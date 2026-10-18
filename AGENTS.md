@@ -95,7 +95,8 @@
 | `preparaion/scenarios/transfer.py`、`card.py`、`cross.py` | A | 转账、卡片与固定跨场景演示 |
 | `preparaion/bank_backend.py`、`preparaion/data/` | B | 后端操作、模拟数据与一致性校验 |
 | `preparaion/scenarios/bills.py`、`subscription.py`、`wealth.py` | B | 账单、订阅与理财 |
-| `api/`、`frontend/` | A | API 接入与最小演示页面 |
+| `api/` | A | API 接入与模型适配 |
+| `frontend/` | B | 最小演示页面 |
 | `preparaion/build_bank_agent_deck.js`、`preparaion/assets/` | 共管 | PPT 生成脚本与流程图素材 |
 | `preparaion/tests/` | 各自 | 谁的功能谁写测试 |
 | `docs/` | 共管 | 协作规则与接口说明 |
@@ -124,7 +125,8 @@
 - **一个任务 = 一个分支 = 一个 PR，diff 尽量 < 400 行。**
   机械移动或清理旧文档导致超过时说明原因；不要为了行数拆成无法验证的碎片。
 - **不要直接往 `main` 提交**（首次导入除外）。所有改动走 PR。
-- 合并前必须：`pytest` 全绿 + 对方确认。
+- 合并前必须：`pytest` 全绿 + 对方确认，**并核对 PR 头 SHA 与已审查的那个一致**。
+  PR 在审查后又推了新提交时，必须重新审查增量，不能凭之前的结论直接合并。
 
 ---
 
