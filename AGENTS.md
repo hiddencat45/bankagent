@@ -8,8 +8,8 @@
 ## 必读文档
 
 要新增或修改**业务场景**之前，必须先读 [`docs/场景扩展与分工.md`](docs/场景扩展与分工.md)。
-那份文档规定了场景的接口契约、两人的领地边界，以及 10 条硬规则。
-本文件只讲全局约定，场景级细节以那份为准。
+那份文档规定了场景的目标接口、两人的领地边界和验收要求。
+协作流程见 [`docs/协作方案.md`](docs/协作方案.md)。本文件规定全局安全与 Git 约定，当前目录和分工以场景文档为准；接口草案仍需双方确认后实现。
 
 ---
 
@@ -27,20 +27,20 @@
 
 ## 二、当前状态（重构尚未进行）
 
-代码目前是**平铺的单文件结构**，重构（拆分为分层结构）还没做：
+代码目前是**平铺的单文件结构**。本轮只在 `preparaion/` 内提取场景与模拟后端，尚未实施：
 
 | 现在的位置 | 内容 | 重构后的目标位置 |
 |---|---|---|
-| `preparaion/bank_agent_graph.py` | 教学源码，583 行，State + 全部节点 + 图组装 | `src/bankagent/contracts/` + `src/bankagent/graph/` |
-| `preparaion/test_bank_agent_graph.py` | 11 条流程与安全测试 | `tests/` |
-| `preparaion/build_bank_agent_deck.js` | PPT 生成脚本（**PPT 的真正源头**） | `deck/` |
-| `preparaion/assets/` | 全流程图的 Mermaid 源与导出 | `deck/assets/` |
-| `preparaion/银行AI智能体全流程规划.pptx` | 交付物成品（由脚本生成） | `release/` |
+| `preparaion/bank_agent_graph.py` | 教学源码，State + 全部节点 + 图组装 | 原文件保留公共逻辑；提取至同目录 `scenarios/`、`bank_backend.py` |
+| `preparaion/test_bank_agent_graph.py` | 11 条流程与安全测试 | 原文件保留；新增测试放 `preparaion/tests/` |
+| `preparaion/build_bank_agent_deck.js` | PPT 生成脚本（**PPT 的真正源头**） | 保留原位置 |
+| `preparaion/assets/` | 全流程图的 Mermaid 源与导出 | 保留原位置 |
+| `preparaion/银行AI智能体全流程规划.pptx` | 交付物成品（由脚本生成） | 保留原位置 |
 
 **目录名 `preparaion` 是 `preparation` 的拼写错误**，重构时会一并处理，暂时不要动它。
 
-重构之外的目录（`src/`、`docs/`、`tests/`、`api/`、`scripts/`）**还不存在**，
-本文件提到的这些路径都是**目标结构**，以"重构后的目标位置"一栏为准。
+`docs/`、`scripts/` 已存在；`scenarios/`、`api/`、`frontend/` 等尚未实现。
+暂不迁往 `src/`、`deck/` 或 `release/`，避免同时推进两套目录方案。
 
 环境**已经搭好**：`.venv` + `langgraph 1.2.16`，11 条测试全绿（2026-10-18 验证）。
 新增的 `requirements.txt` 与 `scripts/setup.ps1` 都在仓库根目录，队友 clone 后跑 `.\scripts\setup.ps1` 即可。
@@ -63,7 +63,7 @@
 
 这是在**转账链路**里已经论证过的结论，新写的任何场景都必须遵守：
 
-- **模型只产出候选**：`intent`、`recipient_name`、`amount`。执行决策由 Python 做，不由模型做。
+- **模型只产出候选**：意图及场景声明的候选槽位（如收款人名称、金额、时间范围）。候选不得直接成为可信 ID 或执行参数；执行决策由 Python 做。
 - **以下字段只能由服务端生成**，模型与前端一律不可写：
   `user_id`、`account_id`、`contact_id`、`risk_level`、`operation_hash`、
   `challenge_id`、`authorized`、`balance`、`result`
@@ -78,28 +78,29 @@
 
 ---
 
-## 五、目录所有权（目标结构，重构后生效）
+## 五、目录所有权（当前实施方案，目标模块尚未建立）
 
 | 路径 | 负责人 | 说明 |
 |---|---|---|
-| `src/bankagent/contracts/` | **共管** | 纯声明（State、枚举、工具签名），无逻辑。改动需两人确认 |
-| `src/bankagent/graph/` | A | LangGraph 图、节点、路由、安全策略、中断与执行 |
-| `src/bankagent/tools/` | B | 6 场景工具函数 |
-| `src/bankagent/data/` | B | 模拟数据生成与一致性校验 |
-| `api/` | B | FastAPI + SSE |
-| `frontend/` | B | 演示工作台 |
-| `deck/` | 共管 | PPT 生成脚本与流程图素材 |
-| `tests/` | 各自 | 谁的功能谁写测试 |
-| `docs/` | 共管 | 契约与看板 |
+| `preparaion/bank_agent_graph.py`、`preparaion/scenarios/__init__.py` | A | 公共状态、调度、图与安全 |
+| `preparaion/scenarios/transfer.py`、`card.py`、`cross.py` | A | 转账、卡片与固定跨场景演示 |
+| `preparaion/bank_backend.py`、`preparaion/data/` | B | 后端操作、模拟数据与一致性校验 |
+| `preparaion/scenarios/bills.py`、`subscription.py`、`wealth.py` | B | 账单、订阅与理财 |
+| `api/`、`frontend/` | A | API 接入与最小演示页面 |
+| `preparaion/build_bank_agent_deck.js`、`preparaion/assets/` | 共管 | PPT 生成脚本与流程图素材 |
+| `preparaion/tests/` | 各自 | 谁的功能谁写测试 |
+| `docs/` | 共管 | 协作规则与接口说明 |
 
 **改别人领地的文件前，先说一句。**
 
-### 契约变更（待 `docs/contracts/` 建立后生效）
+任务明确授权的跨目录修改无需重复询问；临时转交具体函数及测试时，在任务交接或 PR 中说明。
 
-改 `docs/contracts/` 或 `src/bankagent/contracts/` 下任何文件：
+### 契约变更（与路径无关，接口建立后生效）
+
+修改已确认的公共 State、后端公开签名、操作声明结构、结果结构或 API 格式：
 1. 单独开 `contract/<简述>` 分支
 2. PR 描述写明：改了什么、为什么必须改、影响哪些文件
-3. 两人都确认才能合并
+3. 两人都在 PR 确认才能合并，不要求同时在线。函数内部实现不属于契约变更。
 
 **任何 AI 助手都不许为了"让代码跑通"而自行修改契约。**
 
@@ -112,7 +113,7 @@
   - 例：`feat(tools): 增加账单分析三个工具`
   - 类型用 `feat` / `fix` / `docs` / `refactor` / `test` / `chore`
 - **一个任务 = 一个分支 = 一个 PR，diff 尽量 < 400 行。**
-  超过 400 行的 PR 人和 AI 都审不出问题，等于没审。
+  机械移动或清理旧文档导致超过时说明原因；不要为了行数拆成无法验证的碎片。
 - **不要直接往 `main` 提交**（首次导入除外）。所有改动走 PR。
 - 合并前必须：`pytest` 全绿 + 对方确认。
 
