@@ -1,0 +1,67 @@
+# 银行 AI 智能体 —— Python 依赖（完全锁定）
+#
+# 环境基准：Windows / Python 3.10.9
+# 验证时间：2026-10-18，在本机跑通全部 11 条测试（pytest 11 passed）
+#
+# 用法：
+#   python -m venv .venv
+#   .venv\Scripts\python.exe -m pip install --upgrade pip     # ← 这一步不能省，见下
+#   .venv\Scripts\python.exe -m pip install -r requirements.txt
+#
+# 或者直接跑封装好的脚本：.\scripts\setup.ps1
+#
+# ⚠️ 两个已经踩过的坑，别重复踩：
+#   1. Python 3.10 自带的 pip 是 22.3.1，它的依赖解析器会在 langgraph 上疯狂回溯，
+#      表现为 CPU 跑满、pip 缓存几百 MB、但 site-packages 里一个包都装不上。
+#      必须先 `pip install --upgrade pip`（升到 26.x 后秒装）。
+#   2. 国内直连 PyPI 极慢，加 `-i https://pypi.tuna.tsinghua.edu.cn/simple`。
+
+# ---- 直接依赖 ----
+langgraph==1.2.16
+langgraph-checkpoint==4.3.0
+langchain-core==1.6.12
+pytest==9.1.1
+
+# ---- 以下为传递依赖，由 pip freeze 导出，用于锁定完全一致的运行环境 ----
+# 不要手工改。要升级就直接改上面的直接依赖，再用 pip freeze 重新生成这一整段。
+annotated-types==0.8.0
+anyio==4.15.1
+certifi==2026.7.22
+charset-normalizer==3.5.2
+colorama==0.4.6
+distro==1.9.0
+exceptiongroup==1.3.1
+h11==0.16.0
+httpcore==1.0.9
+httpcore2==2.13.1
+httpx==0.28.1
+httpx2==2.13.1
+idna==3.20
+iniconfig==2.3.1
+jsonpatch==1.35
+jsonpointer==3.2.1
+langchain-protocol==0.0.19
+langgraph-prebuilt==1.1.1
+langgraph-sdk==0.4.8
+langsmith==0.14.11
+orjson==3.13.0
+ormsgpack==1.12.2
+packaging==26.3
+pluggy==1.7.0
+pydantic==2.14.1
+pydantic_core==2.50.1
+Pygments==2.21.0
+PyYAML==6.0.3
+requests==2.34.2
+requests-toolbelt==1.0.0
+sniffio==1.3.1
+tenacity==9.2.1
+tomli==2.5.0
+truststore==0.10.5
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+urllib3==2.8.0
+uuid_utils==0.17.1
+websockets==16.1.1
+xxhash==4.0.1
+zstandard==0.25.0

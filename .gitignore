@@ -13,6 +13,10 @@ htmlcov/
 # ---- Node ----
 node_modules/
 
+# ---- pip 被中断时留在当前目录的解包残留 ----
+# （pip 22.x 在解析阶段被 Ctrl+C 或 kill 会留下 pip-unpack-* 临时目录）
+pip-unpack-*
+
 # ---- 渲染输出目录：只是看一眼用的转储，不是构建依赖 ----
 preparaion/deck-preview/
 preparaion/style-preview/

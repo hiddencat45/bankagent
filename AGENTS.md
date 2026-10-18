@@ -34,7 +34,8 @@
 重构之外的目录（`src/`、`docs/`、`tests/`、`api/`、`scripts/`）**还不存在**，
 本文件提到的这些路径都是**目标结构**，以"重构后的目标位置"一栏为准。
 
-测试目前**跑不起来**：`langgraph` 未安装在当前 Python 环境。修环境是待办事项，不是"已经能用"。
+环境**已经搭好**：`.venv` + `langgraph 1.2.16`，11 条测试全绿（2026-10-18 验证）。
+新增的 `requirements.txt` 与 `scripts/setup.ps1` 都在仓库根目录，队友 clone 后跑 `.\scripts\setup.ps1` 即可。
 
 ---
 
@@ -111,10 +112,29 @@
 
 ## 七、环境
 
-- Python 3.10（与现有 `__pycache__` 里的 `cpython-310` 一致）
-- 用 `.venv`，不要往全局环境装包
-- 依赖版本固定后写入 `requirements.txt`（**尚未创建**）
-- 一键检查脚本 `scripts/check.ps1`（**尚未创建**）
+- **Python 3.10**（与现有 `__pycache__` 里的 `cpython-310` 一致）
+- **用 `.venv`，不要往全局环境装包**。`.venv` 已在 `.gitignore` 里，不进仓库
+- 依赖版本**完全锁定**在 `requirements.txt`（45 个包，由 `pip freeze` 导出）
+- 一键搭环境：`.\scripts\setup.ps1`
+- 一键门禁：`.\scripts\check.ps1`（说"做完了"之前必须跑通）
+
+### 两个已经踩过的坑，不要重复踩
+
+1. **Python 3.10 自带的 pip 是 22.3.1，必须先用 `pip install --upgrade pip` 升级。**
+   旧版解析器会在 `langgraph` 的依赖树上来回回溯，症状是：CPU 跑满好几分钟、
+   `pip` 缓存涨到几百 MB、但 `site-packages` 里一个包都没装上。
+   升级到 pip 26.x 后同样的安装几秒完成。
+2. **国内直连 PyPI 极慢，加 `-i https://pypi.tuna.tsinghua.edu.cn/simple`。**
+   `setup.ps1` 已经把这两条都封装进去了，优先用它，不要手敲 `pip install`。
+
+### 运行测试
+
+```powershell
+cd preparaion                       # 测试靠模块名导入，必须在源码所在目录跑
+..\.venv\Scripts\python.exe -m pytest -q
+```
+
+或直接在仓库根目录跑 `.\scripts\check.ps1`。
 
 ---
 
@@ -122,7 +142,7 @@
 
 一个任务算完成，需要同时满足：
 
-1. `pytest` 全绿（环境修好后）
+1. `.\scripts\check.ps1` 全绿（含 `pytest` 11 条 + 依赖完整性）
 2. 新增行为有对应测试，且测试**真的会失败**（不是恒真断言）
 3. 没有擅自修改契约、没有越界改别人领地的文件
 4. 没有声称实现了契约里没有、或 PPT 里有但代码里没有的能力
