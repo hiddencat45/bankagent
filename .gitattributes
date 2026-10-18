@@ -1,0 +1,24 @@
+# 默认：仓库内存 LF、检出也用 LF，避免跨平台行尾噪声把真正的改动淹掉。
+# 首次提交前就要放好，历史一旦脏了再清理很麻烦。
+* text=auto eol=lf
+
+# Windows 脚本保持 CRLF，否则 PowerShell 5.1 下可能出问题
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# 二进制：禁止行尾转换与文本 diff/merge
+*.pptx binary
+*.docx binary
+*.xlsx binary
+*.pdf binary
+*.png binary
+*.PNG binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.zip binary

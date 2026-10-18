@@ -1,0 +1,87 @@
+%%{init: {"flowchart": {"htmlLabels": true, "curve": "basis", "nodeSpacing": 42, "rankSpacing": 58}, "themeVariables": {"fontFamily": "Microsoft YaHei, Arial", "fontSize": "13px"}}}%%
+flowchart TB
+    API["<b>API → graph.invoke(initial_state, config)</b><br/>State 初始字段：user_id · request_id · message · daily_transfer_total?<br/>config：thread_id"]
+    START([START])
+
+    subgraph S1[阶段 1｜可信上下文与语言理解]
+      LC["<b>load_context</b><br/><b>IN(State)</b> user_id · request_id · daily_transfer_total?<br/><b>OUT(always)</b> status · result · response · authorized · plan · plan_valid<br/>operation_hash · challenge_id · context_valid<br/><b>OUT(valid context)</b> account_id · balance · daily_transfer_total"]
+      RC{"<b>route_context</b><br/><b>READ</b> context_valid<br/><b>RET</b> continue｜reject"}
+      UI["<b>understand_intent</b><br/><b>IN(State)</b> message<br/><b>OUT(ΔState)</b> intent · recipient_name · amount · missing_fields"]
+      RE["<b>resolve_entities</b><br/><b>IN(State)</b> intent · recipient_name · missing_fields<br/><b>OUT(ΔState)</b> contact_id · missing_fields<br/>非 TRANSFER 时返回空更新 {}"]
+      RI{"<b>route_information</b><br/><b>READ</b> missing_fields<br/><b>RET</b> clarify｜create_plan"}
+      AC["<b>ask_clarification</b><br/><b>IN(State)</b> missing_fields<br/><b>OUT(ΔState)</b> status · response"]
+    end
+
+    subgraph S2[阶段 2｜计划创建与确定性校验]
+      CP["<b>create_plan</b><br/><b>IN(State)</b> intent · contact_id · amount<br/><b>OUT(ΔState)</b> plan"]
+      VP["<b>validate_plan</b><br/><b>IN(State)</b> plan<br/><b>OUT(ΔState)</b> plan_valid"]
+      RPLAN{"<b>route_plan</b><br/><b>READ</b> plan_valid<br/><b>RET</b> security｜reject"}
+      RP["<b>reject_plan</b><br/><b>IN(State)</b> —<br/><b>OUT(ΔState)</b> status · result"]
+    end
+
+    subgraph S3[阶段 3｜安全策略与权限分流]
+      SP["<b>security_policy</b><br/><b>IN(always)</b> plan<br/><b>IN(TRANSFER)</b> daily_transfer_total<br/><b>IN(non-denied TRANSFER)</b> user_id · account_id · contact_id · request_id<br/><b>OUT(always)</b> risk_level<br/><b>OUT(non-denied TRANSFER)</b> operation_hash · challenge_id"]
+      RSEC{"<b>route_security</b><br/><b>READ</b> risk_level<br/><b>RET</b> green｜yellow｜red｜deny"}
+      EQ["<b>execute_query</b><br/><b>IN(State)</b> balance<br/><b>OUT(ΔState)</b> status · result"]
+      IC["<b>interrupt_for_confirmation</b><br/><b>IN(State)</b> challenge_id · operation_hash · recipient_name · amount<br/><b>INTERRUPT payload</b> kind · challenge_id · operation_hash · recipient · amount<br/><b>RESUME payload</b> approved · challenge_id · operation_hash<br/><b>OUT(ΔState)</b> authorized"]
+      IA["<b>interrupt_for_authentication</b><br/><b>IN(State)</b> challenge_id · operation_hash · amount<br/><b>INTERRUPT payload</b> kind · challenge_id · operation_hash · methods · amount<br/><b>RESUME payload</b> challenge_id · operation_hash · auth_token<br/><b>OUT(ΔState)</b> authorized"]
+      RAC{"<b>route_authorization</b><br/><b>READ</b> authorized<br/><b>RET</b> execute｜reject"}
+      RAA{"<b>route_authorization</b><br/><b>READ</b> authorized<br/><b>RET</b> execute｜reject"}
+    end
+
+    subgraph S4[阶段 4｜可信执行与统一回复]
+      EO["<b>execute_operation</b><br/><b>IN(always)</b> authorized<br/><b>IN(authorized)</b> amount · balance<br/><b>IN(success)</b> recipient_name<br/><b>OUT(ΔState)</b> status · result"]
+      RO["<b>reject_operation</b><br/><b>IN(State)</b> —<br/><b>OUT(ΔState)</b> status · result"]
+      CR["<b>compose_response</b><br/><b>IN(State)</b> status · result<br/><b>OUT(ΔState)</b> response"]
+    end
+
+    END_CLARIFY([END｜等待补充信息])
+    END_FINAL([END｜返回最终响应])
+    CPK["<b>Checkpoint / InMemorySaver</b><br/>保存：当前 State + 执行位置<br/>定位：config.configurable.thread_id<br/>恢复：同一 thread_id + Command(resume=...)"]
+    LEGEND["<b>图例</b><br/>IN / READ：函数直接读取的 State 字段<br/>OUT(ΔState)：节点返回并合并进 State 的字段<br/>未列字段只被 Checkpoint 保留，不代表节点读取"]
+    CLARIFY_NOTE["<b>澄清路径说明</b><br/>ask_clarification → END 不是 interrupt<br/>下一条用户消息会用同一 thread_id 发起新一轮 graph.invoke"]
+    THREAD_NOTE["<b>thread_id 安全边界</b><br/>必须绑定当前登录用户，并在每轮重新注入可信 user_id / request_id<br/>禁止跨用户复用；否则旧 Checkpoint 字段可能在 State 合并时被保留"]
+
+    API --> START --> LC --> RC
+    RC -->|continue| UI --> RE --> RI
+    RC -->|reject| CR
+    RI -->|clarify| AC --> END_CLARIFY
+    RI -->|create_plan| CP --> VP --> RPLAN
+    RPLAN -->|reject| RP --> CR
+    RPLAN -->|security| SP --> RSEC
+    RSEC -->|green（risk_level=GREEN）| EQ --> CR
+    RSEC -->|yellow（risk_level=YELLOW）| IC --> RAC
+    RSEC -->|red（risk_level=RED）| IA --> RAA
+    RSEC -->|deny（risk_level=DENY）| RO
+    RAC -->|execute| EO
+    RAC -->|reject| RO
+    RAA -->|execute| EO
+    RAA -->|reject| RO
+    EO --> CR
+    RO --> CR
+    CR --> END_FINAL
+    CPK -. interrupt 保存 / resume 恢复 .-> IC
+    CPK -. interrupt 保存 / resume 恢复 .-> IA
+    LEGEND -.-> API
+    CLARIFY_NOTE -.-> AC
+    THREAD_NOTE -.-> CPK
+
+    classDef api fill:#F5F7F9,stroke:#64727F,color:#162534,stroke-width:1.5px;
+    classDef context fill:#E9F1F7,stroke:#244F73,color:#162534,stroke-width:1.5px;
+    classDef model fill:#EFE9F6,stroke:#7657A6,color:#162534,stroke-width:1.5px;
+    classDef plan fill:#E9F1F7,stroke:#173B5E,color:#162534,stroke-width:1.5px;
+    classDef security fill:#FBF1D8,stroke:#E2A62B,color:#162534,stroke-width:1.5px;
+    classDef execute fill:#E8F3EC,stroke:#2F8F63,color:#162534,stroke-width:1.5px;
+    classDef reject fill:#F9E7E5,stroke:#C94F48,color:#162534,stroke-width:1.5px;
+    classDef route fill:#FFFFFF,stroke:#64727F,color:#162534,stroke-width:1.5px;
+    classDef checkpoint fill:#EFE9F6,stroke:#7657A6,color:#162534,stroke-dasharray:5 3;
+    class API,START,END_CLARIFY,END_FINAL api;
+    class LC,CR context;
+    class UI,RE model;
+    class CP,VP plan;
+    class SP,IC,IA security;
+    class EQ,EO execute;
+    class RP,RO reject;
+    class RC,RI,RPLAN,RSEC,RAC,RAA route;
+    class CPK,LEGEND,CLARIFY_NOTE checkpoint;
+    class THREAD_NOTE reject;
