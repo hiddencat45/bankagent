@@ -16,7 +16,8 @@
 | 智能转账 | 已实现主链路；后端为内存计算，**不落账、无幂等键、无事务** |
 | 账单分析、理财操作、卡片管理、订阅与代扣、跨场景联动 | **设计目标，尚未实现** |
 | 公共类型与模拟后端 | 已实现 `bank_types.py` 和独立后端查询/受控转账，**尚未接入教学图或 API** |
-| `preparaion/scenarios/`、`preparaion/data/`、`api/`、`frontend/` | **尚未在本分支接入**；数据模块另见 PR #7 |
+| 账单场景适配 | 已实现期间解析、后端调用和有证据的回复，**尚待公共注册器与主图接入** |
+| `preparaion/data/`、`api/`、`frontend/` | **尚未在本分支接入**；数据模块另见 PR #7 |
 | 真实模型接入、多轮槽位补全 | **未实现**；当前意图理解是离线规则（关键词 + 正则） |
 
 `preparaion/银行AI智能体全流程规划.pptx`（34 页）描述的是**设计目标**，其中只有转账主链路已在代码里落地。
@@ -67,6 +68,8 @@ Windows + **Python 3.10**（本机验证 3.10.9）+ PowerShell。
 
 公共类型和后端增量（2026-10-19）：本分支门禁 **58 passed**（11 条教学回归、23 条类型测试、24 条后端测试），依赖检查通过。PR #7 的 17 条数据测试尚未计入本分支，合并后门禁会统一收集。
 
+账单适配层再新增 25 条测试，本分支门禁 **83 passed**；未将主图路由或页面标为完成。
+
 若本机执行策略拦截 `.ps1`（提示「未对文件进行数字签名」）：
 
 ```powershell
@@ -97,6 +100,12 @@ Demo 实际输出：
 
 后端全部使用整数分；重复成功操作返回原结果，失败不扣款，累计风险在锁内复查。余额结果含内部风控累计值，A 对外序列化前必须按 SERVER_ONLY_DATA_FIELDS 过滤；不能直接送模型或 SSE。进程重启丢失内存账本、幂等缓存和授权；没有连接真实银行，也不宣称外部收款到账。
 
+### 账单适配层（等待 A 注册到主图）
+
+`scenarios/bills.py` 提供已约定的 SCENARIO、INTENTS、resolve、validate、execute、render。支持本月、上月、近 N 天（1–366），缺省本月；非法期间不退回默认值。服务端可用 `configure_clock(clock=...)` 注入与后端一致的带时区时钟，固定演示时必须对齐参考日期；不改变 TrustedContext 或 State。
+
+在 `preparaion/` 执行 `..\.venv\Scripts\python.exe -m pytest -q tests/test_bills_scenario.py` 可验证日期边界、实际后端调用、跨用户拒绝和证据回复。尚未修改 A 的 `scenarios/__init__.py` 或教学图，当前用 Python 命名空间包导入；完整的自然语言识别/澄清路由、GREEN 策略执行和页面展示仍需 A 接入后端到端验证。
+
 ### 两个已经踩过的坑
 
 1. **Python 3.10 自带的 pip 是 22.3.1**，其依赖解析器会在 `langgraph` 上疯狂回溯：CPU 跑满、pip 缓存涨到几百 MB，但 `site-packages` 一个包都装不上。**必须先 `pip install --upgrade pip`**（升到 26.x 后秒装）。
@@ -126,6 +135,7 @@ bankagent/
     ├─ bank_agent_graph.py        # 教学源码：State + 全部节点 + 图组装
     ├─ bank_types.py              # 已确认的公共类型和常量
     ├─ bank_backend.py            # B：内存查询与受控转账，不依赖图
+    ├─ scenarios/bills.py         # B：账单场景适配；尚待 A 的公共图注册
     ├─ test_bank_agent_graph.py   # 11 条流程与安全测试
     ├─ tests/                    # 类型与后端隔离测试
     ├─ build_bank_agent_deck.js   # PPT 生成脚本（PPT 的真正源头）
@@ -134,7 +144,7 @@ bankagent/
     └─ 银行AI智能体全流程规划.pptx  # 交付物成品（由脚本生成）
 ```
 
-规划中的目标结构（**尚未接入**）：`preparaion/scenarios/`、`preparaion/data/`（PR #7 待审）、`api/`、`frontend/`。
+规划中的目标结构（**尚未接入**）：`preparaion/scenarios/__init__.py` 与其余场景、`preparaion/data/`（PR #7 待审）、`api/`、`frontend/`。
 
 ---
 
