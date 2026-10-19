@@ -8,18 +8,38 @@
 
 ## 一、当前进度：先读这一段
 
-**这是一个教学原型，不是可用的银行应用。** 从现有教学图入口跑通的仍是**余额查询**和**转账主链路**（准备 → 确认/强认证 → 执行 → 回复）。新增的独立类型、数据、模拟后端和账单适配已有测试，尚待主图与 API 接入。
+**这是一个教学原型，不是可用的银行应用。** 从现有教学图入口（`bank_agent_graph.py`）跑通的仍是**余额查询**和**转账主链路**（准备 → 确认/强认证 → 执行 → 回复）。
+
+阶段 1 的公共部分已**代码完成**，分别在三张待复核的 PR 里：
+
+| PR | 内容 |
+|---|---|
+| #11 | 场景注册器 `scenarios/__init__.py` + 转账场景 `scenarios/transfer.py` |
+| #12 | 安全层 `agent_security.py`：操作哈希、挑战/授权表 |
+| #13 | 主图 `agent_graph.py`：把注册器、安全层、后端串成工作流 |
+
+**三张 PR 都还没合并**（无复核），所以 `main` 上暂时看不到这些文件。按契约 §3.2，旧教学图 `bank_agent_graph.py` 保持原样不动，新旧并存。
 
 | 能力 | 代码状态 |
 |---|---|
 | 余额查询 | 已实现（教学版） |
-| 智能转账 | 已实现主链路；后端为内存计算，**不落账、无幂等键、无事务** |
-| 账单分析、理财操作、卡片管理、订阅与代扣、跨场景联动 | **设计目标，尚未实现** |
-| 公共类型与模拟后端 | 已实现 `bank_types.py` 和独立后端查询/受控转账，**尚未接入教学图或 API** |
-| 账单场景适配 | 已实现期间解析、后端调用和有证据的回复，**尚待公共注册器与主图接入** |
-| 固定演示数据与一致性校验 | 已实现内部数据模块：两账户、联系人、七笔交易；**尚未接入图、API 或模型** |
-| 公共场景注册器、`api/`、`frontend/` | **尚未接入** |
+| 智能转账 | 教学版主链路可用；**新链路**（PR #11–#13）已实现整数分、操作哈希、服务端授权、幂等 |
+| 账单分析 | 场景适配（B）已实现，**已由注册器发现并接入新主图**；尚无 API 出口 |
+| 公共类型与模拟后端 | 已实现并已合入 `main` |
+| 固定演示数据与一致性校验 | 已实现并已合入 `main` |
+| 公共场景注册器、安全层、主图 | **已实现，待在 PR #11–#13 复核合并** |
+| 理财操作、卡片管理、订阅与代扣、跨场景联动 | **设计目标，尚未实现** |
+| `api/`、`frontend/` | **尚未实现** |
 | 真实模型接入、多轮槽位补全 | **未实现**；当前意图理解是离线规则（关键词 + 正则） |
+
+### 新主图做到了什么
+
+- **候选不是参数**：`scenario`/`intent`/`candidate_params` 都是未受信任输入，`operation` 与 `params` 由 Python 依据注册器声明生成，`contact_id` 只能来自受控后端查询
+- **resume 不是授权**：恢复后只读服务端挑战记录，不读 `decision`、不读任何口令字段（旧教学图的固定口令问题已在新链路消除）
+- **状态如实映射**：后端 `REJECTED`/`FAILED` 不会被标成 `COMPLETED`；风险评估失败按失败关闭处理
+- **一句话命中多个操作时要求澄清**，不按模块顺序猜
+
+但它**还没有 API**：目前只能通过 Python 调用图，没有 HTTP 入口、没有 SSE、没有页面。
 
 `preparaion/银行AI智能体全流程规划.pptx`（34 页）描述的是**设计目标**，其中只有转账主链路已在代码里落地。
 **PPT 里写了 ≠ 代码里有。** 讨论、评审、写文档都不要把两者混为一谈。
@@ -65,9 +85,11 @@ Windows + **Python 3.10**（本机验证 3.10.9）+ PowerShell。
 .\scripts\check.ps1     # 门禁：pytest + 敏感字段扫描 + pip check
 ```
 
-门禁基线（2026-10-18 验证）：**11 条测试全绿、`pip check` 无冲突**。敏感字段扫描会列出教学占位符 `demo-otp-ok`，属已知的待改项，不判失败。
+门禁基线（`main`，2026-10-19 验证）：**100 passed**（11 条教学回归、23 条类型测试、17 条数据测试、24 条后端测试、25 条账单适配测试），`pip check` 无冲突。pytest 缓存目录可能报告权限警告，不影响测试结果。
 
-类型、数据、后端和账单适配合并验证（2026-10-19）：完整门禁 **100 passed**（11 条教学回归、23 条类型测试、17 条数据测试、24 条后端测试、25 条账单适配测试），依赖检查通过。pytest 缓存目录可能报告权限警告，不影响测试结果。
+阶段 1 分支叠加后（`feat/graph-integration`，含 PR #11–#13）：**249 passed**。新增部分为注册器 31 条、转账场景 43 条、安全层 31 条、安全层与后端集成 14 条、主图 30 条。
+
+敏感字段扫描会列出教学占位符 `demo-otp-ok`（仅存在于旧教学图 `bank_agent_graph.py` 与其测试中），属已知的待迁移项，不判失败；新链路不使用任何固定口令。
 
 若本机执行策略拦截 `.ps1`（提示「未对文件进行数字签名」）：
 
@@ -89,7 +111,55 @@ Demo 实际输出：
 当前可用余额为 5000.00 CNY。
 ```
 
-### 独立模拟后端（等待 A 接入图和 API）
+### 新主图（需先合并 PR #11–#13）
+
+```powershell
+cd preparaion
+..\.venv\Scripts\python.exe -m pytest -q tests/test_agent_graph.py
+```
+
+最小用法——服务端注入依赖，客户端只提供消息与三个可信字段：
+
+```python
+import threading
+from datetime import datetime
+from langgraph.types import Command
+
+from agent_graph import BankAgentRuntime, build_graph
+from agent_security import SG_TZ, ChallengeStore, compute_operation_hash
+from bank_backend import configure_backend
+from data.generator import build_demo_data
+
+lock = threading.RLock()
+clock = lambda: datetime(2026, 10, 19, 10, 0, tzinfo=SG_TZ)   # 与演示数据参考日对齐
+store = ChallengeStore(lock=lock, clock=clock)
+configure_backend(
+    data_factory=build_demo_data,
+    lookup_authorization=store.lookup,
+    operation_hash=compute_operation_hash,
+    lock=lock,
+    clock=clock,
+)
+
+graph = build_graph(BankAgentRuntime(challenges=store, clock=clock))
+cfg = {"configurable": {"thread_id": "conv-1"}}
+
+out = graph.invoke({
+    "user_id": "user-001", "account_id": "account-001",
+    "request_id": "req-1", "message": "给张伟转 300 元",
+}, cfg)
+# out["__interrupt__"] 里是确认卡；写操作不会在这里扣款
+
+# 用户在页面上确认后，服务端先落授权记录，再恢复图：
+store.decide(challenge_id=..., user_id="user-001", request_id="req-1",
+             operation_hash=..., decision="approve")
+final = graph.invoke(Command(resume={"decision": "approve"}), cfg)
+print(final["status"], final["response"])
+```
+
+**注意**：`Command(resume=...)` 里的内容不是授权凭证。恢复时图只查 `ChallengeStore`，所以必须先由服务端写入授权记录；客户端伪造 `approve` 不会扣款。
+
+### 独立模拟后端（已接新主图，待 API）
 
 在 `preparaion/` 下运行 `..\.venv\Scripts\python.exe -m pytest -q tests/test_bank_backend.py` 可验证隔离后端。测试使用独立小样例和服务端授权替身，不要求先运行 API，也不代表真实认证已接入。
 
@@ -113,11 +183,13 @@ Python 内部调用 `from data.generator import build_demo_data`，再调用 `bu
 
 固定参考日是 2026-10-18，金额为整数分；account-001 余额 500000 分、消费合计 100000 分，account-002 是独立用户的数据。重复扣款真值不写入业务行。此模块不写文件、不扣款、不访问真实银行，也不提供 API 重置；后续后端可重新构建数据集，运行时全量重置仍须按接口契约同步使旧会话和授权失效。内部数据含账户归属，不能直接返回给模型或页面。
 
-### 账单适配层（等待 A 注册到主图）
+### 账单适配层（已由注册器发现并接入新主图）
 
 `scenarios/bills.py` 提供已约定的 SCENARIO、INTENTS、resolve、validate、execute、render。支持本月、上月、近 N 天（1–366），缺省本月；非法期间不退回默认值。服务端可用 `configure_clock(clock=...)` 注入与后端一致的带时区时钟，固定演示时必须对齐参考日期；不改变 TrustedContext 或 State。
 
-在 `preparaion/` 执行 `..\.venv\Scripts\python.exe -m pytest -q tests/test_bills_scenario.py` 可验证日期边界、实际后端调用、跨用户拒绝和证据回复。尚未修改 A 的 `scenarios/__init__.py` 或教学图，当前用 Python 命名空间包导入；完整的自然语言识别/澄清路由、GREEN 策略执行和页面展示仍需 A 接入后端到端验证。
+`scenarios/__init__.py` 通过 `pkgutil` 自动发现 `scenarios/` 下的场景模块并校验其声明，**B 新增场景不需要改注册器**。B 的文件没有做任何修改。
+
+在 `preparaion/` 执行 `..\.venv\Scripts\python.exe -m pytest -q tests/test_bills_scenario.py` 可验证日期边界、实际后端调用、跨用户拒绝和证据回复。端到端路径（识别 → 解析 → GREEN 策略 → 执行 → 渲染）由 `tests/test_agent_graph.py` 覆盖；页面展示仍未实现。
 
 ### 两个已经踩过的坑
 
@@ -145,30 +217,37 @@ bankagent/
 │   ├─ 场景扩展与分工.md           # 场景模块契约、操作声明、统一结果结构
 │   └─ 阶段0-接口草案.md           # 阶段 0 接口草案（过渡文件，阶段 1 落地后由代码取代）
 └─ preparaion/
-    ├─ bank_agent_graph.py        # 教学源码：State + 全部节点 + 图组装
+    ├─ bank_agent_graph.py        # 旧教学源码：State + 全部节点 + 图组装（契约 §3.2 暂不改）
+    ├─ agent_graph.py             # A：新主图，串联注册器、安全层与后端（PR #13）
+    ├─ agent_security.py          # A：操作哈希、挑战与授权表（PR #12）
     ├─ bank_types.py              # 已确认的公共类型和常量
     ├─ bank_backend.py            # B：内存查询与受控转账，不依赖图
-    ├─ scenarios/bills.py         # B：账单场景适配；尚待 A 的公共图注册
-    ├─ test_bank_agent_graph.py   # 11 条流程与安全测试
-    ├─ data/                     # B：固定样例生成与账本一致性校验
-    ├─ tests/                    # 类型、固定数据与后端隔离测试
+    ├─ scenarios/
+    │   ├─ __init__.py            # A：场景注册器，自动发现并校验场景声明（PR #11）
+    │   ├─ transfer.py            # A：转账场景（PR #11）
+    │   └─ bills.py               # B：账单场景适配
+    ├─ test_bank_agent_graph.py   # 旧教学图的 11 条流程与安全测试
+    ├─ data/                      # B：固定样例生成与账本一致性校验
+    ├─ tests/                     # 类型、固定数据、后端、注册器、安全层、主图测试
     ├─ build_bank_agent_deck.js   # PPT 生成脚本（PPT 的真正源头）
     ├─ build_frontend_mockup.js   # 前端效果图生成脚本
     ├─ assets/                    # 全流程图的 Mermaid 源与 SVG/PNG 导出
     └─ 银行AI智能体全流程规划.pptx  # 交付物成品（由脚本生成）
 ```
 
-规划中的目标结构（**尚未接入**）：`preparaion/scenarios/__init__.py` 与其余场景、`api/`、`frontend/`。
+尚未实现：`preparaion/api/`、`preparaion/frontend/`，以及理财、卡片、订阅与代扣、跨场景联动四个场景。
 
 ---
 
 ## 六、已知限制与未完成项
 
-- 教学图仍为单文件，独立后端与数据模块已建立，尚待场景调度和主图接入。
-- **恢复路径读 `resume` 载荷**判断授权（`auth_token == "demo-otp-ok"`），违反「授权结果必须来自服务端查询」，必须改。
-- 教学图金额仍用 `float`；新后端与数据使用整数分。Checkpoint 用 `InMemorySaver`，内存后端同样**进程重启即丢**。
-- 教学代码的通讯录是**精确姓名匹配**，没有重名、别名或手机号尾号歧义处理。
-- 未实现多轮槽位补全：只回复「300 元」不会与上一轮的「给张伟转钱」自动合并。
+- 旧教学图仍为单文件；新主图 `agent_graph.py` 已实现但**尚未合并**，两者暂时并存。
+- **恢复路径读 `resume` 载荷**判断授权（`auth_token == "demo-otp-ok"`）这一缺陷**仅存在于旧教学图**；新主图已改为只读服务端记录，但旧图按契约 §3.2 暂不改，需专门的阶段 1 迁移 PR。
+- 旧教学图金额仍用 `float`；新链路用整数分（`amount_minor`）。新主图同样使用 `InMemorySaver`，**进程重启即丢 Checkpoint**；内存后端也不落账。
+- 旧教学代码的通讯录是**精确姓名匹配**，没有重名、别名或手机号尾号歧义处理。新转账场景解析同样拒绝猜测：重名时要求澄清，不会自动挑一个。
+- **没有 API 层**：`POST /agent/chat`、SSE 事件、`/health`、`/demo/reset` 都还没写，目前只能直接调用图。
+- **意图识别是离线规则**（注册器关键词 + 正则），没有接真实模型。
+- 未实现多轮槽位补全：只回复「300 元」不会与上一轮的「给张伟转钱」自动合并。图内已按 `(user_id, thread_id)` 记录 30 分钟澄清期限，但把新值合并进上一轮候选需要 API 层传 `pending` 上下文，该部分未做。
 - PPT 生成脚本依赖**仓库外**的本机 `.dsh` 路径，队友 clone 后跑不了 PPT 生成；**绝不手改 PPTX**，手改会在下次生成时被覆盖。
 - 产品名「有度」尚未落到 PPT 与前端样稿（封面仍是「银行 AI 智能体 · 全流程规划」）。改名必须改生成脚本后重新生成。
 - 比赛官方细则、评分口径、截止日期与演示时长**尚未核实**；模型供应商、模型与凭据**尚未确定**——这两项不阻塞开发，但提交前必须核对。
