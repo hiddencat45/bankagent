@@ -1,0 +1,52 @@
+"""按阶段 0 契约构造固定样例，不随机编造业务事实或异常标签。
+
+返回新的内部数据集供后续模拟后端加载，不写文件、不修改教学图。
+它不是对用户/模型公开的数据接口，不能直接作为 API 响应。
+"""
+
+from datetime import date
+
+from .validate import validate_demo_data
+
+
+REFERENCE_DATE = date(2026, 10, 18)
+
+
+def build_demo_data() -> dict:
+    """返回已校验、彼此独立的固定账户/联系人/账本，金额单位为分。"""
+    accounts = {
+        "account-001": {"user_id": "user-001", "balance_minor": 500000,
+                        "currency": "CNY"},
+        "account-002": {"user_id": "user-002", "balance_minor": 40000,
+                        "currency": "CNY"},
+    }
+    contacts = {
+        "contact-001": {"user_id": "user-001", "display_name": "张伟"},
+        "contact-002": {"user_id": "user-001", "display_name": "李娜"},
+    }
+    rows = (
+        ("txn-001", "account-001", "2026-10-01T09:00:00+08:00",
+         "INCOME", 600000, "工资", "演示雇主"),
+        ("txn-002", "account-001", "2026-10-02T09:00:00+08:00",
+         "EXPENSE", 77000, "居住", "演示租赁"),
+        ("txn-003", "account-001", "2026-10-10T12:00:00+08:00",
+         "EXPENSE", 12000, "餐饮", "演示餐厅"),
+        ("txn-004", "account-001", "2026-10-11T08:00:00+08:00",
+         "EXPENSE", 6000, "交通", "演示交通"),
+        ("txn-005", "account-001", "2026-10-12T10:00:00+08:00",
+         "EXPENSE", 2500, "订阅", "演示订阅"),
+        ("txn-006", "account-001", "2026-10-12T10:00:30+08:00",
+         "EXPENSE", 2500, "订阅", "演示订阅"),
+        ("txn-007", "account-002", "2026-10-01T09:00:00+08:00",
+         "INCOME", 40000, "工资", "演示雇主"),
+    )
+    fields = ("transaction_id", "account_id", "occurred_at", "kind",
+              "amount_minor", "category", "merchant")
+    data = {
+        "reference_date": REFERENCE_DATE,
+        "accounts": accounts,
+        "contacts": contacts,
+        "transactions": [dict(zip(fields, row)) for row in rows],
+    }
+    validate_demo_data(data)
+    return data
