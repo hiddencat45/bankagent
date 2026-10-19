@@ -15,7 +15,8 @@
 | 余额查询 | 已实现（教学版） |
 | 智能转账 | 已实现主链路；后端为内存计算，**不落账、无幂等键、无事务** |
 | 账单分析、理财操作、卡片管理、订阅与代扣、跨场景联动 | **设计目标，尚未实现** |
-| `preparaion/scenarios/`、`preparaion/bank_backend.py`、`preparaion/data/`、`api/`、`frontend/` | **目录尚未建立** |
+| 固定演示数据与一致性校验 | 已实现内部数据模块：两账户、联系人、七笔交易；**尚未接入图、API 或模型** |
+| `preparaion/scenarios/`、`preparaion/bank_backend.py`、`api/`、`frontend/` | **尚未实现** |
 | 真实模型接入、多轮槽位补全 | **未实现**；当前意图理解是离线规则（关键词 + 正则） |
 
 `preparaion/银行AI智能体全流程规划.pptx`（34 页）描述的是**设计目标**，其中只有转账主链路已在代码里落地。
@@ -64,6 +65,8 @@ Windows + **Python 3.10**（本机验证 3.10.9）+ PowerShell。
 
 门禁基线（2026-10-18 验证）：**11 条测试全绿、`pip check` 无冲突**。敏感字段扫描会列出教学占位符 `demo-otp-ok`，属已知的待改项，不判失败。
 
+数据模块增量（2026-10-19 验证）：新增 17 条数据测试，完整门禁 **28 passed**、依赖检查通过。pytest 缓存目录可能报告权限警告，不影响测试结果。
+
 若本机执行策略拦截 `.ps1`（提示「未对文件进行数字签名」）：
 
 ```powershell
@@ -83,6 +86,18 @@ Demo 实际输出：
 ```text
 当前可用余额为 5000.00 CNY。
 ```
+
+### 固定数据（供后续模拟后端加载）
+
+在 `preparaion/` 下可执行：
+
+```powershell
+..\.venv\Scripts\python.exe -m pytest -q tests/test_demo_data.py
+```
+
+Python 内部调用 `from data.generator import build_demo_data`，再调用 `build_demo_data()` 得到新的独立数据集，生成时先运行一致性校验。也可从 `data.validate` 导入 `validate_demo_data` 校验修改后的数据；非法金额、外键、时间或账本余额会抛 `ValueError`。
+
+固定参考日是 2026-10-18，金额为整数分；account-001 余额 500000 分、消费合计 100000 分，account-002 是独立用户的数据。重复扣款真值不写入业务行。此模块不写文件、不扣款、不访问真实银行，也不提供 API 重置；后续后端可重新构建数据集，运行时全量重置仍须按接口契约同步使旧会话和授权失效。内部数据含账户归属，不能直接返回给模型或页面。
 
 ### 两个已经踩过的坑
 
@@ -112,13 +127,15 @@ bankagent/
 └─ preparaion/
     ├─ bank_agent_graph.py        # 教学源码：State + 全部节点 + 图组装
     ├─ test_bank_agent_graph.py   # 11 条流程与安全测试
+    ├─ data/                     # B：固定样例生成与账本一致性校验
+    ├─ tests/test_demo_data.py    # B：17 条数据测试
     ├─ build_bank_agent_deck.js   # PPT 生成脚本（PPT 的真正源头）
     ├─ build_frontend_mockup.js   # 前端效果图生成脚本
     ├─ assets/                    # 全流程图的 Mermaid 源与 SVG/PNG 导出
     └─ 银行AI智能体全流程规划.pptx  # 交付物成品（由脚本生成）
 ```
 
-规划中的目标结构（**尚未建立**）：`preparaion/scenarios/`、`preparaion/bank_backend.py`、`preparaion/data/`、`preparaion/tests/`、`api/`、`frontend/`。
+规划中的目标结构（**尚未实现**）：`preparaion/bank_types.py`、`preparaion/scenarios/`、`preparaion/bank_backend.py`、`api/`、`frontend/`。
 
 ---
 
