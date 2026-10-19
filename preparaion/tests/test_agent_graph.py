@@ -232,6 +232,40 @@ def test_approved_transfer_completes(wired) -> None:
     assert "4700.00" in resumed["response"]
 
 
+def test_authorization_ref_never_enters_state_or_checkpoint(wired) -> None:
+    """授权引用与幂等键不得写进 ``params``，也就不会进 Checkpoint。
+
+    这两者是服务端能力凭证：进了 Checkpoint，任何能读 checkpoint 的人
+    都能拿去重放；进了 ``params``，还可能被后续序列化到 SSE。
+    正确做法是执行时按 ``challenge_id`` 回查服务端记录。
+
+    这条测试是为一次真实退化补的：最初版本把 ``_authorization_ref`` 和
+    ``_idempotency_key`` 塞进了 ``params``。
+    """
+    store, graph = wired
+    out = ask(graph, "给张伟转 300 元")
+    intr = out["__interrupt__"][0].value
+    store.decide(challenge_id=intr["challenge_id"], user_id="user-001",
+                 request_id="req-1", operation_hash=intr["operation_hash"],
+                 decision="approve")
+
+    resumed = graph.invoke(Command(resume={"decision": "approve"}), CFG)
+    assert resumed["status"] == "COMPLETED"
+
+    # params 只能是纯业务参数
+    assert set(resumed["params"]) == {"amount_minor", "currency", "contact_id"}
+    for leaking in ("_authorization_ref", "_idempotency_key"):
+        assert leaking not in resumed["params"]
+
+    # Checkpoint 里的 params 同样干净
+    checkpoint_params = graph.get_state(CFG).values.get("params") or {}
+    assert not [k for k in checkpoint_params if k.startswith("_")]
+
+    # 整个 checkpoint 不应出现幂等键的值
+    idem = store.lookup(intr["challenge_id"])["idempotency_key"]
+    assert idem not in repr(graph.get_state(CFG).values)
+
+
 def test_repeated_resume_does_not_double_charge(wired) -> None:
     store, graph = wired
     out = ask(graph, "给张伟转 300 元")

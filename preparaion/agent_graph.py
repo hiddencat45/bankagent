@@ -467,16 +467,15 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
                 "result": _rejected(operation, "USER_CANCELLED"),
             }
 
-        # 已批准：登记授权引用与幂等键，供执行节点构造 WriteContext。
+        # 已批准：只记录"已授权"这个事实。
+        #
+        # 注意**不要**把授权引用与幂等键塞进 ``params``：``params`` 是会写进
+        # Checkpoint 的业务参数，而这两个是服务端能力凭证（契约禁止把它们
+        # 放进 Checkpoint、日志或 SSE）。执行节点改为从 ``challenge_id``
+        # 回查服务端记录取得，state 里只保留契约已声明的 ``challenge_id``。
         return {
             "challenge_id": challenge_id,
             "authorized": True,
-            "params": {
-                **params,
-                # 这两个是服务端设施，只在本进程内传给后端，不来自候选参数。
-                "_authorization_ref": challenge_id,
-                "_idempotency_key": settled["idempotency_key"],
-            },
         }
 
     def interrupt_for_confirmation(state: BankAgentState) -> dict[str, Any]:
@@ -504,14 +503,17 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
     def _run_scenario(state: BankAgentState, *, write: bool) -> dict[str, Any]:
         scenario_name = state["scenario"]
         operation = state["operation"]
+        # params 必须是**纯业务参数**：授权引用与幂等键不写进来，也不会
+        # 从 checkpoint 里读出来。写操作靠 challenge_id 回查服务端记录。
         raw_params = dict(state.get("params", {}))
-        auth_ref = raw_params.pop("_authorization_ref", "")
-        idem_key = raw_params.pop("_idempotency_key", "")
 
         if write:
+            challenge_id = state.get("challenge_id") or ""
+            record = rt.challenges.lookup(challenge_id) or {}
+            idem_key = record.get("idempotency_key") or ""
             context: Any = WriteContext(
                 state["user_id"], state["account_id"], state["request_id"],
-                authorization_ref=auth_ref, idempotency_key=idem_key,
+                authorization_ref=challenge_id, idempotency_key=idem_key,
             )
         else:
             context = TrustedContext(
