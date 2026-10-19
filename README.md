@@ -15,7 +15,8 @@
 | 余额查询 | 已实现（教学版） |
 | 智能转账 | 已实现主链路；后端为内存计算，**不落账、无幂等键、无事务** |
 | 账单分析、理财操作、卡片管理、订阅与代扣、跨场景联动 | **设计目标，尚未实现** |
-| `preparaion/scenarios/`、`preparaion/bank_backend.py`、`preparaion/data/`、`api/`、`frontend/` | **目录尚未建立** |
+| 公共类型与模拟后端 | 已实现 `bank_types.py` 和独立后端查询/受控转账，**尚未接入教学图或 API** |
+| `preparaion/scenarios/`、`preparaion/data/`、`api/`、`frontend/` | **尚未在本分支接入**；数据模块另见 PR #7 |
 | 真实模型接入、多轮槽位补全 | **未实现**；当前意图理解是离线规则（关键词 + 正则） |
 
 `preparaion/银行AI智能体全流程规划.pptx`（34 页）描述的是**设计目标**，其中只有转账主链路已在代码里落地。
@@ -64,6 +65,8 @@ Windows + **Python 3.10**（本机验证 3.10.9）+ PowerShell。
 
 门禁基线（2026-10-18 验证）：**11 条测试全绿、`pip check` 无冲突**。敏感字段扫描会列出教学占位符 `demo-otp-ok`，属已知的待改项，不判失败。
 
+公共类型和后端增量（2026-10-19）：本分支门禁 **58 passed**（11 条教学回归、23 条类型测试、24 条后端测试），依赖检查通过。PR #7 的 17 条数据测试尚未计入本分支，合并后门禁会统一收集。
+
 若本机执行策略拦截 `.ps1`（提示「未对文件进行数字签名」）：
 
 ```powershell
@@ -83,6 +86,16 @@ Demo 实际输出：
 ```text
 当前可用余额为 5000.00 CNY。
 ```
+
+### 独立模拟后端（等待 A 接入图和 API）
+
+在 `preparaion/` 下运行 `..\.venv\Scripts\python.exe -m pytest -q tests/test_bank_backend.py` 可验证隔离后端。测试使用独立小样例和服务端授权替身，不要求先运行 API，也不代表真实认证已接入。
+
+服务端启动时调用 `bank_backend.configure_backend(...)` 一次，注入已校验的 `data_factory`、`lookup_authorization(ref)`、`operation_hash(context, operation, params)`、共享 `threading.RLock` 以及可选 `clock()`。固定日期演示应让 clock 与数据参考日一致；不注入时使用真实当前时间。返回的 `BankBackend` 实例和模块级 get_balance/find_contacts/query_bills/execute_transfer/reset_demo_data 入口操作同一份内存数据。图与 API 不得从客户端构造这些依赖；未配置时入口报错，无授权查询或哈希函数时转账拒绝。
+
+授权表的终态修改、后端写入及 API 的整体验示重置必须使用同一个 RLock；重置业务数据后，A 仍须在该锁内使旧会话、授权和 Checkpoint 失效，不能把后端 reset 当作完整的 /demo/reset。PR #7 合并后可用 build_demo_data 作 data_factory，此后端本身不导入数据包或图模块。
+
+后端全部使用整数分；重复成功操作返回原结果，失败不扣款，累计风险在锁内复查。余额结果含内部风控累计值，A 对外序列化前必须按 SERVER_ONLY_DATA_FIELDS 过滤；不能直接送模型或 SSE。进程重启丢失内存账本、幂等缓存和授权；没有连接真实银行，也不宣称外部收款到账。
 
 ### 两个已经踩过的坑
 
@@ -111,14 +124,17 @@ bankagent/
 │   └─ 阶段0-接口草案.md           # 阶段 0 接口草案（过渡文件，阶段 1 落地后由代码取代）
 └─ preparaion/
     ├─ bank_agent_graph.py        # 教学源码：State + 全部节点 + 图组装
+    ├─ bank_types.py              # 已确认的公共类型和常量
+    ├─ bank_backend.py            # B：内存查询与受控转账，不依赖图
     ├─ test_bank_agent_graph.py   # 11 条流程与安全测试
+    ├─ tests/                    # 类型与后端隔离测试
     ├─ build_bank_agent_deck.js   # PPT 生成脚本（PPT 的真正源头）
     ├─ build_frontend_mockup.js   # 前端效果图生成脚本
     ├─ assets/                    # 全流程图的 Mermaid 源与 SVG/PNG 导出
     └─ 银行AI智能体全流程规划.pptx  # 交付物成品（由脚本生成）
 ```
 
-规划中的目标结构（**尚未建立**）：`preparaion/scenarios/`、`preparaion/bank_backend.py`、`preparaion/data/`、`preparaion/tests/`、`api/`、`frontend/`。
+规划中的目标结构（**尚未接入**）：`preparaion/scenarios/`、`preparaion/data/`（PR #7 待审）、`api/`、`frontend/`。
 
 ---
 
