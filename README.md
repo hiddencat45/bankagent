@@ -8,15 +8,16 @@
 
 ## 一、当前进度：先读这一段
 
-**这是一个教学原型，不是可用的银行应用。** 代码里真正跑通的只有**余额查询**和**转账主链路**（准备 → 确认/强认证 → 执行 → 回复），而且集中在一个平面文件里，后端是内存模拟。
+**这是一个教学原型，不是可用的银行应用。** 从现有教学图入口跑通的仍是**余额查询**和**转账主链路**（准备 → 确认/强认证 → 执行 → 回复）。新增的独立类型、数据和模拟后端已有测试，尚待主图与 API 接入。
 
 | 能力 | 代码状态 |
 |---|---|
 | 余额查询 | 已实现（教学版） |
 | 智能转账 | 已实现主链路；后端为内存计算，**不落账、无幂等键、无事务** |
 | 账单分析、理财操作、卡片管理、订阅与代扣、跨场景联动 | **设计目标，尚未实现** |
+| 公共类型与模拟后端 | 已实现 `bank_types.py` 和独立后端查询/受控转账，**尚未接入教学图或 API** |
 | 固定演示数据与一致性校验 | 已实现内部数据模块：两账户、联系人、七笔交易；**尚未接入图、API 或模型** |
-| `preparaion/scenarios/`、`preparaion/bank_backend.py`、`api/`、`frontend/` | **尚未实现** |
+| `preparaion/scenarios/`、`api/`、`frontend/` | **尚未接入** |
 | 真实模型接入、多轮槽位补全 | **未实现**；当前意图理解是离线规则（关键词 + 正则） |
 
 `preparaion/银行AI智能体全流程规划.pptx`（34 页）描述的是**设计目标**，其中只有转账主链路已在代码里落地。
@@ -65,7 +66,7 @@ Windows + **Python 3.10**（本机验证 3.10.9）+ PowerShell。
 
 门禁基线（2026-10-18 验证）：**11 条测试全绿、`pip check` 无冲突**。敏感字段扫描会列出教学占位符 `demo-otp-ok`，属已知的待改项，不判失败。
 
-数据模块增量（2026-10-19 验证）：新增 17 条数据测试，完整门禁 **28 passed**、依赖检查通过。pytest 缓存目录可能报告权限警告，不影响测试结果。
+类型、数据和后端合并验证（2026-10-19）：完整门禁 **75 passed**（11 条教学回归、23 条类型测试、17 条数据测试、24 条后端测试），依赖检查通过。pytest 缓存目录可能报告权限警告，不影响测试结果。
 
 若本机执行策略拦截 `.ps1`（提示「未对文件进行数字签名」）：
 
@@ -77,7 +78,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check.ps1
 
 ```powershell
 cd preparaion
-..\.venv\Scripts\python.exe -m pytest -q                        # 11 passed
+..\.venv\Scripts\python.exe -m pytest -q test_bank_agent_graph.py # 原教学 11 条
 ..\.venv\Scripts\python.exe -X utf8 bank_agent_graph.py
 ```
 
@@ -86,6 +87,16 @@ Demo 实际输出：
 ```text
 当前可用余额为 5000.00 CNY。
 ```
+
+### 独立模拟后端（等待 A 接入图和 API）
+
+在 `preparaion/` 下运行 `..\.venv\Scripts\python.exe -m pytest -q tests/test_bank_backend.py` 可验证隔离后端。测试使用独立小样例和服务端授权替身，不要求先运行 API，也不代表真实认证已接入。
+
+服务端启动时调用 `bank_backend.configure_backend(...)` 一次，注入已校验的 `data_factory`、`lookup_authorization(ref)`、`operation_hash(context, operation, params)`、共享 `threading.RLock` 以及可选 `clock()`。固定日期演示应让 clock 与数据参考日一致；不注入时使用真实当前时间。返回的 `BankBackend` 实例和模块级 get_balance/find_contacts/query_bills/execute_transfer/reset_demo_data 入口操作同一份内存数据。图与 API 不得从客户端构造这些依赖；未配置时入口报错，无授权查询或哈希函数时转账拒绝。
+
+授权表的终态修改、后端写入及 API 的整体验示重置必须使用同一个 RLock；重置业务数据后，A 仍须在该锁内使旧会话、授权和 Checkpoint 失效，不能把后端 reset 当作完整的 /demo/reset。可用下面数据模块的 build_demo_data 作 data_factory，此后端本身不导入数据包或图模块。
+
+后端全部使用整数分；重复成功操作返回原结果，失败不扣款，累计风险在锁内复查。余额结果含内部风控累计值，A 对外序列化前必须按 SERVER_ONLY_DATA_FIELDS 过滤；不能直接送模型或 SSE。进程重启丢失内存账本、幂等缓存和授权；没有连接真实银行，也不宣称外部收款到账。
 
 ### 固定数据（供后续模拟后端加载）
 
@@ -126,24 +137,26 @@ bankagent/
 │   └─ 阶段0-接口草案.md           # 阶段 0 接口草案（过渡文件，阶段 1 落地后由代码取代）
 └─ preparaion/
     ├─ bank_agent_graph.py        # 教学源码：State + 全部节点 + 图组装
+    ├─ bank_types.py              # 已确认的公共类型和常量
+    ├─ bank_backend.py            # B：内存查询与受控转账，不依赖图
     ├─ test_bank_agent_graph.py   # 11 条流程与安全测试
     ├─ data/                     # B：固定样例生成与账本一致性校验
-    ├─ tests/test_demo_data.py    # B：17 条数据测试
+    ├─ tests/                    # 类型、固定数据与后端隔离测试
     ├─ build_bank_agent_deck.js   # PPT 生成脚本（PPT 的真正源头）
     ├─ build_frontend_mockup.js   # 前端效果图生成脚本
     ├─ assets/                    # 全流程图的 Mermaid 源与 SVG/PNG 导出
     └─ 银行AI智能体全流程规划.pptx  # 交付物成品（由脚本生成）
 ```
 
-规划中的目标结构（**尚未实现**）：`preparaion/bank_types.py`、`preparaion/scenarios/`、`preparaion/bank_backend.py`、`api/`、`frontend/`。
+规划中的目标结构（**尚未接入**）：`preparaion/scenarios/`、`api/`、`frontend/`。
 
 ---
 
 ## 六、已知限制与未完成项
 
-- 代码仍是**平铺单文件**，尚未按场景模块化（阶段 1 的工作）。
+- 教学图仍为单文件，独立后端与数据模块已建立，尚待场景调度和主图接入。
 - **恢复路径读 `resume` 载荷**判断授权（`auth_token == "demo-otp-ok"`），违反「授权结果必须来自服务端查询」，必须改。
-- 金额用 `float`，Checkpoint 用 `InMemorySaver`，**进程重启即丢**。
+- 教学图金额仍用 `float`；新后端与数据使用整数分。Checkpoint 用 `InMemorySaver`，内存后端同样**进程重启即丢**。
 - 教学代码的通讯录是**精确姓名匹配**，没有重名、别名或手机号尾号歧义处理。
 - 未实现多轮槽位补全：只回复「300 元」不会与上一轮的「给张伟转钱」自动合并。
 - PPT 生成脚本依赖**仓库外**的本机 `.dsh` 路径，队友 clone 后跑不了 PPT 生成；**绝不手改 PPTX**，手改会在下次生成时被覆盖。
