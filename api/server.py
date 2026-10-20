@@ -1,0 +1,249 @@
+"""本地单进程离线 Demo 的 FastAPI 接线；认证结果只来自服务端。"""
+import threading
+from datetime import datetime
+from urllib.parse import urlsplit
+from uuid import uuid4
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
+from starlette.background import BackgroundTask
+from starlette.concurrency import iterate_in_threadpool
+
+from agent_graph import BankAgentRuntime, SG_TZ, build_graph
+from agent_security import ChallengeError, ChallengeStore, compute_operation_hash
+from bank_backend import configure_backend, get_balance, reset_demo_data
+from bank_types import TrustedContext
+from data.generator import REFERENCE_DATE, build_demo_data
+from scenarios.bills import configure_clock
+from api import events
+from api.contracts import ApiError, parse_chat_request
+from api.session import DemoSessionStore
+
+
+class Service:
+    def __init__(self, *, clock=None, authenticate=None):
+        # 固定业务参考日，挑战仍随真实经过时间过期。
+        started = datetime.now(SG_TZ)
+        reference = datetime.combine(REFERENCE_DATE, datetime.min.time(), SG_TZ).replace(hour=12)
+        self.clock = clock or (lambda: reference + (datetime.now(SG_TZ) - started))
+        self.authenticate = authenticate or (lambda context, otp: False)
+        self.lock = threading.RLock()
+        self.running = threading.Lock()
+        self.sessions = DemoSessionStore(lock=self.lock)
+        self.challenges = ChallengeStore(lock=self.lock, clock=self.clock)
+        self.challenge_by_thread = {}
+        self.saver = InMemorySaver()
+        self.runtime = BankAgentRuntime(challenges=self.challenges, clock=self.clock)
+        self.graph = build_graph(self.runtime, checkpointer=self.saver)
+        configure_clock(clock=self.clock)
+        configure_backend(data_factory=build_demo_data, lookup_authorization=self.challenges.lookup,
+                          operation_hash=compute_operation_hash, lock=self.lock, clock=self.clock)
+
+    def reserve(self):
+        if not self.running.acquire(blocking=False):
+            raise ApiError('RUN_BUSY', '演示服务正在办理业务，请稍后重试。', 409)
+
+    def prepare(self, authorization, payload):
+        session = self.sessions.resolve(authorization)
+        req = parse_chat_request(payload)
+        if req.is_resume and req.thread_id is None:
+            raise ApiError('INVALID_REQUEST', '恢复时必须提供 thread_id。', 400)
+        thread = req.thread_id or f'conv-{uuid4().hex}'
+        if req.thread_id:
+            self.sessions.require_thread(session, thread)
+        self.reserve()
+        try:
+            cfg = {'configurable': {'thread_id': thread}}
+            snapshot = self.graph.get_state(cfg)
+            state = snapshot.values or {}
+            waiting = [i for task in snapshot.tasks for i in task.interrupts]
+            if req.is_resume:
+                cid = req.resume.challenge_id
+                record = self.challenges.lookup(cid)
+                current_cid = self.challenge_by_thread.get(thread)
+                if not record or cid != current_cid:
+                    raise ApiError('CHALLENGE_INVALID', '确认卡不存在或已失效。', 409)
+                context = TrustedContext(session.user_id, session.account_id, state['request_id'])
+                expected = compute_operation_hash(context, state['operation'], state['params'])
+                if state.get('operation_hash') != expected:
+                    raise ApiError('CHALLENGE_STATE_MISMATCH', '操作参数已变化，请重新发起。', 409)
+                authenticated = False
+                if record['risk_level'] == 'RED' and req.resume.decision == 'approve' and record['decision'] == 'PENDING':
+                    try:
+                        authenticated = self.authenticate(context, req.resume.otp) is True
+                    except Exception:
+                        raise ApiError('CHALLENGE_INVALID', '认证服务暂时不可用，尚未执行。', 409) from None
+                self.challenges.decide(challenge_id=cid, user_id=session.user_id,
+                    request_id=context.request_id, operation_hash=expected,
+                    decision=req.resume.decision, authenticated=authenticated)
+                # 不把 decision 或凭证交给图/Checkpoint。
+                graph_input = Command(resume=True) if snapshot.next else None
+                request_id = context.request_id
+            else:
+                if waiting:
+                    record = self.challenges.lookup(waiting[0].value['challenge_id'])
+                    if record and record['expires_at'] > self.clock():
+                        raise ApiError('RUN_BUSY', '请先确认或拒绝当前操作。', 409)
+                    self.saver.delete_thread(thread)
+                request_id = f'req-{uuid4().hex}'
+                graph_input = {'user_id': session.user_id, 'account_id': session.account_id,
+                               'request_id': request_id, 'message': req.message}
+                if not req.thread_id:
+                    self.sessions.register_thread(session, thread)
+            return cfg, graph_input, state, dict(thread_id=thread, request_id=request_id, mode='offline')
+        except ChallengeError as exc:
+            self.running.release()
+            raise ApiError(exc.code, '确认失败或已失效，请检查当前操作。', 409) from None
+        except Exception:
+            self.running.release()
+            raise
+
+    def stream(self, cfg, graph_input, previous, base):
+        def frame(name, **kw):
+            return events.format_sse(name, getattr(events, name)(**base, **kw))
+        yield frame('status', step='started', status_value='PROCESSING')
+        try:
+            if graph_input is None:
+                state = previous  # 相同决定重放已完成结果，不再执行图。
+            else:
+                for _ in self.graph.stream(graph_input, cfg, stream_mode='updates'):
+                    pass
+                snapshot = self.graph.get_state(cfg)
+                state = snapshot.values
+                waiting = [i for task in snapshot.tasks for i in task.interrupts]
+                if waiting:
+                    intr = waiting[0].value
+                    self.challenge_by_thread[base['thread_id']] = intr['challenge_id']
+                    record = self.challenges.lookup(intr['challenge_id'])
+                    status = 'AWAITING_AUTHENTICATION' if intr['kind'] == 'STRONG_AUTH' else 'AWAITING_CONFIRMATION'
+                    yield frame('status', step='awaiting_authentication' if intr['kind'] == 'STRONG_AUTH' else 'awaiting_confirmation', status_value=status)
+                    from bank_backend import find_contacts
+                    context = TrustedContext(state['user_id'], state['account_id'], state['request_id'])
+                    # 姓名从已绑定联系人查询，不能把内部 contact_id 当作展示名。
+                    contacts = find_contacts(context=context, name=state['candidate_params'].get('recipient_name', ''))
+                    recipient = next(c['display_name'] for c in contacts if c['contact_id'] == record['params']['contact_id'])
+                    payload = {k: record[k] for k in ('operation', 'risk_level', 'challenge_id', 'operation_hash')}
+                    payload.update(recipient=recipient, amount_minor=record['params']['amount_minor'],
+                                   currency=record['params']['currency'], expires_at=record['expires_at'].isoformat())
+                    yield frame('card', card_type='confirm', payload=payload)
+                    yield frame('interrupt', kind=intr['kind'], challenge_id=record['challenge_id'],
+                                operation_hash=record['operation_hash'], prompt='请确认本次操作；高风险操作需要独立认证。')
+                    yield frame('done', status_value=status)
+                    return
+            status = state['status']
+            result = state.get('result')
+            if status == 'FAILED':
+                yield frame('error', code='BACKEND_UNAVAILABLE', message_text='业务服务暂时不可用，请稍后重试。')
+            else:
+                if state.get('response'):
+                    yield frame('message', text=state['response'])
+                if result:
+                    if result['operation'] == 'GET_BALANCE' and result['data']:
+                        result = {**result, 'data': {k: result['data'][k] for k in ('balance_minor', 'currency')}}
+                    if result['operation'] == 'QUERY_BILLS' and status == 'COMPLETED':
+                        yield frame('card', card_type='evidence', payload={'operation': 'QUERY_BILLS', 'data': result['data']})
+                    yield frame('card', card_type='result', payload=result)
+            yield frame('status', step='finished', status_value=status)
+            yield frame('done', status_value=status)
+        except Exception:
+            yield frame('error', code='BACKEND_UNAVAILABLE', message_text='办理中断，请核对结果后重试当前确认操作。')
+            yield frame('done', status_value='FAILED')
+
+
+def create_app(*, demo=False, clock=None, authenticate=None):
+    service = Service(clock=clock, authenticate=authenticate)
+    app = FastAPI(title='有度 · 本地离线银行 Demo')
+    app.state.service = service
+
+    @app.exception_handler(ApiError)
+    async def api_error(request, exc):
+        code = 'CONVERSATION_NOT_FOUND' if exc.code == 'THREAD_NOT_FOUND' else exc.code
+        return JSONResponse({'code': code, 'message': exc.message}, status_code=exc.http_status)
+
+    @app.middleware('http')
+    async def local_only(request, call_next):
+        host = request.url.hostname
+        origin = request.headers.get('origin')
+        if host not in {'127.0.0.1', 'localhost', '::1'} or (
+            origin and (urlsplit(origin).netloc != request.headers.get('host') or urlsplit(origin).scheme != request.url.scheme)
+        ):
+            return JSONResponse({'code': 'INVALID_REQUEST', 'message': '仅允许本地同源演示。'}, status_code=403)
+        response = await call_next(request)
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+
+    @app.get('/health')
+    def health():
+        try:
+            result = get_balance(context=TrustedContext('user-001', 'account-001', 'health'))
+            ok = result['status'] == 'COMPLETED'
+        except Exception:
+            ok = False
+        return {'status': 'ok' if ok else 'degraded', 'mode': 'offline',
+                'backend': 'ok' if ok else 'unavailable', 'model': 'not_configured'}
+
+    def require_demo(request):
+        if not demo or request.client is None or request.client.host not in {'127.0.0.1', '::1', 'testclient'}:
+            raise ApiError('NOT_FOUND', '入口未开放。', 404)
+
+    @app.post('/demo/session')
+    async def session(request: Request):
+        require_demo(request)
+        if await request.body() not in (b'', b'{}'):
+            raise ApiError('INVALID_REQUEST', '会话入口不接受身份参数。', 400)
+        service.reserve()
+        try:
+            issued = service.sessions.issue(user_id='user-001', account_id='account-001')
+            return {'token': issued.token, 'mode': 'offline'}
+        finally:
+            service.running.release()
+
+    @app.post('/demo/reset')
+    async def reset(request: Request):
+        require_demo(request)
+        if await request.body() not in (b'', b'{}'):
+            raise ApiError('INVALID_REQUEST', '重置入口不接受业务参数。', 400)
+        service.sessions.resolve(request.headers.get('authorization'))
+        service.reserve()
+        try:
+            with service.lock:
+                reset_demo_data()
+                service.sessions.invalidate_all()
+                service.challenges.invalidate_all()
+                service.challenge_by_thread.clear()
+                service.saver = InMemorySaver()
+                service.runtime = BankAgentRuntime(challenges=service.challenges, clock=service.clock)
+                service.graph = build_graph(service.runtime, checkpointer=service.saver)
+            return {'status': 'COMPLETED'}
+        finally:
+            service.running.release()
+
+    @app.post('/agent/chat')
+    async def chat(request: Request):
+        try:
+            payload = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError('INVALID_REQUEST', '请求体必须是 JSON。', 400) from None
+        prepared = service.prepare(request.headers.get('authorization'), payload)
+        released = False
+        def release():
+            nonlocal released
+            if not released:
+                released = True
+                service.running.release()
+        async def body():
+            try:
+                # 同一进程 Demo 串行运行；yield 保留真实 SSE 边界。
+                async for data in iterate_in_threadpool(service.stream(*prepared)):
+                    yield data
+            finally:
+                release()
+        return StreamingResponse(body(), media_type='text/event-stream',
+                                 background=BackgroundTask(release))
+    return app
+
+
+def create_demo_app():
+    return create_app(demo=True)

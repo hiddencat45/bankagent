@@ -21,6 +21,8 @@ langgraph==1.2.16
 langgraph-checkpoint==4.3.0
 langchain-core==1.6.12
 pytest==9.1.1
+fastapi==0.150.0
+uvicorn==0.54.0
 
 # ---- 以下为传递依赖，由 pip freeze 导出，用于锁定完全一致的运行环境 ----
 # 不要手工改。要升级就直接改上面的直接依赖，再用 pip freeze 重新生成这一整段。
@@ -65,3 +67,9 @@ uuid_utils==0.17.1
 websockets==16.1.1
 xxhash==4.0.1
 zstandard==0.25.0
+
+# HTTP 服务传递依赖（2026-10-20，由 pip freeze 导出）
+annotated-doc==0.0.5
+click==8.5.0
+opentelemetry-api==1.45.1
+starlette==1.7.0
