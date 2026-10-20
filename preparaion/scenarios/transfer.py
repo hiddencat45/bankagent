@@ -39,7 +39,7 @@ INTENTS: dict[str, IntentSpec] = {
         "keywords": ["转", "转账", "汇", "打钱"],
         "slots": {
             "recipient_name": r"给\s*(.+?)\s*转",
-            "amount": r"转(?:账)?\s*([^\s元，。！？!?；;]+)",
+            "amount": r"转(?:账)?\s*([+\-0-9][^\s元，。！？!?；;]*)",
         },
         "required": ["recipient_name", "amount"],
         "operation": "TRANSFER",
