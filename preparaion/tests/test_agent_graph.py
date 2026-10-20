@@ -28,10 +28,13 @@ CFG = {"configurable": {"thread_id": "conv-1"}}
 
 
 @pytest.fixture()
-def wired():
+def wired(monkeypatch):
     """装配真实后端、真实演示数据、共享锁与可控时钟。"""
+    from scenarios import bills
+    monkeypatch.setattr(bills, "_clock", bills._clock)
     lock = threading.RLock()
-    clock = lambda: datetime(2026, 10, 19, 10, 0, tzinfo=SG_TZ)
+    clock = lambda: datetime(2026, 10, 18, 10, 0, tzinfo=SG_TZ)
+    bills.configure_clock(clock=clock)
     store = ChallengeStore(lock=lock, clock=clock)
     configure_backend(
         data_factory=build_demo_data,
@@ -520,3 +523,60 @@ def test_backend_rejection_maps_to_top_level_rejected(wired) -> None:
     assert resumed["status"] == "REJECTED"
     assert resumed["result"]["error_code"] == "INSUFFICIENT_BALANCE"
     assert balance_minor() == 50_000
+
+
+@pytest.mark.parametrize("text", ["不要给张伟转 300 元", "给张伟转 300 元人民币，不要执行", "是否给张伟转 300 元", "先别给张伟转 300 元"])
+def test_negative_or_uncertain_write_creates_no_challenge(wired, text):
+    store, graph = wired
+    out = ask(graph, text)
+    assert out["status"] == "NEEDS_CLARIFICATION"
+    assert not out.get("__interrupt__")
+    assert store.pending(user_id="user-001", request_id="req-1") is None
+    assert balance_minor() == 500000
+
+
+@pytest.mark.parametrize("token", ["300.001", "1,000", "1e3", "-300", "300万", "1_000"])
+def test_full_message_invalid_amount_never_creates_confirmation(wired, token):
+    store, graph = wired
+    out = ask(graph, f"给张伟转 {token} 元")
+    assert out["status"] in {"REJECTED", "NEEDS_CLARIFICATION"}
+    assert not out.get("__interrupt__")
+    assert store.pending(user_id="user-001", request_id="req-1") is None
+    assert balance_minor() == 500000
+
+
+def test_balance_full_graph_has_no_internal_daily_total(wired):
+    _, graph = wired
+    out = ask(graph, "查一下余额")
+    assert out["status"] == "COMPLETED"
+    assert out["result"]["data"] == {"balance_minor": 500000, "currency": "CNY"}
+    assert "daily_transfer_total_minor" not in repr(list(graph.get_state_history(CFG)))
+    assert "5000.00" in out["response"]
+
+
+@pytest.mark.parametrize("hook", ["resolve", "risk", "execute", "validate"])
+def test_unexpected_scenario_error_is_sanitized(wired, monkeypatch, hook):
+    from scenarios import REGISTRY
+    def broken(*args, **kwargs):
+        raise RuntimeError("private backend diagnostic")
+    monkeypatch.setattr(REGISTRY.get("transfer"), hook, broken)
+    _, graph = wired
+    if hook == "execute":
+        # Use the read-only scenario to reach execution without authorization.
+        monkeypatch.setattr(REGISTRY.get("bills"), "execute", broken)
+        text = "本月账单"
+    else:
+        text = "给张伟转 300 元"
+    out = ask(graph, text)
+    assert out["status"] == out["result"]["status"] == "FAILED"
+    assert out["result"]["error_code"] == "INTERNAL"
+    assert "private backend diagnostic" not in repr(out)
+    assert not out.get("__interrupt__")
+    assert balance_minor() == 500000
+
+
+def test_bills_clock_uses_injected_reference_day(wired):
+    _, graph = wired
+    out = ask(graph, "本月账单")
+    assert out["result"]["data"]["start"] == "2026-10-01"
+    assert out["result"]["data"]["total_minor"] == 100000

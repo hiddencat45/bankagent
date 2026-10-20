@@ -29,6 +29,7 @@ from typing import Any, Callable, Literal
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
+from langgraph.errors import GraphBubbleUp
 from langgraph.types import interrupt
 
 from agent_security import ChallengeStore, compute_operation_hash
@@ -147,6 +148,12 @@ def _rejected(operation: str, error_code: str) -> BackendResult:
             "error_code": error_code}
 
 
+def _failed(operation: str, code: str = "INTERNAL") -> dict[str, Any]:
+    return {"status": "FAILED", "result": {
+        "operation": operation, "status": "FAILED", "data": None, "error_code": code,
+    }}
+
+
 def _safe_projection(params: dict[str, Any]) -> dict[str, Any]:
     """把参数投影成可展示的形式，剔除服务端专用字段（契约 §1.3）。"""
     return {k: v for k, v in params.items() if k not in SERVER_ONLY_DATA_FIELDS}
@@ -260,6 +267,12 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
         spec = registry.get(scenario_name)
         intent_spec = spec.intents[intent_name]
 
+        if intent_spec["effect"] == "WRITE" and re.search(
+            r"不|别|取消|停止|暂缓|等等|算了|放弃|能否|是否|可能|也许|考虑|想想", message
+        ):
+            return {"status": "NEEDS_CLARIFICATION", "missing_fields": [],
+                    "response": "尚未发起转账。如需办理，请明确收款人和金额。"}
+
         candidates = _extract_slots(message, intent_spec["slots"])
         return {
             "scenario": scenario_name,
@@ -303,6 +316,10 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
                 "status": "REJECTED",
                 "result": _rejected(operation, code),
             }
+        except GraphBubbleUp:
+            raise
+        except Exception:
+            return _failed(operation)
 
         # 缺失槽位：只按「候选里缺了必填槽位」判定。
         #
@@ -320,7 +337,13 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
         # 注意不能拿 ``required`` 里的槽位名去比对 params——``recipient_name``
         # 与 ``amount`` 会被转换成 ``contact_id`` 与 ``amount_minor``，
         # 它们永远不会是 params 的键，那样判会误报"缺信息"。
-        if not missing and spec.validate is not None and not spec.validate(operation, resolved):
+        try:
+            valid = spec.validate(operation, resolved) if spec.validate is not None else True
+        except GraphBubbleUp:
+            raise
+        except Exception:
+            return _failed(operation)
+        if not missing and not valid:
             missing = [
                 key for key in spec.clarify_labels
                 if key not in candidates and key not in resolved
@@ -344,7 +367,7 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
         status = state.get("status")
         if status == "NEEDS_CLARIFICATION":
             return "clarify"
-        if status == "REJECTED":
+        if status in {"REJECTED", "FAILED"}:
             return "end"
         return "security"
 
@@ -378,11 +401,11 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
             risk_level = registry.evaluate_risk(scenario_name, operation, params, context)
         except (ScenarioError, ValueError):
             # 失败关闭：算不出风险就不执行。
-            return {
-                "risk_level": "DENY",
-                "result": _rejected(operation, "RISK_EVALUATION_FAILED"),
-                "status": "FAILED",
-            }
+            return {"risk_level": "DENY", **_failed(operation, "RISK_EVALUATION_FAILED")}
+        except GraphBubbleUp:
+            raise
+        except Exception:
+            return {"risk_level": "DENY", **_failed(operation)}
 
         if risk_level == "DENY":
             return {
@@ -522,11 +545,10 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
 
         try:
             result = registry.execute(scenario_name, operation, raw_params, context)
-        except ScenarioError:
-            return {
-                "status": "FAILED",
-                "result": _rejected(operation, "INTERNAL"),
-            }
+        except GraphBubbleUp:
+            raise
+        except Exception:
+            return _failed(operation)
 
         # 契约 §1.4：后端状态如实映射，不能因为返回了就标 COMPLETED。
         return {"status": STATUS_MAP.get(result["status"], "FAILED"), "result": result}
