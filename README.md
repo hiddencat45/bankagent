@@ -10,7 +10,7 @@
 
 **这是一个教学原型，不是可用的银行应用。** 从现有教学图入口（`bank_agent_graph.py`）跑通的仍是**余额查询**和**转账主链路**（准备 → 确认/强认证 → 执行 → 回复）。
 
-阶段 1 的公共部分已**代码完成**，分别在三张待复核的 PR 里：
+阶段 1 的公共部分已有实现，尚待审查确认与集成验收，分别在三张待复核的 PR 里：
 
 | PR | 内容 |
 |---|---|
@@ -87,7 +87,7 @@ Windows + **Python 3.10**（本机验证 3.10.9）+ PowerShell。
 
 门禁基线（`main`，2026-10-19 验证）：**100 passed**（11 条教学回归、23 条类型测试、17 条数据测试、24 条后端测试、25 条账单适配测试），`pip check` 无冲突。pytest 缓存目录可能报告权限警告，不影响测试结果。
 
-阶段 1 分支叠加后（`feat/graph-integration`，含 PR #11–#13）：**249 passed**。新增部分为注册器 31 条、转账场景 43 条、安全层 31 条、安全层与后端集成 14 条、主图 30 条。
+阶段 1 分支叠加后（`feat/graph-integration`，含 PR #11–#13）：**272 passed**（2026-10-20 修复后）。新增部分为注册器 31 条、转账场景 43 条、安全层 31 条、安全层与后端集成 14 条；另补金额、余额、否定写请求及异常边界回归。
 
 敏感字段扫描会列出教学占位符 `demo-otp-ok`（仅存在于旧教学图 `bank_agent_graph.py` 与其测试中），属已知的待迁移项，不判失败；新链路不使用任何固定口令。
 
@@ -118,7 +118,7 @@ cd preparaion
 ..\.venv\Scripts\python.exe -m pytest -q tests/test_agent_graph.py
 ```
 
-最小用法——服务端注入依赖，客户端只提供消息与三个可信字段：
+服务端内部装配示例：客户端只提供消息；user_id/account_id 来自服务端登录会话，request_id 由服务端生成。以下虚构身份仅用于本地 Python 演示：
 
 ```python
 import threading
@@ -129,9 +129,11 @@ from agent_graph import BankAgentRuntime, build_graph
 from agent_security import SG_TZ, ChallengeStore, compute_operation_hash
 from bank_backend import configure_backend
 from data.generator import build_demo_data
+from scenarios.bills import configure_clock
 
 lock = threading.RLock()
-clock = lambda: datetime(2026, 10, 19, 10, 0, tzinfo=SG_TZ)   # 与演示数据参考日对齐
+clock = lambda: datetime(2026, 10, 18, 10, 0, tzinfo=SG_TZ)   # 与演示数据参考日对齐
+configure_clock(clock=clock)
 store = ChallengeStore(lock=lock, clock=clock)
 configure_backend(
     data_factory=build_demo_data,
@@ -151,8 +153,9 @@ out = graph.invoke({
 # out["__interrupt__"] 里是确认卡；写操作不会在这里扣款
 
 # 用户在页面上确认后，服务端先落授权记录，再恢复图：
-store.decide(challenge_id=..., user_id="user-001", request_id="req-1",
-             operation_hash=..., decision="approve")
+intr = out["__interrupt__"][0].value
+store.decide(challenge_id=intr["challenge_id"], user_id="user-001", request_id="req-1",
+             operation_hash=intr["operation_hash"], decision="approve")
 final = graph.invoke(Command(resume={"decision": "approve"}), cfg)
 print(final["status"], final["response"])
 ```
@@ -235,7 +238,7 @@ bankagent/
     └─ 银行AI智能体全流程规划.pptx  # 交付物成品（由脚本生成）
 ```
 
-尚未实现：`preparaion/api/`、`preparaion/frontend/`，以及理财、卡片、订阅与代扣、跨场景联动四个场景。
+尚未实现：`api/`、`frontend/`，以及理财、卡片、订阅与代扣、跨场景联动四个场景。
 
 ---
 
