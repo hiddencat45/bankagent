@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
+import re
 from typing import Any
 
 from bank_types import (
@@ -38,7 +39,7 @@ INTENTS: dict[str, IntentSpec] = {
         "keywords": ["转", "转账", "汇", "打钱"],
         "slots": {
             "recipient_name": r"给\s*(.+?)\s*转",
-            "amount": r"转\s*(\d+(?:\.\d{1,2})?)\s*元?",
+            "amount": r"转(?:账)?\s*([^\s元，。！？!?；;]+)",
         },
         "required": ["recipient_name", "amount"],
         "operation": "TRANSFER",
@@ -75,6 +76,8 @@ def _to_minor(amount: Any) -> int | None:
     elif isinstance(amount, Decimal):
         value = amount
     elif isinstance(amount, str):
+        if not re.fullmatch(r"[0-9]+(?:\.[0-9]{1,2})?", amount.strip()):
+            return None
         try:
             value = Decimal(amount.strip())
         except (InvalidOperation, ValueError):
