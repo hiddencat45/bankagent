@@ -10,6 +10,8 @@
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from bank_types import UNTRUSTED_STATE_FIELDS
+
 __all__ = [
     "ApiError",
     "ChatRequest",
@@ -22,38 +24,14 @@ __all__ = [
 #
 # ``thread_id`` 与 ``challenge_id`` 允许出现，但它们只是**服务端引用的回传**，
 # 服务器必须重新校验归属，不能当成可信 ID。
-UNTRUSTED_REQUEST_FIELDS: frozenset[str] = frozenset({
-    "user_id",
-    "account_id",
-    "balance",
-    "balance_minor",
-    "risk_level",
-    "authorized",
-    "operation_hash",
-    "operation",
-    "params",
-    "result",
-    "daily_transfer_total_minor",
-    "contact_id",
-})
+UNTRUSTED_REQUEST_FIELDS: frozenset[str] = UNTRUSTED_STATE_FIELDS | {
+    "balance_minor", "operation", "params",
+}
 
-# 嵌套在 resume 里的可信字段同样要拒（契约要求"同时覆盖嵌套 resume"）。
-UNTRUSTED_RESUME_FIELDS: frozenset[str] = frozenset({
-    "user_id",
-    "account_id",
-    "balance",
-    "balance_minor",
-    "risk_level",
-    "authorized",
-    "approved",
-    "auth_token",
-    "token",
-    "params",
-    "operation",
-    "result",
-    "created_at",
-    "decided_at",
-})
+# challenge_id 是 resume 中唯一允许回传的服务端引用。
+UNTRUSTED_RESUME_FIELDS: frozenset[str] = (
+    UNTRUSTED_REQUEST_FIELDS - {"challenge_id"}
+) | {"approved", "auth_token", "token", "created_at", "decided_at"}
 
 # 顶层允许的键，其余一律视为客户端 bug。
 _ALLOWED_REQUEST_KEYS: frozenset[str] = frozenset({"thread_id", "message", "resume"})
@@ -196,7 +174,7 @@ def _parse_resume(raw: dict[str, Any]) -> ResumePayload:
         raise ApiError("INVALID_REQUEST", "resume.challenge_id 必须是非空字符串。", 400)
 
     decision = raw.get("decision")
-    if decision not in _DECISIONS:
+    if not isinstance(decision, str) or decision not in _DECISIONS:
         raise ApiError(
             "INVALID_REQUEST",
             "resume.decision 只能是 approve 或 reject。",

@@ -130,12 +130,14 @@ def test_untrusted_field_takes_priority_over_unknown() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("decision", ["APPROVE", "yes", "", None, 1])
+@pytest.mark.parametrize("decision", ["APPROVE", "yes", "", None, 1, [], {}, ["approve"], True])
 def test_invalid_decision_is_rejected(decision) -> None:
-    with pytest.raises(ApiError):
+    with pytest.raises(ApiError) as caught:
         parse_chat_request({
             "resume": {"challenge_id": "ch-1", "decision": decision},
         })
+    assert caught.value.http_status == 400
+    assert caught.value.code == "INVALID_REQUEST"
 
 
 def test_missing_challenge_id_is_rejected() -> None:
@@ -152,10 +154,12 @@ def test_reject_decision_is_accepted() -> None:
 
 def test_otp_is_kept_only_on_the_parsed_object() -> None:
     """otp 只短暂存在于解析结果里；不写日志、不进 State 由调用方保证。"""
+    import secrets
+    transient = secrets.token_urlsafe(16)
     req = parse_chat_request({
-        "resume": {"challenge_id": "ch-1", "decision": "approve", "otp": "123456"},
+        "resume": {"challenge_id": "ch-1", "decision": "approve", "otp": transient},
     })
-    assert req.resume.otp == "123456"
+    assert req.resume.otp == transient
 
 
 def test_non_object_body_is_rejected() -> None:
@@ -312,3 +316,15 @@ def test_open_events_rejected_by_validation_never_reach_sse() -> None:
     """校验失败的请求不会产生任何事件——这条串起两层。"""
     with pytest.raises(ApiError):
         parse_chat_request({"message": "查账单", "user_id": "user-001"})
+
+
+@pytest.mark.parametrize("field", ["request_id", "idempotency_key", "authorization_ref", "operation_hash", "card_id", "product_code", "daily_transfer_total_minor"])
+@pytest.mark.parametrize("nested", [False, True])
+def test_known_trusted_fields_always_get_untrusted_code(field, nested):
+    body = {"message": "查余额", field: "untrusted"}
+    if nested:
+        body = {"resume": {"challenge_id": "ch-1", "decision": "approve", field: "untrusted"}}
+    with pytest.raises(ApiError) as caught:
+        parse_chat_request(body)
+    assert caught.value.http_status == 400
+    assert caught.value.code == "UNTRUSTED_FIELD"
