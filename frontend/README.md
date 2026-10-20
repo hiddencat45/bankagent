@@ -1,31 +1,54 @@
-# 前端接入（开发中）
+# 有度 · 本地工作台
 
-当前交付是面向浏览器的 POST/SSE 通信模块，还没有页面或可运行的端到端 Demo。
-依据已确认的 `docs/阶段0-接口草案.md` §4.1–4.3；不依赖尚未合并的 A 分支。
+复用根目录 API 的真实模拟账本、服务端会话和授权。当前为离线规则模式，
+未连接真实银行或大模型；理财、卡片、订阅、跨场景联动与多轮补全尚未开放。
 
-`agent-client.mjs` 使用标准 fetch 与 ReadableStream，不新增第三方依赖：
+## 启动
 
-- `createAgentClient().send(request, {token, onEvent, signal})` 向同源 `/agent/chat` 发送请求。
-- request 只允许 `thread_id/message/resume`；可信身份由服务端注入。
-- token 必须来自服务端发放的演示会话，仅短暂传入，不写浏览器持久存储或日志。
-- onEvent 接收 `{event, data}`，data 为六种已确认事件的信封。
-- 第一条事件必须为 status；一轮的 thread_id/request_id/mode 必须一致。
-- done 的业务状态原样保留，等待确认、澄清、拒绝和失败都不转换为成功。
-- 断流、取消或协议异常会抛 AgentClientError；不会自动重发 POST。
-- 同一个客户端实例的并发发送被拒绝；服务端仍须实现 RUN_BUSY 和写入幂等。
-
-验证（使用支持 fetch/ReadableStream 的 Node.js，开发机已用 Node 24 验证）：
+在仓库根目录，先按根 README 用现有 `.venv` 安装锁定依赖，然后执行：
 
 ```powershell
-node --test frontend/tests/agent-client.test.mjs
-.\scripts\check.ps1
+.\.venv\Scripts\python.exe -m uvicorn frontend.dev_app:create_app --factory --app-dir preparaion --host 127.0.0.1 --port 8021 --workers 1 --no-access-log
 ```
 
-测试替身仅在测试中返回合成事件，不是运行时模拟银行响应。
-现有 scripts/check.ps1 只运行 Python 门禁；前端测试须单独运行上述 node 命令。
-目前已在 Node 验证流读取与请求行为，尚未完成真实浏览器和 HTTP 服务联调。
+打开 <http://127.0.0.1:8021/>，点击「开始演示」。页面与 API 同源，不需要另开前端服务器。
+只支持本地单进程单实例；Ctrl+C 停止服务，重启后内存数据恢复。
 
-后续接入：A 提供受控演示会话入口及响应格式、实际 HTTP 服务；B 在此模块上增加
-账单证据、转账确认卡与执行轨迹的页面。卡片字段校验、挑战一致性、过期、按钮状态和
-金额展示由页面层实现。OTP 只能短暂传给 resume，消费后清空，不能写入对话记录。
-通信模块没有验证卡片业务 payload，也不替代服务端授权、归属和金额校验。
+页面通过 `POST /demo/session` 获取短暂令牌，可信身份由服务端选择；
+令牌不进入对话记录、日志或浏览器持久存储。静态入口只挂载本目录，不暴露仓库根文件。
+
+## 演示验收步骤
+
+1. 开始演示：由实际余额查询显示 ¥ 5,000.00。
+2. 点击「本月账单」：消费 ¥ 1,000.00；疑似重复证据为两笔演示订阅交易，可展开完整明细。
+3. 点击「填写转账示例」再发送：出现给张伟转 ¥ 300.00 的确认卡。未收到匹配的 interrupt 前按钮禁用。
+4. 点击「确认转账」：结果、交易流水和最近确认余额来自服务端，余额变为 ¥ 4,700.00。
+5. 再发起一笔转账并取消：显示拒绝或取消结果，余额保持 ¥ 4,700.00。
+6. 高风险示例「给张伟转 1500 元」：明确独立认证尚未接入，批准按钮禁用，可取消。
+7. 重置演示：确认提示后恢复固定账本，旧会话与确认卡失效，页面重新建立会话查询余额。
+
+以上是浏览器验收步骤及预期，不代表全部已完成验收：当前浏览器安全权限拒绝本地页面访问，
+真实浏览器视觉/点击验证仍待用户授权。HTTP 与模块检查结果见 PR；不要把单测通过说成页面端到端通过。
+
+## 通信与确认边界
+
+- `agent-client.mjs`：标准 POST fetch/SSE，支持中文分片、CRLF、心跳与多行 data；同轮信封归属一致。
+- done 只结束流，等待确认/澄清、拒绝、失败都不转换为成功；断流不自动重发 POST。
+- 确认只回传当前 thread/challenge 与决定，不回传金额、身份、授权结论或改写后的执行参数。
+- 重发确认必须由用户明确选择并沿用同一挑战/决定，服务端仍负责幂等与授权。
+- 模拟业务日期与浏览器当天可能不同，页面不按浏览器日期误判过期；每次确认由服务端重新校验。
+- 高风险独立认证未接入，页面不收集或保存 OTP。服务端默认拒绝高风险批准。
+- 所有业务文本通过 textContent 展示，不将模型或后端文本当作 HTML 执行。
+
+## 检查
+
+使用支持 fetch/ReadableStream 的 Node.js（开发机 Node 24）：
+
+```powershell
+node --test frontend/tests/*.test.mjs
+.\scripts\check.ps1
+.\.venv\Scripts\python.exe scripts/smoke_api.py
+```
+
+Node 测试覆盖通信和展示模型；Python 门禁与 HTTP 冒烟使用真实后端。
+现有 scripts/check.ps1 不运行 Node 测试，需分别执行。测试替身不作为运行时假银行接口。
