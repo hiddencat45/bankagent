@@ -1,4 +1,4 @@
-"""本地单进程离线 Demo 的 FastAPI 接线；认证结果只来自服务端。"""
+"""本地单进程 Demo 的 FastAPI 接线；认证结果只来自服务端。"""
 import threading
 from datetime import datetime
 from urllib.parse import urlsplit
@@ -23,11 +23,12 @@ from api.session import DemoSessionStore
 
 
 class Service:
-    def __init__(self, *, clock=None, authenticate=None):
+    def __init__(self, *, clock=None, authenticate=None, candidate_model=None):
         # 固定业务参考日，挑战仍随真实经过时间过期。
         started = datetime.now(SG_TZ)
         reference = datetime.combine(REFERENCE_DATE, datetime.min.time(), SG_TZ).replace(hour=12)
         self.clock = clock or (lambda: reference + (datetime.now(SG_TZ) - started))
+        self.candidate_model = candidate_model
         self.authenticate = authenticate or (lambda context, otp: False)
         self.lock = threading.RLock()
         self.running = threading.Lock()
@@ -35,7 +36,7 @@ class Service:
         self.challenges = ChallengeStore(lock=self.lock, clock=self.clock)
         self.challenge_by_thread = {}
         self.saver = InMemorySaver()
-        self.runtime = BankAgentRuntime(challenges=self.challenges, clock=self.clock)
+        self.runtime = BankAgentRuntime(challenges=self.challenges, clock=self.clock, candidate_model=self.candidate_model)
         self.graph = build_graph(self.runtime, checkpointer=self.saver)
         configure_clock(clock=self.clock)
         configure_backend(data_factory=build_demo_data, lookup_authorization=self.challenges.lookup,
@@ -92,7 +93,7 @@ class Service:
                                'request_id': request_id, 'message': req.message}
                 if not req.thread_id:
                     self.sessions.register_thread(session, thread)
-            return cfg, graph_input, state, dict(thread_id=thread, request_id=request_id, mode='offline')
+            return cfg, graph_input, state, dict(thread_id=thread, request_id=request_id, mode=self.runtime.mode)
         except ChallengeError as exc:
             self.running.release()
             raise ApiError(exc.code, '确认失败或已失效，请检查当前操作。', 409) from None
@@ -135,7 +136,9 @@ class Service:
             status = state['status']
             result = state.get('result')
             if status == 'FAILED':
-                yield frame('error', code='BACKEND_UNAVAILABLE', message_text='业务服务暂时不可用，请稍后重试。')
+                code = result.get('error_code') if result else None
+                code = code if code in {'MODEL_UNAVAILABLE', 'MODEL_OUTPUT_INVALID'} else 'BACKEND_UNAVAILABLE'
+                yield frame('error', code=code, message_text=state.get('response') or '业务服务暂时不可用，请稍后重试。')
             else:
                 if state.get('response'):
                     yield frame('message', text=state['response'])
@@ -152,9 +155,9 @@ class Service:
             yield frame('done', status_value='FAILED')
 
 
-def create_app(*, demo=False, clock=None, authenticate=None):
-    service = Service(clock=clock, authenticate=authenticate)
-    app = FastAPI(title='有度 · 本地离线银行 Demo')
+def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=None):
+    service = Service(clock=clock, authenticate=authenticate, candidate_model=candidate_model)
+    app = FastAPI(title='有度 · 本地银行 Demo')
     app.state.service = service
 
     @app.exception_handler(ApiError)
@@ -181,8 +184,10 @@ def create_app(*, demo=False, clock=None, authenticate=None):
             ok = result['status'] == 'COMPLETED'
         except Exception:
             ok = False
-        return {'status': 'ok' if ok else 'degraded', 'mode': 'offline',
-                'backend': 'ok' if ok else 'unavailable', 'model': 'not_configured'}
+        interpreter = service.runtime.interpreter
+        model = 'not_configured' if interpreter is None else ('ok' if interpreter.health() else 'unavailable')
+        return {'status': 'ok' if ok and model != 'unavailable' else 'degraded', 'mode': service.runtime.mode,
+                'backend': 'ok' if ok else 'unavailable', 'model': model}
 
     def require_demo(request):
         if not demo or request.client is None or request.client.host not in {'127.0.0.1', '::1', 'testclient'}:
@@ -196,7 +201,7 @@ def create_app(*, demo=False, clock=None, authenticate=None):
         service.reserve()
         try:
             issued = service.sessions.issue(user_id='user-001', account_id='account-001')
-            return {'token': issued.token, 'mode': 'offline'}
+            return {'token': issued.token, 'mode': service.runtime.mode}
         finally:
             service.running.release()
 
@@ -214,7 +219,7 @@ def create_app(*, demo=False, clock=None, authenticate=None):
                 service.challenges.invalidate_all()
                 service.challenge_by_thread.clear()
                 service.saver = InMemorySaver()
-                service.runtime = BankAgentRuntime(challenges=service.challenges, clock=service.clock)
+                service.runtime = BankAgentRuntime(challenges=service.challenges, clock=service.clock, candidate_model=service.candidate_model)
                 service.graph = build_graph(service.runtime, checkpointer=service.saver)
             return {'status': 'COMPLETED'}
         finally:

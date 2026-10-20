@@ -34,6 +34,7 @@ from langgraph.errors import GraphBubbleUp
 from langgraph.types import interrupt
 
 from agent_security import ChallengeStore, compute_operation_hash
+from agent_understanding import CandidateInterpreter, CandidateModel, UnderstandingError
 from bank_types import (
     CLARIFICATION_TIMEOUT_MINUTES,
     SERVER_ONLY_DATA_FIELDS,
@@ -80,6 +81,8 @@ _PUBLIC_ERROR_TEXT: dict[str, str] = {
     "USER_CANCELLED": "您已取消这笔操作，账户未发生任何变动。",
     "AUTHORIZATION_REQUIRED": "这笔操作尚未确认，账户未发生任何变动。",
     "INTERNAL": "系统处理异常，操作未执行，请稍后重试。",
+    "MODEL_UNAVAILABLE": "模型暂时不可用，本次未生成操作；请稍后重试。",
+    "MODEL_OUTPUT_INVALID": "模型返回了无法使用的候选，本次未生成操作，请重新描述。",
 }
 
 
@@ -95,8 +98,11 @@ class BankAgentRuntime:
         registry: ScenarioRegistry | None = None,
         challenges: ChallengeStore | None = None,
         clock: Callable[[], datetime] | None = None,
+        candidate_model: CandidateModel | None = None,
     ) -> None:
         self.registry = registry if registry is not None else REGISTRY
+        self.interpreter = CandidateInterpreter(candidate_model, self.registry) if candidate_model is not None else None
+        self.mode = "model" if self.interpreter is not None else "offline"
         self.clock = clock if clock is not None else (lambda: datetime.now(SG_TZ))
         self.challenges = challenges if challenges is not None else ChallengeStore(clock=self.clock)
         # 澄清续轮的期限元数据，按 (user_id, thread_id) 记，**不进 State**
@@ -267,10 +273,10 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
     # -- 2. 意图识别 -----------------------------------------------------
 
     def understand_intent(state: BankAgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
-        """用注册器的关键词收集**全部**候选，再决定意图。
+        """按服务端模式理解候选；候选始终经过注册器解析与风控。
 
-        不按模块名顺序取第一个：多个不同操作同时命中时要求用户明确，
-        猜错会直接把用户带到错误的业务流程。
+        离线模式收集全部关键词命中；模型模式只接受校验后的单一意图。
+        已识别的多操作与否定表达仍由公共层阻止进入写操作。
         """
         message = state["message"]
         thread = _thread_id(config)
@@ -282,21 +288,6 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
         if pending and re.match(r"^(?:重新|另一个|另外|换个话题|新请求|新任务|从头)", message):
             rt.forget_clarification(state["user_id"], thread)
             pending = None
-        if not hits:
-            additions = _followup_slots(message, pending) if pending else {}
-            if additions:
-                return {"scenario": pending["scenario"], "intent": pending["intent"],
-                        "candidate_params": {**pending["candidate_params"], **additions}, "missing_fields": []}
-            rt.forget_clarification(state["user_id"], thread)
-            if pending:
-                return {"status": "NEEDS_CLARIFICATION", "missing_fields": [],
-                        "response": "未能判断这是补充信息还是新需求，请完整描述要办理的业务。"}
-            return {
-                "status": "REJECTED",
-                "result": _rejected("", "UNSUPPORTED_INTENT"),
-                "response": "抱歉，我暂时只能办理余额查询、转账和账单查询。",
-            }
-
         # 命中多个不同操作 → 不能猜。
         operations = set()
         for scenario_name, intent_name, _ in hits:
@@ -314,7 +305,35 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
                 "response": f"您的需求可以对应多件事（{labels}），请明确要先办哪一件？",
             }
 
-        scenario_name, intent_name, _ = hits[0]
+        if rt.interpreter is not None:
+            try:
+                prediction = rt.interpreter.predict(message, pending)
+            except UnderstandingError as exc:
+                rt.forget_clarification(state["user_id"], thread)
+                return _failed("", exc.code)
+            if prediction["scenario"] is None:
+                rt.forget_clarification(state["user_id"], thread)
+                return {"status": "NEEDS_CLARIFICATION", "missing_fields": [],
+                        "response": "请明确要办理的一项业务及相关信息。"}
+            scenario_name, intent_name = prediction["scenario"], prediction["intent"]
+            candidates = prediction["candidate_params"]
+        else:
+            if not hits:
+                additions = _followup_slots(message, pending) if pending else {}
+                if additions:
+                    return {"scenario": pending["scenario"], "intent": pending["intent"],
+                            "candidate_params": {**pending["candidate_params"], **additions}, "missing_fields": []}
+                rt.forget_clarification(state["user_id"], thread)
+                if pending:
+                    return {"status": "NEEDS_CLARIFICATION", "missing_fields": [],
+                            "response": "未能判断这是补充信息还是新需求，请完整描述要办理的业务。"}
+                return {
+                    "status": "REJECTED",
+                    "result": _rejected("", "UNSUPPORTED_INTENT"),
+                    "response": "抱歉，我暂时只能办理余额查询、转账和账单查询。",
+                }
+            scenario_name, intent_name, _ = hits[0]
+            candidates = _extract_slots(message, registry.get(scenario_name).intents[intent_name]["slots"])
         spec = registry.get(scenario_name)
         intent_spec = spec.intents[intent_name]
 
@@ -325,7 +344,6 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
             return {"status": "NEEDS_CLARIFICATION", "missing_fields": [],
                     "response": "尚未发起转账。如需办理，请明确收款人和金额。"}
 
-        candidates = _extract_slots(message, intent_spec["slots"])
         if pending and (pending["scenario"], pending["intent"]) == (scenario_name, intent_name):
             candidates = {**pending["candidate_params"], **candidates}
         else:
@@ -339,7 +357,7 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
 
     def route_intent(state: BankAgentState) -> Literal["clarify", "end", "resolve"]:
         status = state.get("status")
-        if status in {"REJECTED", "NEEDS_CLARIFICATION"}:
+        if status in {"REJECTED", "FAILED", "NEEDS_CLARIFICATION"}:
             return "clarify" if status == "NEEDS_CLARIFICATION" else "end"
         return "resolve"
 
