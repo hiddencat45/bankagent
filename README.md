@@ -10,7 +10,7 @@
 
 **这是一个教学原型，不是可用的银行应用。** 从现有教学图入口（`bank_agent_graph.py`）跑通的仍是**余额查询**和**转账主链路**（准备 → 确认/强认证 → 执行 → 回复）。
 
-阶段 1 的公共部分已有实现，尚待审查确认与集成验收，分别在三张待复核的 PR 里：
+阶段 1 的公共部分已复核并合并，相关实现见以下 PR：
 
 | PR | 内容 |
 |---|---|
@@ -18,18 +18,19 @@
 | #12 | 安全层 `agent_security.py`：操作哈希、挑战/授权表 |
 | #13 | 主图 `agent_graph.py`：把注册器、安全层、后端串成工作流 |
 
-**三张 PR 都还没合并**（无复核），所以 `main` 上暂时看不到这些文件。按契约 §3.2，旧教学图 `bank_agent_graph.py` 保持原样不动，新旧并存。
+**#11–#15 已复核并合并**。旧教学图按契约保留，新图为新的业务链路入口。
 
 | 能力 | 代码状态 |
 |---|---|
-| 余额查询 | 已实现（教学版） |
+| 余额查询 | 教学版及新主图/API 均已实现；对外只返回余额和币种 |
 | 智能转账 | 教学版主链路可用；**新链路**（PR #11–#13）已实现整数分、操作哈希、服务端授权、幂等 |
-| 账单分析 | 场景适配（B）已实现，**已由注册器发现并接入新主图**；尚无 API 出口 |
+| 账单分析 | 场景适配（B）已实现，**已由注册器发现并接入新主图**；已接 HTTP/SSE |
 | 公共类型与模拟后端 | 已实现并已合入 `main` |
 | 固定演示数据与一致性校验 | 已实现并已合入 `main` |
-| 公共场景注册器、安全层、主图 | **已实现，待在 PR #11–#13 复核合并** |
+| 公共场景注册器、安全层、主图 | 已复核并合入 main（PR #11–#13） |
 | 理财操作、卡片管理、订阅与代扣、跨场景联动 | **设计目标，尚未实现** |
-| `api/`、`frontend/` | **尚未实现** |
+| `api/` | 已实现本地 HTTP/SSE：会话、查询、确认恢复、重置 |
+| `frontend/` | B 的通信层 PR #16 待合并，完整页面尚未交付 |
 | 真实模型接入、多轮槽位补全 | **未实现**；当前意图理解是离线规则（关键词 + 正则） |
 
 ### 新主图做到了什么
@@ -39,7 +40,7 @@
 - **状态如实映射**：后端 `REJECTED`/`FAILED` 不会被标成 `COMPLETED`；风险评估失败按失败关闭处理
 - **一句话命中多个操作时要求澄清**，不按模块顺序猜
 
-但它**还没有 API**：目前只能通过 Python 调用图，没有 HTTP 入口、没有 SSE、没有页面。
+本分支已接 FastAPI 与 SSE，支持通过 HTTP 办理余额查询、账单查询和转账确认/拒绝。完整页面、真实模型与多轮补全仍待交付，不能称六场景 Demo 已完成。
 
 `preparaion/银行AI智能体全流程规划.pptx`（34 页）描述的是**设计目标**，其中只有转账主链路已在代码里落地。
 **PPT 里写了 ≠ 代码里有。** 讨论、评审、写文档都不要把两者混为一谈。
@@ -85,7 +86,7 @@ Windows + **Python 3.10**（本机验证 3.10.9）+ PowerShell。
 .\scripts\check.ps1     # 门禁：pytest + 敏感字段扫描 + pip check
 ```
 
-门禁基线（`main`，2026-10-19 验证）：**100 passed**（11 条教学回归、23 条类型测试、17 条数据测试、24 条后端测试、25 条账单适配测试），`pip check` 无冲突。pytest 缓存目录可能报告权限警告，不影响测试结果。
+历史基线（#10 合并时，`main`，2026-10-19 验证）：**100 passed**（11 条教学回归、23 条类型测试、17 条数据测试、24 条后端测试、25 条账单适配测试），`pip check` 无冲突。pytest 缓存目录可能报告权限警告，不影响测试结果。
 
 阶段 1 分支叠加后（`feat/graph-integration`，含 PR #11–#13）：**272 passed**（2026-10-20 修复后）。新增部分为注册器 31 条、转账场景 43 条、安全层 31 条、安全层与后端集成 14 条；另补金额、余额、否定写请求及异常边界回归。
 
@@ -111,7 +112,7 @@ Demo 实际输出：
 当前可用余额为 5000.00 CNY。
 ```
 
-### 新主图（需先合并 PR #11–#13）
+### 新主图（PR #11–#13 已合并）
 
 ```powershell
 cd preparaion
@@ -162,7 +163,29 @@ print(final["status"], final["response"])
 
 **注意**：`Command(resume=...)` 里的内容不是授权凭证。恢复时图只查 `ChallengeStore`，所以必须先由服务端写入授权记录；客户端伪造 `approve` 不会扣款。
 
-### 独立模拟后端（已接新主图，待 API）
+### 本地 HTTP/SSE Demo
+
+在仓库根目录执行：
+
+```powershell
+.\scripts\serve-api.ps1                 # 默认 http://127.0.0.1:8000，Ctrl+C 停止
+.\.venv\Scripts\python.exe scripts/smoke_api.py  # 独立端口自动验证并关闭服务
+```
+
+也可直接执行 `.\.venv\Scripts\python.exe -m uvicorn api.server:create_demo_app --factory --app-dir preparaion --host 127.0.0.1 --port 8000 --workers 1 --no-access-log`。依赖已锁定在 requirements.txt；首次运行先按前文搭环境。流式响应使用 [FastAPI StreamingResponse](https://fastapi.tiangolo.com/advanced/custom-response/#streamingresponse)。
+
+前端接入顺序（同源部署，不硬编码用户或令牌）：
+
+1. `POST /demo/session`，空请求体或 `{}`，得到 `{token: string, mode: "offline"}`。仅显式本地 Demo 模式开放；身份由服务端选定。令牌短暂保存在页面内存，不写 localStorage，不输出到日志。
+2. `POST /agent/chat`，携带 `Authorization: Bearer <session>` 和 JSON `{message: "本月账单"}`。读取真实 SSE，首条 status 保存 thread_id/request_id，账单证据来自真实模拟账本。
+3. 新请求“给张伟转 300 元”返回 confirm 卡和 interrupt；余额仍为 5000 元。用返回的 thread_id/challenge_id 提交 `{thread_id, resume: {challenge_id, decision: "approve"}}`，沿用原 request_id，完成后余额为 4700 元。相同确认重发返回首次结果；`decision: "reject"` 取消且不扣款。
+4. `POST /demo/reset` 携带当前会话，空体或 `{}`。成功返回 `{status: "COMPLETED"}`；旧会话、授权及 Checkpoint 同时失效，页面清空卡片后重新获取演示会话。
+
+`GET /health` 实际查询后端，返回 mode/backend/model 状态。非法请求在流前返回 `{code,message}` JSON；办理失败通过 error 和 FAILED 的 done 告知。done 仅表示流结束；等待确认时须保留卡片。前端不能自动重试新消息 POST。
+
+限制：仅本地、同源、**单进程单实例**，进程内演示数据；不要启用多 worker。运行与重置使用互斥门禁，忙时返回 409 RUN_BUSY。参考日以 2026-10-18 为起点，挑战随经过时间在 5 分钟后失效。明确使用离线规则，未接真实银行或模型。默认强认证服务拒绝所有 RED 批准，不存在固定口令；可取消 RED 操作，独立认证服务接入另做验收。未实现多轮补全，缺参数时需重述完整请求。测试注入的认证替身不作为交付认证能力。
+
+### 独立模拟后端（已接新主图与本地 API）
 
 在 `preparaion/` 下运行 `..\.venv\Scripts\python.exe -m pytest -q tests/test_bank_backend.py` 可验证隔离后端。测试使用独立小样例和服务端授权替身，不要求先运行 API，也不代表真实认证已接入。
 
@@ -238,13 +261,13 @@ bankagent/
     └─ 银行AI智能体全流程规划.pptx  # 交付物成品（由脚本生成）
 ```
 
-尚未实现：`api/`、`frontend/`，以及理财、卡片、订阅与代扣、跨场景联动四个场景。
+本分支增加根目录 `api/server.py` 与启动/真实 HTTP 冒烟脚本；`frontend/` 完整页面仍待 B 交付。尚未实现：理财、卡片、订阅与代扣、跨场景联动四个场景。
 
 ---
 
 ## 六、已知限制与未完成项
 
-- 旧教学图仍为单文件；新主图 `agent_graph.py` 已实现但**尚未合并**，两者暂时并存。
+- 旧教学图保留作参考；新主图已经复核并合并，两者暂时并存。
 - **恢复路径读 `resume` 载荷**判断授权（`auth_token == "demo-otp-ok"`）这一缺陷**仅存在于旧教学图**；新主图已改为只读服务端记录，但旧图按契约 §3.2 暂不改，需专门的阶段 1 迁移 PR。
 - 旧教学图金额仍用 `float`；新链路用整数分（`amount_minor`）。新主图同样使用 `InMemorySaver`，**进程重启即丢 Checkpoint**；内存后端也不落账。
 - 旧教学代码的通讯录是**精确姓名匹配**，没有重名、别名或手机号尾号歧义处理。新转账场景解析同样拒绝猜测：重名时要求澄清，不会自动挑一个。

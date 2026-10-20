@@ -26,7 +26,8 @@ Pop-Location
 # 教学代码里合法地存在 demo-otp-ok 这类占位符，所以这里只报告、交给人判断，
 # 不自动判失败——一个永远失败的门禁等于没有门禁。
 Write-Host "=== 2/3 敏感字段扫描（人工确认）===" -ForegroundColor Cyan
-$pyFiles = Get-ChildItem -Path (Join-Path $root 'preparaion') -Recurse -Filter *.py -ErrorAction SilentlyContinue
+$scanPaths = @((Join-Path $root 'preparaion'), (Join-Path $root 'api')) | Where-Object { Test-Path $_ }
+$pyFiles = Get-ChildItem -Path $scanPaths -Recurse -Filter *.py -ErrorAction SilentlyContinue
 $hits = $pyFiles | Select-String -Pattern 'demo-otp-ok|password\s*=\s*["'']|secret\s*=\s*["'']|api[_-]?key\s*=\s*["'']' -ErrorAction SilentlyContinue
 if ($hits) {
     Write-Host "发现以下疑似硬编码，请人工确认是否属于教学占位符：" -ForegroundColor Yellow
