@@ -131,16 +131,20 @@ function accept({ event, data }) {
     state.phase = data.status;
     if (['COMPLETED', 'REJECTED', 'NEEDS_CLARIFICATION'].includes(data.status)) {
       state.pending = state.signal = null; state.decision = null;
+      state.uncertain = false;
     }
     if (data.status === 'FAILED' && state.decision) state.uncertain = true;
-    if (data.status === 'NEEDS_CLARIFICATION') notice('请按提示完整重述请求；当前尚未接入多轮槽位补全。');
+    if (data.status === 'NEEDS_CLARIFICATION') notice('请按上面的提示补充信息或重新描述请求。');
     else if (data.status !== 'FAILED') notice(phases[data.status]);
   }
   controls();
 }
 async function send(input) {
   if (state.busy) return;
-  state.busy = true; state.uncertain = false; controls();
+  const retrying = state.uncertain && state.pending
+    && input?.resume?.challenge_id === state.pending.challenge_id
+    && input.resume.decision === state.decision;
+  state.busy = true; state.uncertain = Boolean(retrying); controls();
   notice('正在等待服务端处理…');
   try { await client.send(input, { token: state.token, onEvent: accept }); }
   catch (error) {
@@ -152,8 +156,9 @@ async function send(input) {
         UNAUTHENTICATED: '演示会话已失效，请重新开始演示。', CHALLENGE_INVALID: '确认卡已失效或未获准，请重新发起。',
         CHALLENGE_STATE_MISMATCH: '操作信息已变化，旧确认卡不能继续使用。' })[error.code] ?? '请求未被接受，请检查连接或重试。', true);
       if (error.code === 'UNAUTHENTICATED') state.token = null;
-      if (['CHALLENGE_INVALID', 'CHALLENGE_STATE_MISMATCH'].includes(error.code)) {
+      if (['CHALLENGE_INVALID', 'CHALLENGE_STATE_MISMATCH', 'CONVERSATION_NOT_FOUND'].includes(error.code)) {
         state.pending = state.signal = null; state.thread = null; state.decision = null; state.phase = 'REJECTED';
+        state.uncertain = false;
       }
     }
   } finally { state.busy = false; controls(); $('messages').scrollTop = $('messages').scrollHeight; }
@@ -161,6 +166,7 @@ async function send(input) {
 function respond(decision, retry, challengeId) {
   if (!state.pending || state.pending.challenge_id !== challengeId || state.busy
       || !['approve', 'reject'].includes(decision)) return;
+  if (retry && (!state.uncertain || decision !== state.decision)) return;
   if (!retry && (!confirmationReady(state.pending, state.signal, state.phase) || state.uncertain)) return;
   if (decision === 'approve' && state.pending.risk_level === 'RED') return;
   state.decision = decision;
@@ -182,7 +188,9 @@ async function connect() {
     await health(); if (!state.healthy) throw new Error();
     const response = await fetch('/demo/session', { method: 'POST', cache: 'no-store' });
     const data = await response.json();
-    if (!response.ok || typeof data.token !== 'string' || !data.token || data.mode !== 'offline') throw new Error();
+    if (!response.ok || typeof data.token !== 'string' || !data.token
+        || !['offline', 'model'].includes(data.mode)) throw new Error();
+    $('mode').textContent = `${data.mode === 'offline' ? '离线规则' : '模型模式'} · 本地模拟银行`;
     state.token = data.token; state.thread = null; state.pending = state.signal = null;
     state.uncertain = false; state.decision = null; state.phase = 'IDLE';
   } catch { notice('无法建立本地演示会话，请检查服务启动方式。', true); }

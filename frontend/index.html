@@ -18,7 +18,7 @@
     <main class="conversation"><div class="section-head"><div><span class="eyebrow">YOUR BANKING ASSISTANT</span><h1>把银行业务，说清楚就好。</h1></div><span id="phase" class="badge">等待连接</span></div>
       <div id="notice" role="status">点击「开始演示」，由服务端建立模拟会话。转账会先展示确认卡，确认前不会扣款。</div>
       <section id="messages" class="messages" aria-label="业务对话" aria-live="polite"><div class="welcome"><span class="welcome-symbol">有度</span><h2>从一笔有依据的查询开始</h2><p>可以查本月账单、查看疑似重复扣款的交易证据，<br>也可以输入「给张伟转 300 元」。</p></div></section>
-      <form id="composer"><label class="sr-only" for="input">业务请求</label><textarea id="input" rows="2" maxlength="2000" placeholder="例如：查看本月账单" disabled></textarea><button id="send" type="submit" disabled>发送 ↗</button></form><p class="composer-note">当前使用离线关键词规则；缺少信息时请完整重述请求。每笔写操作均需本人确认。</p>
+      <form id="composer"><label class="sr-only" for="input">业务请求</label><textarea id="input" rows="2" maxlength="2000" placeholder="例如：查看本月账单" disabled></textarea><button id="send" type="submit" disabled>发送 ↗</button></form><p class="composer-note">理解模式以服务端显示为准；缺少信息时请按提示补充或重新描述。每笔写操作均需本人确认。</p>
     </main>
     <aside class="activity"><div class="section-head"><h2>执行轨迹</h2><span class="live-dot"></span></div><p class="muted">仅显示服务端实际返回的业务步骤。</p><ol id="trace"><li class="empty-trace">尚未开始办理</li></ol><div class="safety-note"><strong>确认有边界</strong><p>金额、收款人与结果来自服务端。高风险转账的独立认证暂未接入，当前仅支持取消。</p></div></aside>
   </div>
