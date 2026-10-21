@@ -253,6 +253,7 @@ def freeze_card(*, context: WriteContext, card_id: str) -> BackendResult:
     ACTIVE -> FROZEN，仅临时冻结，不是永久挂失。已冻结返回 COMPLETED、
     changed=False；仍须验证授权，不因无变更跳过校验。
     失败及幂等语义同 unfreeze_card；不改变余额或创建资金流水。
+    本轮仅模拟卡片状态，没有刷卡扣款路径，也不联动账户转账或代扣协议。
     """
     raise NotImplementedError("FREEZE_CARD is not implemented")
 
@@ -302,7 +303,7 @@ def pause_subscription(*, context: WriteContext,
 
     ACTIVE -> PAUSED，next_payment_date 置 None；已暂停仍查授权后返回
     COMPLETED、changed=False。这是模拟银行侧暂停代扣，不承诺终止商户合同、
-    退款或已接通自动扣款调度；原期间消费及余额不变。
+    退款；本轮仅改模拟状态，尚未模拟后续扣款执行，原期间消费及余额不变。
     名称由 find_subscriptions 受控解析，歧义须澄清；不存在或不属当前账户
     统一为 SUBSCRIPTION_NOT_ACCESSIBLE。其余失败和原子幂等语义同卡片写入。
     """
