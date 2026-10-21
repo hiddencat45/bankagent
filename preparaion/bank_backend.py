@@ -13,7 +13,7 @@ from uuid import uuid4
 from bank_types import (
     BILLS_MAX_RANGE_DAYS, MAX_BILL_TRANSACTIONS, SUPPORTED_CURRENCY,
     TRANSFER_SINGLE_LIMIT_MINOR, YELLOW_DAILY_LIMIT_MINOR,
-    BackendResult, TrustedContext, WriteContext,
+    BackendResult, SubscriptionRecord, TrustedContext, WriteContext,
 )
 
 
@@ -231,3 +231,79 @@ def execute_transfer(*, context: WriteContext, contact_id: str,
 
 def reset_demo_data() -> None:
     _configured().reset_demo_data()
+
+
+# 以下接口属于卡片/订阅契约提案，确认后另一个 feat/ PR 实现。
+# 目前不注册场景、不启用白名单、不更换数据集，不把占位函数当成功能力。
+# 共用已建立的 TrustedContext/WriteContext、BackendResult 和整数分。
+
+def query_cards(*, context: TrustedContext) -> BackendResult:
+    """QUERY_CARDS，READ/GREEN；data 为 bank_types.CardsData。
+
+    只返回当前账户的卡，按 card_id 排序；空集为 {"cards": []}。
+    账户归属失败为 REJECTED/ACCOUNT_NOT_ACCESSIBLE。
+    场景以 display_name 精确匹配候选，零个或多个匹配都澄清，不任选。
+    """
+    raise NotImplementedError("QUERY_CARDS is not implemented")
+
+
+def freeze_card(*, context: WriteContext, card_id: str) -> BackendResult:
+    """FREEZE_CARD，WRITE/YELLOW；data 为 bank_types.CardChangeData。
+
+    ACTIVE -> FROZEN，仅临时冻结，不是永久挂失。已冻结返回 COMPLETED、
+    changed=False；仍须验证授权，不因无变更跳过校验。
+    失败及幂等语义同 unfreeze_card；不改变余额或创建资金流水。
+    """
+    raise NotImplementedError("FREEZE_CARD is not implemented")
+
+
+def unfreeze_card(*, context: WriteContext, card_id: str) -> BackendResult:
+    """UNFREEZE_CARD，WRITE/YELLOW；data 为 bank_types.CardChangeData。
+
+    FROZEN -> ACTIVE；已激活返回 COMPLETED、changed=False。
+    card_id 只由 query_cards 受控解析；不存在或不属账户统一返回
+    REJECTED/CARD_NOT_ACCESSIBLE。账户、授权、幂等错误沿用转账错误码。
+    新写入在共享锁内重查授权/期限/操作参数；同键同参数返回首次结果，
+    同键异参数为 IDEMPOTENCY_CONFLICT，状态与幂等结果原子保存。
+    """
+    raise NotImplementedError("UNFREEZE_CARD is not implemented")
+
+
+def query_subscriptions(*, context: TrustedContext, start: date,
+                        end: date) -> BackendResult:
+    """QUERY_SUBSCRIPTIONS，READ/GREEN；data 为 bank_types.SubscriptionsData。
+
+    查询当前账户已登记的全部协议（含暂停项），按 subscription_id 排序；
+    payments 仅包含 [start, end) 内明确关联的 EXPENSE，按时间/流水ID排序。
+    paid_minor 为这些流水之和，total_minor 为各协议合计；暂停不改旧流水。
+    协议与流水须同账户且一笔流水最多归属一个协议，不能只凭同名商户推断。
+    空集返回零总额和空列表；没有当期扣款的协议仍显示，paid_minor 为零。
+    日期范围、时区和最大跨度沿用 query_bills；关联流水最多
+    MAX_BILL_TRANSACTIONS 笔，超限不截断。
+    错误为 ACCOUNT_NOT_ACCESSIBLE、INVALID_DATE_RANGE、TOO_MANY_TRANSACTIONS。
+    """
+    raise NotImplementedError("QUERY_SUBSCRIPTIONS is not implemented")
+
+
+def find_subscriptions(*, context: TrustedContext,
+                       name: str) -> list[SubscriptionRecord]:
+    """服务端名称解析，非新增场景操作；不依赖消费期间或流水数量。
+
+    当前账户内精确匹配 display_name，含已暂停项，按 subscription_id 排序。
+    无匹配返回 []，多匹配由场景澄清；归属失败同 find_contacts，抛
+    PermissionError("ACCOUNT_NOT_ACCESSIBLE")，由公共 resolve 边界转码。
+    """
+    raise NotImplementedError("subscription lookup is not implemented")
+
+
+def pause_subscription(*, context: WriteContext,
+                       subscription_id: str) -> BackendResult:
+    """PAUSE_SUBSCRIPTION，WRITE/YELLOW；data 为 bank_types.SubscriptionChangeData。
+
+    ACTIVE -> PAUSED，next_payment_date 置 None；已暂停仍查授权后返回
+    COMPLETED、changed=False。这是模拟银行侧暂停代扣，不承诺终止商户合同、
+    退款或已接通自动扣款调度；原期间消费及余额不变。
+    名称由 find_subscriptions 受控解析，歧义须澄清；不存在或不属当前账户
+    统一为 SUBSCRIPTION_NOT_ACCESSIBLE。其余失败和原子幂等语义同卡片写入。
+    """
+    raise NotImplementedError("PAUSE_SUBSCRIPTION is not implemented")

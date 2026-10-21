@@ -37,6 +37,17 @@ __all__ = [
     "BackendResult",
     "TrustedContext",
     "WriteContext",
+    "CardStatus",
+    "SubscriptionStatus",
+    "CardSummary",
+    "CardsData",
+    "CardChangeData",
+    "SubscriptionRecord",
+    "SubscriptionPayment",
+    "SubscriptionSummary",
+    "SubscriptionsData",
+    "SubscriptionChangeData",
+    "StateChangeConfirmation",
     # 常量
     "YELLOW_DAILY_LIMIT_MINOR",
     "TRANSFER_SINGLE_LIMIT_MINOR",
@@ -189,6 +200,83 @@ class WriteContext(TrustedContext):
 
 
 # ---------------------------------------------------------------------------
+# 卡片与订阅的最小数据契约；不代表对应运行能力已经启用
+# ---------------------------------------------------------------------------
+
+CardStatus = Literal["ACTIVE", "FROZEN"]
+SubscriptionStatus = Literal["ACTIVE", "PAUSED"]
+
+
+class CardSummary(TypedDict):
+    """后端返回的模拟卡；card_id 只由服务端解析，不作为模型候选。"""
+
+    card_id: str
+    display_name: str
+    status: CardStatus
+
+
+class CardsData(TypedDict):
+    cards: list[CardSummary]
+
+
+class CardChangeData(CardSummary):
+    previous_status: CardStatus
+    changed: bool
+
+
+class SubscriptionRecord(TypedDict):
+    """已登记的月度代扣协议；金额是每期约定额，不是历史消费合计。"""
+
+    subscription_id: str
+    display_name: str
+    status: SubscriptionStatus
+    amount_minor: int
+    currency: str
+    next_payment_date: str | None  # ISO 日期；暂停后为 None，不承诺商户侧取消
+
+
+class SubscriptionPayment(TypedDict):
+    transaction_id: str
+    occurred_at: str
+    amount_minor: int
+
+
+class SubscriptionSummary(SubscriptionRecord):
+    paid_minor: int
+    payments: list[SubscriptionPayment]  # 指定期间的实际流水，笔数取 len(payments)
+
+
+class SubscriptionsData(TypedDict):
+    start: str
+    end: str
+    currency: str
+    total_minor: int  # 各协议 paid_minor 之和，不是下一期预计额
+    subscriptions: list[SubscriptionSummary]
+
+
+class SubscriptionChangeData(SubscriptionRecord):
+    previous_status: SubscriptionStatus
+    changed: bool
+
+
+class StateChangeConfirmation(TypedDict):
+    """新增状态操作的 confirm payload；原 TRANSFER 卡保持原格式。
+
+    服务端从已绑定操作及受控查询生成；不含实体 ID，不接受前端修改。
+    current_status 是生成卡片时的状态，target_status 由 operation 唯一确定。
+    """
+
+    operation: Literal["FREEZE_CARD", "UNFREEZE_CARD", "PAUSE_SUBSCRIPTION"]
+    display_name: str
+    current_status: CardStatus | SubscriptionStatus
+    target_status: CardStatus | SubscriptionStatus
+    risk_level: Literal["YELLOW", "RED"]
+    challenge_id: str
+    operation_hash: str
+    expires_at: str
+
+
+# ---------------------------------------------------------------------------
 # 公共常量
 # ---------------------------------------------------------------------------
 # 阈值只定义在这一处：A 算初始风险、B 在锁内复查，都必须引用同一常量，
@@ -233,6 +321,7 @@ UNTRUSTED_STATE_FIELDS: frozenset[str] = frozenset(
         "request_id",
         "contact_id",
         "card_id",
+        "subscription_id",
         "product_code",
         "risk_level",
         "operation_hash",

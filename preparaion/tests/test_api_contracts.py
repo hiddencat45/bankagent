@@ -318,7 +318,7 @@ def test_open_events_rejected_by_validation_never_reach_sse() -> None:
         parse_chat_request({"message": "查账单", "user_id": "user-001"})
 
 
-@pytest.mark.parametrize("field", ["request_id", "idempotency_key", "authorization_ref", "operation_hash", "card_id", "product_code", "daily_transfer_total_minor"])
+@pytest.mark.parametrize("field", ["request_id", "idempotency_key", "authorization_ref", "operation_hash", "card_id", "subscription_id", "product_code", "daily_transfer_total_minor"])
 @pytest.mark.parametrize("nested", [False, True])
 def test_known_trusted_fields_always_get_untrusted_code(field, nested):
     body = {"message": "查余额", field: "untrusted"}
