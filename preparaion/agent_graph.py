@@ -77,7 +77,7 @@ _PUBLIC_ERROR_TEXT: dict[str, str] = {
     "INVALID_PARAMS": "您提供的信息有误，请重新确认后再试。",
     "USER_CANCELLED": "您已取消这笔操作，账户未发生任何变动。",
     "AUTHORIZATION_REQUIRED": "这笔操作尚未确认，账户未发生任何变动。",
-    "INTERNAL": "系统处理异常，操作未执行，请稍后重试。",
+    "INTERNAL": "系统处理异常，办理结果尚未确认，请核对后重试。",
 }
 
 
