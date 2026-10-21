@@ -9,10 +9,9 @@
 
 要新增或修改**业务场景**之前，必须先读 [`docs/场景扩展与分工.md`](docs/场景扩展与分工.md)。
 那份文档规定了场景的目标接口、两人的领地边界和验收要求。
-协作流程见 [`docs/协作方案.md`](docs/协作方案.md)。本文件规定全局安全与 Git 约定，当前目录和分工以场景文档为准；接口草案仍需双方确认后实现。
+协作流程见 [`docs/协作方案.md`](docs/协作方案.md)。本文件规定全局安全与 Git 约定，目录和分工以场景文档为准；当前能力及启动方式统一见 [`README.md`](README.md)，开工时再核对相关 PR。
 
-**阶段 0 接口草案**（进行中，待双方确认）见 [`docs/阶段0-接口草案.md`](docs/阶段0-接口草案.md)。
-它是过渡文件：阶段 1 落地后**由代码本身取代**，不要当作长期契约维护。
+[`阶段 0 接口草案`](docs/阶段0-接口草案.md) 已作为历史设计保留。已落地接口以代码类型、公开签名及测试为准，不再维护一套重复声明；新增公共接口仍须双方确认。
 
 ---
 
@@ -26,36 +25,37 @@
 
 - 仓库实际资料目录是 `preparaion/`。`build_bank_agent_deck.js` 是设计内容源，`build_frontend_mockup.js` 与工作台预览 PNG 是交互参考；业务实现以 Python 代码和运行结果为准。
 - 用户已确认参加**人工智能赛道**，以项目本身的能力和演示效果为重点；[比赛网站](https://fintechathon.g-ican.com/#/) 仅作背景参考。官方细则、截止日期和演示时长尚未核实，不得把团队 PPT 推断成官方要求，也不要因缺少评分表阻塞开发。提交前再核对必要的参赛约束。
+- 用户确认对标 Revolut AIR。优先推进基于个人业务数据的消费洞察、订阅、卡片与自然多轮体验；具体近期分工在 [协作计划 #22](https://github.com/hiddencat45/bankagent/issues/22) 对齐，不将 AIR 全部功能自动列为比赛必做项。
 - 第一条转账＋账单链路是开发里程碑，不是擅自把六场景目标缩成两个。最终范围由双方结合赛题和时间确认；缺失项要显式列出。
 - 每个功能同时考虑用户输入、真实业务结果、页面反馈和演示验证。不能只交函数或静态页面就称 Demo 完成。
 - 真实模型接入与多轮补全是团队设计中的重点，不能被关键词规则长期替代；离线规则模式用于开发和兜底，必须明确标注。具体交付与降级方式见《协作方案》。
 - AI 主动阅读材料、提出最小实现、写测试并验证。向用户说明业务效果、代价和推荐选项，不把尚可由代码推导的技术问题逐项退回用户。仅在外部信息、范围决策、必要凭据或协作确认缺失时提问。
 
 ⚠️ **最重要的一条前提**：`银行AI智能体全流程规划.pptx`（34 页）描述的是**设计目标**，
-其中只有**智能转账**主链路已在代码里实现，其余 5 个场景是设计意图。
+已实现范围必须核对 README、代码和实际运行结果，不能仅依据 PPT 判断。
 **PPT 里写了 ≠ 代码里有。** 讨论、写文档、写代码时都不要把两者混为一谈。
 
 ---
 
-## 二、当前状态（重构尚未进行）
+## 二、代码入口与环境
 
-代码目前是**平铺的单文件结构**。本轮只在 `preparaion/` 内提取场景与模拟后端，尚未实施：
+场景模块、模拟后端和新主图已经建立，不重复执行初期提取任务。入口如下：
 
-| 现在的位置 | 内容 | 重构后的目标位置 |
-|---|---|---|
-| `preparaion/bank_agent_graph.py` | 教学源码，State + 全部节点 + 图组装 | 原文件保留公共逻辑；提取至同目录 `scenarios/`、`bank_backend.py` |
-| `preparaion/test_bank_agent_graph.py` | 11 条流程与安全测试 | 原文件保留；新增测试放 `preparaion/tests/` |
-| `preparaion/build_bank_agent_deck.js` | PPT 生成脚本（**PPT 的真正源头**） | 保留原位置 |
-| `preparaion/assets/` | 全流程图的 Mermaid 源与导出 | 保留原位置 |
-| `preparaion/银行AI智能体全流程规划.pptx` | 交付物成品（由脚本生成） | 保留原位置 |
+| 路径 | 用途 |
+|---|---|
+| `preparaion/agent_graph.py`、`agent_security.py` | 新业务主图、挑战与授权 |
+| `preparaion/scenarios/`、`bank_backend.py`、`bank_types.py`、`data/` | 场景、模拟后端、公共声明与固定数据 |
+| `api/` | 本地 HTTP/SSE、会话、确认恢复与重置 |
+| `preparaion/tests/` | 新业务测试；旧教学测试仍保留 |
+| `preparaion/bank_agent_graph.py` | 旧教学示例，不是新功能入口 |
+| `preparaion/build_bank_agent_deck.js`、`assets/` | PPT 内容源与流程图素材；PPTX 是生成成品 |
 
 **目录名 `preparaion` 是 `preparation` 的拼写错误**，本轮保留；仅在另行约定的目录迁移任务中处理。
 
-`docs/`、`scripts/` 已存在；`scenarios/`、`api/`、`frontend/` 等尚未实现。
 暂不迁往 `src/`、`deck/` 或 `release/`，避免同时推进两套目录方案。
 
-环境**已经搭好**：`.venv` + `langgraph 1.2.16`，11 条测试全绿（2026-10-18 验证）。
-新增的 `requirements.txt` 与 `scripts/setup.ps1` 都在仓库根目录，队友 clone 后跑 `.\scripts\setup.ps1` 即可。
+使用现有 `.venv`；依赖以根目录 `requirements.txt` 为准。队友 clone 后运行 `.\scripts\setup.ps1`。
+测试数量随功能变化，验证结果在对应 PR 记录，不把历史数量当作门禁要求。
 
 ---
 
@@ -64,6 +64,7 @@
 - 不要把 PPT 里的设计目标当成已实现能力去调用、断言或写文档
 - 不要在同一个提交里同时做重构和加功能
 - 不要新增第三方依赖，除非在 PR 描述里给出理由
+- 不为尚未出现的需求增加框架、重复校验或静默兜底。保留外部输入、模型候选、授权与资金后端的必要校验；复用开源模块时核对适配成本、来源及实际行为。
 - 不要为了"让代码跑通"而修改或放宽已有测试的断言
 - 不要把密钥、口令、OTP、真实卡号、身份证号、手机号写进代码、测试、样例数据或日志
 - 不要 `git push --force`、不要直接往 `main` 推（见第六节）
@@ -90,11 +91,12 @@
 
 ---
 
-## 五、目录所有权（当前实施方案，目标模块尚未建立）
+## 五、目录所有权
 
 | 路径 | 负责人 | 说明 |
 |---|---|---|
-| `preparaion/bank_agent_graph.py`、`preparaion/scenarios/__init__.py` | A | 公共状态、调度、图与安全 |
+| `preparaion/agent_graph.py`、`agent_security.py`、`agent_understanding.py`、`bank_agent_graph.py`、`scenarios/__init__.py` | A | 公共图、理解、调度与安全；新模块按此归属 |
+| `preparaion/bank_types.py` | 共管 | 公共声明；变更按下述契约流程 |
 | `preparaion/scenarios/transfer.py`、`card.py`、`cross.py` | A | 转账、卡片与固定跨场景演示 |
 | `preparaion/bank_backend.py`、`preparaion/data/` | B | 后端操作、模拟数据与一致性校验 |
 | `preparaion/scenarios/bills.py`、`subscription.py`、`wealth.py` | B | 账单、订阅与理财 |
@@ -137,7 +139,7 @@
 
 - **Python 3.10**（与现有 `__pycache__` 里的 `cpython-310` 一致）
 - **用 `.venv`，不要往全局环境装包**。`.venv` 已在 `.gitignore` 里，不进仓库
-- 依赖版本**完全锁定**在 `requirements.txt`（45 个包，由 `pip freeze` 导出）
+- 依赖版本锁定在 `requirements.txt`，实际包数以文件为准
 - 一键搭环境：`.\scripts\setup.ps1`
 - 一键门禁：`.\scripts\check.ps1`（说"做完了"之前必须跑通）
 
@@ -165,7 +167,7 @@ cd preparaion                       # 测试靠模块名导入，必须在源码
 
 一个任务算完成，需要同时满足：
 
-1. `.\scripts\check.ps1` 全绿（含 `pytest` 11 条 + 依赖完整性）
+1. `.\scripts\check.ps1` 全绿（全量 pytest + 依赖完整性）；前端变更另跑 Node 测试
 2. 新增行为有对应测试，且测试**真的会失败**（不是恒真断言）
 3. 没有擅自修改契约、没有越界改别人领地的文件
 4. 没有声称实现了契约里没有、或 PPT 里有但代码里没有的能力
