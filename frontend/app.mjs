@@ -210,15 +210,24 @@ document.querySelectorAll('[data-query]').forEach(button => button.addEventListe
 }));
 $('example').addEventListener('click', () => { $('input').value = '给张伟转 300 元'; $('input').focus(); });
 $('new').addEventListener('click', () => { state.thread = null; state.phase = 'IDLE'; $('messages').replaceChildren(); notice('已开始新对话，模拟账本保持当前状态。'); controls(); });
+function clearSessionView() {
+  state.token = state.pending = state.signal = null; state.thread = null; state.decision = null;
+  state.uncertain = false; state.phase = 'IDLE';
+  $('messages').replaceChildren(); $('trace').replaceChildren(); $('balance').textContent = '—';
+}
 $('reset').addEventListener('click', () => $('reset-dialog').showModal());
 $('reset-dialog').addEventListener('close', async () => {
   if ($('reset-dialog').returnValue !== 'confirm' || state.busy) return;
   state.busy = true; controls();
   try {
     const response = await fetch('/demo/reset', { method: 'POST', cache: 'no-store', headers: { Authorization: `Bearer ${state.token}` } });
+    if (response.status === 401) {
+      clearSessionView();
+      notice('演示会话已失效，重置结果尚未确认。请点击「开始演示」重新连接并查询余额。', true);
+      return;
+    }
     if (!response.ok || (await response.json()).status !== 'COMPLETED') throw new Error();
-    state.token = state.pending = state.signal = null; state.thread = null; state.decision = null;
-    state.uncertain = false; $('messages').replaceChildren(); $('trace').replaceChildren(); $('balance').textContent = '—';
+    clearSessionView();
     notice('演示数据已恢复，旧确认卡已失效。');
   } catch { notice('尚未确认重置结果，请检查连接或会话；当前展示可能已经过期。', true); }
   finally { state.busy = false; controls(); }
