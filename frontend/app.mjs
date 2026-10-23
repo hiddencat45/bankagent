@@ -19,6 +19,7 @@ const steps = { started: '服务端已接收请求', understood: '已识别业�
   validated: '已校验业务信息', awaiting_confirmation: '已生成确认操作',
   awaiting_authentication: '需要独立认证', executing: '正在执行操作', finished: '本轮处理结束' };
 const cardStatus = { ACTIVE: '可用', FROZEN: '已冻结' };
+const subscriptionStatus = { ACTIVE: '代扣启用', PAUSED: '已暂停代扣' };
 let pendingNode;
 
 function notice(text, warning = false) {
@@ -39,6 +40,9 @@ function controls() {
   const canChat = ready && !state.pending && !state.uncertain;
   $('send').disabled = $('input').disabled = !canChat;
   document.querySelectorAll('[data-query],#example,#new').forEach(button => { button.disabled = !canChat; });
+  document.querySelectorAll('.subscription-action').forEach(button => {
+    button.disabled = !canChat || button.dataset.paused === 'true';
+  });
   $('connect').disabled = state.busy || Boolean(state.token);
   $('connect').textContent = state.token ? '演示已连接' : '开始演示';
   $('reset').disabled = !state.token || state.busy;
@@ -82,6 +86,14 @@ function evidence(data) {
     item.append(node('small', '', `${row.occurred_at} · ${row.transaction_id}`)); detail.append(item);
   }
   box.append(detail);
+  if (data.anomalies.length) {
+    const button = node('button', 'quiet', '查看已登记的订阅与代扣');
+    button.dataset.query = '查询订阅';
+    button.addEventListener('click', () => {
+      bubble('查询订阅', true); send({ thread_id: state.thread, message: '查询订阅' });
+    });
+    box.append(button);
+  }
 }
 function confirmation(payload) {
   const value = readConfirmation(payload);
@@ -91,10 +103,15 @@ function confirmation(payload) {
   }
   state.pending = value; state.signal = null;
   const transfer = value.operation === 'TRANSFER';
-  const action = transfer ? '转账' : value.operation === 'FREEZE_CARD' ? '冻结卡片' : '解冻卡片';
+  const subscription = value.operation === 'PAUSE_SUBSCRIPTION';
+  const action = transfer ? '转账' : subscription ? '暂停代扣' : value.operation === 'FREEZE_CARD' ? '冻结卡片' : '解冻卡片';
   pendingNode = card(`${action}需要本人确认`, 'confirm-card');
   if (transfer) {
     pendingNode.append(node('p', '', `收款人：${value.recipient}`), node('div', 'amount', `¥ ${money(value.amount_minor)}`));
+  } else if (subscription) {
+    pendingNode.append(node('p', '', `代扣协议：${value.display_name}`),
+      node('p', '', `${subscriptionStatus[value.current_status]} → ${subscriptionStatus[value.target_status]}`),
+      node('p', '', '仅暂停模拟协议；历史扣费不变，不代表退款或商户合同终止，尚未模拟后续扣款。'));
   } else {
     pendingNode.append(node('p', '', `卡片：${value.display_name}`),
       node('p', '', `${cardStatus[value.current_status]} → ${cardStatus[value.target_status]}`),
@@ -103,7 +120,7 @@ function confirmation(payload) {
   pendingNode.append(node('p', '', value.risk_level === 'RED'
     ? '高风险：独立认证尚未接入，当前不能批准；可以取消。'
     : transfer ? '请核对收款人与金额。确认前不会扣款，有效期由服务端重新校验。'
-      : '请核对卡片和目标状态。确认前不会变更，有效期由服务端重新校验。'));
+      : '请核对办理对象和目标状态。确认前不会变更，有效期由服务端重新校验。'));
   const actions = node('div', 'actions');
   for (const [decision, label] of [['reject', `取消${action}`], ['approve', `确认${action}`]]) {
     const button = node('button', `decision ${decision === 'approve' ? 'approve' : 'quiet'}`, label);
@@ -144,6 +161,34 @@ function accept({ event, data }) {
           box.append(node('p', '', `${result.data.display_name} · ${cardStatus[result.data.status]}`),
             node('p', '', result.data.changed ? '本次请求已完成状态变更。' : '办理时已是目标状态，本次未重复变更。'),
             node('p', '', '这是该请求的办理回执。后续操作可能已改变状态，请重新查询卡片核对当前状态。'));
+        }
+        if (result.operation === 'QUERY_SUBSCRIPTIONS') {
+          const box = card('订阅与代扣 · 以关联流水为依据');
+          box.append(node('p', '', `${result.data.start} 至 ${result.data.end}（结束日不含）`),
+            node('div', 'amount', `本期实际扣费 ¥ ${money(result.data.total_minor)}`));
+          if (result.data.subscriptions.length === 0) box.append(node('p', '', '本账户暂无已登记的代扣协议。'));
+          for (const row of result.data.subscriptions) {
+            const group = node('div', 'evidence');
+            group.append(node('strong', '', `${row.display_name} · ${subscriptionStatus[row.status]}`),
+              node('p', '', `月度约定 ¥ ${money(row.amount_minor)} · 本期 ${row.payments.length} 笔，共 ¥ ${money(row.paid_minor)}`),
+              node('p', '', row.next_payment_date ? `模拟计划扣费日：${row.next_payment_date}` : '无后续计划扣费日'));
+            for (const tx of row.payments) group.append(node('small', '', `${tx.occurred_at} · ¥ ${money(tx.amount_minor)} · ${tx.transaction_id}`));
+            const button = node('button', 'quiet subscription-action', '申请暂停此代扣');
+            button.dataset.paused = String(row.status === 'PAUSED');
+            button.disabled = row.status === 'PAUSED';
+            button.addEventListener('click', () => {
+              $('input').value = `暂停${row.display_name}的代扣`;
+              notice('已填写暂停申请，请发送后核对确认卡；尚未变更协议。');
+              $('input').focus();
+            });
+            group.append(button); box.append(group);
+          }
+        }
+        if (result.operation === 'PAUSE_SUBSCRIPTION') {
+          const box = card('暂停代扣 · 操作回执');
+          box.append(node('p', '', `${result.data.display_name} · 已暂停代扣`),
+            node('p', '', result.data.changed ? '本次请求已变更模拟协议状态。' : '办理时已暂停，本次未重复变更。'),
+            node('p', '', '历史扣费不变；本回执不表示退款或商户合同终止。当前状态请重新查询代扣记录。'));
         }
       } else trace(phases[result.status], result.error_code === 'USER_CANCELLED'
         ? '本次操作已取消，账户未发生变动。' : '请查看对话中的办理说明。');

@@ -331,7 +331,7 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
                 return {
                     "status": "REJECTED",
                     "result": _rejected("", "UNSUPPORTED_INTENT"),
-                    "response": "抱歉，我暂时只能办理余额查询、转账和账单查询。",
+                    "response": "未识别到可办理的业务，请明确查询或操作的目标。",
                 }
             scenario_name, intent_name, _ = hits[0]
             candidates = _extract_slots(message, registry.get(scenario_name).intents[intent_name]["slots"])
@@ -343,7 +343,7 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
         ):
             rt.forget_clarification(state["user_id"], thread)
             return {"status": "NEEDS_CLARIFICATION", "missing_fields": [],
-                    "response": "尚未发起转账。如需办理，请明确收款人和金额。"}
+                    "response": "尚未发起操作。如需办理，请明确目标和必要信息。"}
 
         if pending and (pending["scenario"], pending["intent"]) == (scenario_name, intent_name):
             candidates = {**pending["candidate_params"], **candidates}

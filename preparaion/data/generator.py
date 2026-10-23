@@ -1,4 +1,4 @@
-"""按阶段 0 契约构造固定样例，不随机编造业务事实或异常标签。
+"""固定模拟银行样例，不随机编造业务事实或异常标签。
 
 返回新的内部数据集供后续模拟后端加载，不写文件、不修改教学图。
 它不是对用户/模型公开的数据接口，不能直接作为 API 响应。
@@ -33,6 +33,16 @@ def build_demo_data() -> dict:
         "card-003": {"account_id": "account-002", "display_name": "日常消费卡",
                      "status": "ACTIVE"},
     }
+    subscriptions = {
+        "subscription-001": {"account_id": "account-001", "display_name": "演示订阅",
+            "status": "ACTIVE", "amount_minor": 2500, "currency": "CNY", "next_payment_date": "2026-11-12"},
+        "subscription-002": {"account_id": "account-001", "display_name": "通勤月票",
+            "status": "ACTIVE", "amount_minor": 6000, "currency": "CNY", "next_payment_date": "2026-11-11"},
+        "subscription-003": {"account_id": "account-001", "display_name": "工作餐月卡",
+            "status": "PAUSED", "amount_minor": 12000, "currency": "CNY", "next_payment_date": None},
+        "subscription-004": {"account_id": "account-002", "display_name": "演示订阅",
+            "status": "ACTIVE", "amount_minor": 2500, "currency": "CNY", "next_payment_date": "2026-11-12"},
+    }
     rows = (
         ("txn-001", "account-001", "2026-10-01T09:00:00+08:00",
          "INCOME", 600000, "工资", "演示雇主"),
@@ -56,6 +66,10 @@ def build_demo_data() -> dict:
         "accounts": accounts,
         "contacts": contacts,
         "cards": cards,
+        "subscriptions": subscriptions,
+        # 明确登记的协议外键；不通过商户同名或统计规律推断可暂停权限。
+        "subscription_payments": {"txn-005": "subscription-001", "txn-006": "subscription-001",
+                                  "txn-004": "subscription-002", "txn-003": "subscription-003"},
         "transactions": [dict(zip(fields, row)) for row in rows],
     }
     validate_demo_data(data)

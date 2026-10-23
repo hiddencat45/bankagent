@@ -19,9 +19,10 @@ export function readConfirmation(value) {
     if (!text(value.recipient) || !minor(value.amount_minor) || value.amount_minor === 0
         || value.currency !== 'CNY') invalid();
     fields = ['recipient', 'amount_minor', 'currency'];
-  } else if (['FREEZE_CARD', 'UNFREEZE_CARD'].includes(value.operation)) {
-    const target = value.operation === 'FREEZE_CARD' ? 'FROZEN' : 'ACTIVE';
-    if (!text(value.display_name) || !['ACTIVE', 'FROZEN'].includes(value.current_status)
+  } else if (['FREEZE_CARD', 'UNFREEZE_CARD', 'PAUSE_SUBSCRIPTION'].includes(value.operation)) {
+    const target = { FREEZE_CARD: 'FROZEN', UNFREEZE_CARD: 'ACTIVE', PAUSE_SUBSCRIPTION: 'PAUSED' }[value.operation];
+    const states = value.operation === 'PAUSE_SUBSCRIPTION' ? ['ACTIVE', 'PAUSED'] : ['ACTIVE', 'FROZEN'];
+    if (!text(value.display_name) || !states.includes(value.current_status)
         || value.target_status !== target) invalid();
     fields = ['display_name', 'current_status', 'target_status'];
   } else invalid();
@@ -93,6 +94,29 @@ export function readResult(result) {
     if (data.status !== target || !['ACTIVE', 'FROZEN'].includes(data.previous_status)
         || typeof data.changed !== 'boolean'
         || data.changed !== (data.previous_status !== data.status)) invalid();
+  } else if (result.operation === 'QUERY_SUBSCRIPTIONS') {
+    if (data.currency !== 'CNY' || !minor(data.total_minor) || !text(data.start) || !text(data.end)
+        || !Array.isArray(data.subscriptions)) invalid();
+    let total = 0n;
+    const ids = new Set(), payments = new Set();
+    for (const row of data.subscriptions) {
+      readSubscription(row);
+      if (ids.has(row.subscription_id) || !minor(row.paid_minor) || !Array.isArray(row.payments)) invalid();
+      ids.add(row.subscription_id);
+      let paid = 0n;
+      for (const tx of row.payments) {
+        if (!object(tx) || !text(tx.transaction_id) || payments.has(tx.transaction_id)
+            || !text(tx.occurred_at) || !minor(tx.amount_minor)) invalid();
+        payments.add(tx.transaction_id); paid += BigInt(tx.amount_minor);
+      }
+      if (paid !== BigInt(row.paid_minor)) invalid();
+      total += paid;
+    }
+    if (total !== BigInt(data.total_minor) || payments.size > 100) invalid();
+  } else if (result.operation === 'PAUSE_SUBSCRIPTION') {
+    readSubscription(data);
+    if (data.status !== 'PAUSED' || !['ACTIVE', 'PAUSED'].includes(data.previous_status)
+        || typeof data.changed !== 'boolean' || data.changed !== (data.previous_status !== data.status)) invalid();
   } else if (result.operation === 'QUERY_BILLS') readBills(data);
   else invalid();
   return result;
@@ -101,4 +125,12 @@ export function readResult(result) {
 function readCard(value) {
   if (!object(value) || !text(value.card_id) || !text(value.display_name)
       || !['ACTIVE', 'FROZEN'].includes(value.status)) invalid();
+}
+
+function readSubscription(value) {
+  if (!object(value) || !text(value.subscription_id) || !text(value.display_name)
+      || !['ACTIVE', 'PAUSED'].includes(value.status) || !minor(value.amount_minor)
+      || value.amount_minor === 0 || value.currency !== 'CNY'
+      || (value.status === 'PAUSED' ? value.next_payment_date !== null
+        : !text(value.next_payment_date) || !Number.isFinite(Date.parse(value.next_payment_date)))) invalid();
 }
