@@ -27,7 +27,7 @@
 | 多轮槽位补全 | 已实现并合入 `main`（PR #18）：补金额、改收款人、同意图话题切换；服务端待补任务 30 分钟后失效 |
 | 模型候选边界 | 已实现并合入 `main`（PR #28，接续 #19）：可替换候选接口、严格校验、模式贯穿；**未配置真实供应商**，默认仍为 offline |
 | 失败写操作原确认恢复 | 已修复并合入 `main`（PR #20）；确认后失败可用同一挑战安全重试，不重复落账 |
-| 真实模型接入 | 适配器已实现（OpenAI 兼容协议，`preparaion/model_providers.py`）；**未用真实凭据验收**，默认仍 offline |
+| 真实模型接入 | 已接入 DeepSeek（`preparaion/model_providers.py`）：默认 `deepseek-flash`、关闭思考模式；只差有效凭据。**真实语义未验收**，默认仍 offline |
 
 ### 新主图做到了什么
 
@@ -209,48 +209,78 @@ print(final["status"], final["response"])
 
 供应商适配器已实现，见下节。但**真实模型验收仍未完成**：需要实际凭据验证同义表达、多轮对话与拒识能力，测试替身不能代替这一项。
 
-### 真实模型接入（OpenAI 兼容，本分支待复核）
+### 真实模型接入（DeepSeek，本分支待复核）
 
-供应商尚未选定，因此适配器实现的是 **OpenAI 兼容的 `/chat/completions`**，而不是绑定某家 SDK：DeepSeek、通义、Kimi、智谱、本地 vLLM/Ollama 都支持这套协议，换供应商只改 `base_url` 与模型名，不必为每家引一个包。实现只依赖已在 `requirements.txt` 里的 httpx，没有新增依赖。
+供应商已定为 **DeepSeek**。适配器按官方文档调好，同时保持对其它 OpenAI 兼容供应商可用：换 `base_url` 与模型名即可，不改代码、不加依赖（只用已有的 httpx）。
 
-配置走环境变量，不进代码：
+最少只要一个 key：
 
-| 变量 | 必填 | 说明 |
+```powershell
+$env:BANKAGENT_MODEL_API_KEY = "<你的 key>"
+```
+
+地址与模型名有默认值，不必设：
+
+| 变量 | 默认 | 说明 |
 |---|---|---|
-| `BANKAGENT_MODEL_BASE_URL` | 是 | 形如 `https://api.deepseek.com/v1`，不要带 `/chat/completions` |
-| `BANKAGENT_MODEL_API_KEY` | 是 | 只读进 `Authorization` 头 |
-| `BANKAGENT_MODEL_NAME` | 是 | 形如 `deepseek-chat` |
-| `BANKAGENT_MODEL_TIMEOUT` | 否 | 默认 20 秒，允许 0–120 |
+| `BANKAGENT_MODEL_API_KEY` | 无（必填） | 只读进 `Authorization` 头 |
+| `BANKAGENT_MODEL_BASE_URL` | `https://api.deepseek.com` | 不要带 `/chat/completions` |
+| `BANKAGENT_MODEL_NAME` | `deepseek-flash` | 官方当前只有 `deepseek-flash` 与 `deepseek-v4-pro` |
+| `BANKAGENT_MODEL_TIMEOUT` | `20` | 秒，允许 0–120 |
+| `BANKAGENT_MODEL_MAX_TOKENS` | `512` | 候选很小，给太多是浪费 |
+| `BANKAGENT_MODEL_THINKING` | `disabled`（DeepSeek 地址时） | 见下 |
 
 启动行为有三种，第三种是刻意的：
 
-- **三个变量全空** → offline 关键词规则（默认，与之前一致）
-- **三个变量齐全** → model 模式，`mode` 字段贯穿每条 SSE
-- **只配了一部分** → 启动直接报错，并列出缺哪个变量
+- 什么都没设 → offline 关键词规则（默认，与之前一致）
+- 给了 key → model 模式，`mode` 贯穿每条 SSE
+- **设了地址或模型名但没给 key** → 启动直接报错
 
-静默回退 offline 会让人以为模型已经在用、实际在跑关键词，这是答辩现场最难自证的一类问题。
+最后一条是刻意的：静默回退 offline 会让人以为模型已经在用、实际在跑关键词，这是答辩现场最难自证的一类问题。
 
-错误分两类映射，因为它们对用户的含义不同：
+#### 按官方文档处理的三处 DeepSeek 差异
 
-- 网络失败、超时、HTTP 非 200、响应结构不对 → `MODEL_UNAVAILABLE`（请稍后重试）
-- 拿到响应但内容不是合法候选 → `MODEL_OUTPUT_INVALID`（请重新描述）
+**① 思考模式默认开启，而思考模式下 `temperature` 不生效。**
+
+`thinking.type` 的默认值是 `enabled`。也就是说，什么都不做的话，我们设的 `temperature: 0` 会被忽略——意图识别要的是稳定复现，这一项失效比它看起来严重。而且思考模式更慢、更贵（reasoning tokens 单独计费）。
+
+所以对 DeepSeek 地址默认发 `thinking: {"type": "disabled"}`，要改回来设 `BANKAGENT_MODEL_THINKING=enabled`。非 DeepSeek 地址不发这个字段，避免对方不认识而返回 400。
+
+**② `max_tokens` 不设时非思考模式默认 8K，而候选输出不到 200 字节。**
+
+显式设 512。撞上上限时 `finish_reason` 是 `length`、content 是半截 JSON——这种要报 `MODEL_RESPONSE_TRUNCATED`，不能当成「用户说得不对」让他重述，因为重述一次还是会截断。
+
+**③ JSON 模式要求提示词里出现 `json` 字样并给出格式样例。**
+
+官方文档明说：不指示模型输出 JSON 时，模型会一直吐空白字符直到撞上 token 上限，看起来像「卡住」。所以提示词里既有 `json` 字样，也有完整的格式样例。
+
+另外文档提到 JSON 模式**有概率返回空 content**，属于供应商侧偶发问题，因此空响应会自动重试一次，而不是把用户直接挡在「请重新描述」上。
+
+#### 错误分两类
+
+- 网络失败、超时、HTTP 非 200、响应结构不对、被截断 → `MODEL_UNAVAILABLE`
+- 拿到响应但内容不是合法候选 → `MODEL_OUTPUT_INVALID`
 
 把后者也归成「服务不可用」，用户会对着一个其实已经连通的服务白等。
 
-适配器的硬约束：凭据只出现在 `Authorization` 头，不进请求体、不进日志、不进异常消息；HTTP 错误只报状态码、不回显响应体（错误体常带请求 id 甚至回显凭据）；不跟随重定向（跨域重定向会把 Bearer 带到别的主机）；响应体上限 256 KB；连接超时单独封顶 10 秒，避免 DNS/握手段吃掉整个预算。
+适配器的硬约束：凭据只出现在 `Authorization` 头，不进请求体、不进日志、不进异常消息；HTTP 错误只报状态码、不回显响应体；不跟随重定向（跨域重定向会把 Bearer 带到别的主机）；响应体上限 256 KB；连接超时单独封顶 10 秒。
 
-验收方式：拿到凭据后跑一次冒烟脚本。
+#### 验收
 
 ```powershell
-$env:BANKAGENT_MODEL_BASE_URL = "https://api.deepseek.com/v1"
-$env:BANKAGENT_MODEL_API_KEY  = "<你的 key>"
-$env:BANKAGENT_MODEL_NAME     = "deepseek-chat"
+$env:BANKAGENT_MODEL_API_KEY = "<你的 key>"
 .\.venv\Scripts\python.exe scripts/check_model.py
 ```
 
-脚本打三条：明确指令、同义表达、无关问题。前两条看识别能力，**第三条看拒识能力**——如果对「今天天气怎么样」也编出一个业务意图，那是安全隐患，不是「模型很聪明」。
+脚本打三条：明确指令、同义表达、**无关问题**。第三条看的是拒识能力——如果对「今天天气怎么样」也编出一个业务意图，那是安全隐患，不是「模型很聪明」。
 
-**验收状态要说清楚**：协议层已有 42 条测试覆盖（请求格式、超时配置、错误映射、凭据不泄漏、配置校验、端到端驱动确认卡），变异测试 10/10 捕获。但**真实模型的语义能力尚未验收**：没有凭据，无法证明它能把「帮我把这个月的房租两千五打给张伟」识别成转账，也无法证明它不会在无关问题上乱答。这一项必须由拿到凭据的人跑 `check_model.py` 才算完成。
+失败时会额外打印 `技术原因`（如 `http_401`），因为对用户只报 `MODEL_UNAVAILABLE`，供应商细节不能进用户可见文案。
+
+**验收状态**：协议层已有 51 条测试（请求格式、思考模式、截断、空响应重试、超时、错误映射、凭据不泄漏、配置校验、端到端驱动确认卡），变异测试全部捕获。
+
+**连通性已实测**：用一个无效 key 请求，返回 `401` 而不是 `404` 或 `400`——说明地址与请求格式都被 DeepSeek 接受，只差一个有效凭据。
+
+**但真实语义能力仍未验收**：无法证明它能把「帮我把这个月的房租两千五打给张伟」识别成转账，也无法证明它不会在无关问题上乱答。这一项必须由拿到 key 的人跑 `check_model.py` 才算完成。
 
 ### 失败后重试原确认（本分支待复核）
 
