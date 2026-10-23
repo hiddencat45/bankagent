@@ -33,29 +33,43 @@ def build_demo_data() -> dict:
         "card-003": {"account_id": "account-002", "display_name": "日常消费卡",
                      "status": "ACTIVE"},
     }
+    # 月度代扣协议。merchant 与 display_name 一致，账单流水才能归到某条协议上：
+    # txn-005/006 就是 sub-001 在同一分钟内被扣了两次，账单里表现为疑似重复。
+    subscriptions = {
+        "sub-001": {"account_id": "account-001", "display_name": "演示影音会员",
+                    "status": "ACTIVE", "amount_minor": 2500, "currency": "CNY",
+                    "next_payment_date": "2026-11-12"},
+        "sub-002": {"account_id": "account-001", "display_name": "演示云存储",
+                    "status": "PAUSED", "amount_minor": 1200, "currency": "CNY",
+                    "next_payment_date": None},
+        "sub-003": {"account_id": "account-002", "display_name": "演示健身",
+                    "status": "ACTIVE", "amount_minor": 9900, "currency": "CNY",
+                    "next_payment_date": "2026-11-01"},
+    }
     rows = (
         ("txn-001", "account-001", "2026-10-01T09:00:00+08:00",
-         "INCOME", 600000, "工资", "演示雇主"),
+         "INCOME", 600000, "工资", "演示雇主", None),
         ("txn-002", "account-001", "2026-10-02T09:00:00+08:00",
-         "EXPENSE", 77000, "居住", "演示租赁"),
+         "EXPENSE", 77000, "居住", "演示租赁", None),
         ("txn-003", "account-001", "2026-10-10T12:00:00+08:00",
-         "EXPENSE", 12000, "餐饮", "演示餐厅"),
+         "EXPENSE", 12000, "餐饮", "演示餐厅", None),
         ("txn-004", "account-001", "2026-10-11T08:00:00+08:00",
-         "EXPENSE", 6000, "交通", "演示交通"),
+         "EXPENSE", 6000, "交通", "演示交通", None),
         ("txn-005", "account-001", "2026-10-12T10:00:00+08:00",
-         "EXPENSE", 2500, "订阅", "演示订阅"),
+         "EXPENSE", 2500, "订阅", "演示影音会员", "sub-001"),
         ("txn-006", "account-001", "2026-10-12T10:00:30+08:00",
-         "EXPENSE", 2500, "订阅", "演示订阅"),
+         "EXPENSE", 2500, "订阅", "演示影音会员", "sub-001"),
         ("txn-007", "account-002", "2026-10-01T09:00:00+08:00",
-         "INCOME", 40000, "工资", "演示雇主"),
+         "INCOME", 40000, "工资", "演示雇主", None),
     )
     fields = ("transaction_id", "account_id", "occurred_at", "kind",
-              "amount_minor", "category", "merchant")
+              "amount_minor", "category", "merchant", "subscription_id")
     data = {
         "reference_date": REFERENCE_DATE,
         "accounts": accounts,
         "contacts": contacts,
         "cards": cards,
+        "subscriptions": subscriptions,
         "transactions": [dict(zip(fields, row)) for row in rows],
     }
     validate_demo_data(data)

@@ -32,13 +32,16 @@ def test_ledger_expenses_and_duplicate_evidence_match_contract():
     assert data["reference_date"] == date(2026, 10, 18)
     evidence = [t for t in rows if t["transaction_id"] in {"txn-005", "txn-006"}]
     assert len(evidence) == 2
-    assert evidence[0]["merchant"] == evidence[1]["merchant"] == "演示订阅"
+    assert evidence[0]["merchant"] == evidence[1]["merchant"] == "演示影音会员"
+    # 归属靠显式外键，不能只凭同名商户推断。
+    assert evidence[0]["subscription_id"] == evidence[1]["subscription_id"] == "sub-001"
     assert evidence[0]["amount_minor"] == evidence[1]["amount_minor"] == 2500
     elapsed = datetime.fromisoformat(evidence[1]["occurred_at"]) - datetime.fromisoformat(
         evidence[0]["occurred_at"])
     assert elapsed.total_seconds() == 30
     assert all(set(t) == {"transaction_id", "account_id", "occurred_at", "kind",
-                          "amount_minor", "category", "merchant"} for t in rows)
+                          "amount_minor", "category", "merchant",
+                          "subscription_id"} for t in rows)
     other = [t for t in data["transactions"] if t["account_id"] == "account-002"]
     assert len(other) == 1 and other[0]["amount_minor"] == 40000
     assert data["accounts"]["account-002"]["user_id"] == "user-002"
@@ -100,6 +103,7 @@ def test_validator_accepts_order_independent_ledger_and_consistent_transfer():
         "transaction_id": "txn-test-transfer", "account_id": "account-001",
         "occurred_at": "2026-10-18T09:00:00+08:00", "kind": "TRANSFER_OUT",
         "amount_minor": 30000, "category": "转账", "merchant": None,
+        "subscription_id": None,
     })
     data["accounts"]["account-001"]["balance_minor"] = 470000
     validate_demo_data(data)
