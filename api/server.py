@@ -150,6 +150,7 @@ class Service:
                     spec = self.runtime.registry.spec_for_operation(record['operation'])
                     if spec is not None and spec.confirmation is not None:
                         payload.update(spec.confirmation(
+                            operation=record['operation'],
                             params=record['params'],
                             candidate_params=state.get('candidate_params') or {},
                             context=context,

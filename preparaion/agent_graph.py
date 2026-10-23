@@ -342,8 +342,10 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
             _WRITE_HESITATION, message
         ):
             rt.forget_clarification(state["user_id"], thread)
+            # 文案不写具体业务名：这里已不止转账一种写操作，说"尚未发起转账"
+            # 会把冻结卡片的犹豫回复成一件用户没提过的事。
             return {"status": "NEEDS_CLARIFICATION", "missing_fields": [],
-                    "response": "尚未发起转账。如需办理，请明确收款人和金额。"}
+                    "response": "好的，本次操作尚未发起。如需继续，请重新告诉我完整的办理需求。"}
 
         if pending and (pending["scenario"], pending["intent"]) == (scenario_name, intent_name):
             candidates = {**pending["candidate_params"], **candidates}

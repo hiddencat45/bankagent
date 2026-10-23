@@ -84,7 +84,7 @@ def _card_scenario_module(backend: FakeCardBackend, *, with_confirmation: bool =
     def risk(operation, params, context):
         return "YELLOW"
 
-    def confirmation(*, params, candidate_params, context):
+    def confirmation(*, operation, params, candidate_params, context):
         result = backend.query_cards(context=context)
         card = next(c for c in result["data"]["cards"] if c["card_id"] == params["card_id"])
         return {
@@ -172,10 +172,12 @@ def test_confirmation_hook_receives_bound_params_not_raw_candidates(card_app):
     spec = registry.get("card_demo")
     original = spec.confirmation
 
-    def spy(*, params, candidate_params, context):
+    def spy(*, operation, params, candidate_params, context):
+        seen["operation"] = operation
         seen["params"] = dict(params)
         seen["candidate"] = dict(candidate_params)
-        return original(params=params, candidate_params=candidate_params, context=context)
+        return original(operation=operation, params=params,
+                        candidate_params=candidate_params, context=context)
 
     spec.confirmation = spy
     try:
@@ -183,6 +185,7 @@ def test_confirmation_hook_receives_bound_params_not_raw_candidates(card_app):
     finally:
         spec.confirmation = original
 
+    assert seen["operation"] == "FREEZE_CARD"
     assert seen["params"] == {"card_id": "card-001"}
     assert seen["candidate"] == {"card_name": "日常消费卡"}
 
@@ -226,12 +229,14 @@ def test_transfer_confirmation_refuses_unmatched_recipient(card_app):
     context = TrustedContext("user-001", "account-001", "req-1")
     with pytest.raises(ValueError):
         transfer_module.confirmation(
+            operation="TRANSFER",
             params={"contact_id": "contact-999", "amount_minor": 30000, "currency": "CNY"},
             candidate_params={"recipient_name": "张伟"},
             context=context,
         )
     with pytest.raises(ValueError):
         transfer_module.confirmation(
+            operation="TRANSFER",
             params={"amount_minor": 30000, "currency": "CNY"},
             candidate_params={"recipient_name": "张伟"},
             context=context,
