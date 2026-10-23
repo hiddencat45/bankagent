@@ -1,0 +1,77 @@
+"""候选模型的供应商无关边界；不接网络，不产生可信执行字段。
+
+供应商适配器实现 predict(request) 和 health()；predict 必须自行限制网络超时，
+返回解包后的 JSON 对象。此模块不接受 SDK 响应对象、任意文本或执行计划。
+"""
+from copy import deepcopy
+from typing import Any, Protocol
+
+from scenarios import ScenarioRegistry
+from bank_types import UNTRUSTED_STATE_FIELDS
+
+_FORBIDDEN = UNTRUSTED_STATE_FIELDS | {"operation", "params", "balance_minor", "approved", "auth_token", "otp", "token"}
+
+
+class CandidateModel(Protocol):
+    def predict(self, request: dict[str, Any]) -> object: ...
+    def health(self) -> bool: ...
+
+
+class UnderstandingError(Exception):
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__(code)
+
+
+class CandidateInterpreter:
+    def __init__(self, model: CandidateModel, registry: ScenarioRegistry):
+        if not callable(getattr(model, 'predict', None)) or not callable(getattr(model, 'health', None)):
+            raise ValueError('candidate model must provide predict and health')
+        self.model, self.registry = model, registry
+
+    def health(self) -> bool:
+        try:
+            return self.model.health() is True
+        except Exception:
+            return False
+
+    def predict(self, message: str, pending: dict[str, Any] | None) -> dict[str, Any]:
+        catalog = [
+            {'scenario': name, 'intent': intent, 'slots': sorted(set(declaration['slots']) - _FORBIDDEN)}
+            for name in self.registry.scenario_names()
+            for intent, declaration in self.registry.get(name).intents.items()
+        ]
+        context = None
+        if pending:
+            slots = self.registry.get(pending['scenario']).intents[pending['intent']]['slots']
+            context = {k: pending[k] for k in ('scenario', 'intent')}
+            context['candidate_params'] = {k: v for k, v in pending['candidate_params'].items()
+                                           if k in slots and k not in _FORBIDDEN and isinstance(v, str)}
+            context['missing_fields'] = [k for k in pending['missing_fields'] if k in slots and k not in _FORBIDDEN]
+        request = {
+            'instruction': '只识别一个明确的业务意图与本轮明确提供的候选槽位；金额用十进制字符串。'
+                           '不要继承旧槽位或猜测缺失值。多意图、否定或含糊请求请返回空候选。'
+                           '只返回 scenario、intent、candidate_params；空候选为 null、null、{}。',
+            'catalog': catalog, 'message': message, 'pending': deepcopy(context),
+        }
+        try:
+            raw = self.model.predict(request)
+        except Exception:
+            raise UnderstandingError('MODEL_UNAVAILABLE') from None
+        if not isinstance(raw, dict) or set(raw) != {'scenario', 'intent', 'candidate_params'}:
+            raise UnderstandingError('MODEL_OUTPUT_INVALID')
+        scenario, intent, candidates = raw['scenario'], raw['intent'], raw['candidate_params']
+        if scenario is None and intent is None and candidates == {}:
+            return {'scenario': None, 'intent': None, 'candidate_params': {}}
+        if not isinstance(scenario, str) or not isinstance(intent, str) or not isinstance(candidates, dict):
+            raise UnderstandingError('MODEL_OUTPUT_INVALID')
+        if scenario not in self.registry.scenario_names():
+            raise UnderstandingError('MODEL_OUTPUT_INVALID')
+        declarations = self.registry.get(scenario).intents
+        if (intent not in declarations or set(candidates) & _FORBIDDEN
+                or set(candidates) - set(declarations[intent]['slots'])):
+            raise UnderstandingError('MODEL_OUTPUT_INVALID')
+        if any(not isinstance(v, str) or not v.strip() or len(v) > 256 for v in candidates.values()):
+            raise UnderstandingError('MODEL_OUTPUT_INVALID')
+        return {'scenario': scenario, 'intent': intent,
+                'candidate_params': {k: v.strip() for k, v in candidates.items()}}
