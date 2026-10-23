@@ -33,6 +33,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.errors import GraphBubbleUp
 from langgraph.types import interrupt
 
+from agent_phrasing import ResponsePhraser
 from agent_security import ChallengeStore, compute_operation_hash
 from agent_understanding import CandidateInterpreter, CandidateModel, UnderstandingError
 from bank_types import (
@@ -100,10 +101,13 @@ class BankAgentRuntime:
         challenges: ChallengeStore | None = None,
         clock: Callable[[], datetime] | None = None,
         candidate_model: CandidateModel | None = None,
+        phraser: ResponsePhraser | None = None,
     ) -> None:
         self.registry = registry if registry is not None else REGISTRY
         self.interpreter = CandidateInterpreter(candidate_model, self.registry) if candidate_model is not None else None
         self.mode = "model" if self.interpreter is not None else "offline"
+        # 措辞改写与意图识别分开注入：只接了识别模型时，回复仍是模板。
+        self.phraser = phraser if phraser is not None else ResponsePhraser(None)
         self.clock = clock if clock is not None else (lambda: datetime.now(SG_TZ))
         self.challenges = challenges if challenges is not None else ChallengeStore(clock=self.clock)
         # 澄清续轮的期限元数据，按 (user_id, thread_id) 记，**不进 State**
@@ -678,7 +682,8 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
                 text = registry.render(scenario_name, result)
             except (ScenarioError, KeyError):
                 text = "操作未完成，请稍后重试。"
-            return {"response": text}
+            # 模板先给出事实正确的原文，再由措辞层改写；改写不过校验就原样返回。
+            return {"response": rt.phraser.phrase(result, text)}
 
         if status == "REJECTED":
             return {"response": "该请求未获准办理。"}

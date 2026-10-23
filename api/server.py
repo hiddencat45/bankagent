@@ -28,13 +28,14 @@ _RETRY_EXECUTION = object()
 
 class Service:
     def __init__(self, *, clock=None, authenticate=None, candidate_model=None,
-                 registry=None):
+                 registry=None, phraser=None):
         # 固定业务参考日，挑战仍随真实经过时间过期。
         started = datetime.now(SG_TZ)
         reference = datetime.combine(REFERENCE_DATE, datetime.min.time(), SG_TZ).replace(hour=12)
         self.clock = clock or (lambda: reference + (datetime.now(SG_TZ) - started))
         self.candidate_model = candidate_model
         self.registry = registry
+        self.phraser = phraser
         self.authenticate = authenticate or (lambda context, otp: False)
         self.lock = threading.RLock()
         self.running = threading.Lock()
@@ -43,7 +44,8 @@ class Service:
         self.challenge_by_thread = {}
         self.saver = InMemorySaver()
         self.runtime = BankAgentRuntime(challenges=self.challenges, clock=self.clock,
-                                        candidate_model=self.candidate_model, registry=registry)
+                                        candidate_model=self.candidate_model, registry=registry,
+                                        phraser=phraser)
         self.graph = build_graph(self.runtime, checkpointer=self.saver)
         configure_clock(clock=self.clock)
         subscription_clock(clock=self.clock)
@@ -185,9 +187,9 @@ class Service:
 
 
 def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=None,
-               registry=None, allow_lan=False):
+               registry=None, allow_lan=False, phraser=None):
     service = Service(clock=clock, authenticate=authenticate,
-                      candidate_model=candidate_model, registry=registry)
+                      candidate_model=candidate_model, registry=registry, phraser=phraser)
     app = FastAPI(title='有度 · 本地银行 Demo')
     app.state.service = service
 
@@ -257,7 +259,8 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
                 service.saver = InMemorySaver()
                 service.runtime = BankAgentRuntime(challenges=service.challenges, clock=service.clock,
                                            candidate_model=service.candidate_model,
-                                           registry=service.registry)
+                                           registry=service.registry,
+                                           phraser=service.phraser)
                 service.graph = build_graph(service.runtime, checkpointer=service.saver)
             return {'status': 'COMPLETED'}
         finally:
@@ -300,8 +303,13 @@ def create_demo_app():
     """
     import os
 
+    from agent_phrasing import ResponsePhraser
     from model_providers import build_model_from_env
 
     allow_lan = os.environ.get('BANKAGENT_DEMO_ALLOW_LAN') == '1'
+    # 识别与措辞各用一个实例：两者共用时，改写层一次空响应就会把 /health
+    # 标记成模型不可用，而识别其实是好的——这会把人带偏。
+    phraser_model = build_model_from_env()
     return create_app(demo=True, candidate_model=build_model_from_env(),
+                      phraser=ResponsePhraser(phraser_model) if phraser_model is not None else None,
                       allow_lan=allow_lan)

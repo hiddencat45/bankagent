@@ -535,3 +535,46 @@ def test_real_adapter_timeout_surfaces_as_model_unavailable(clock):
         assert "模型" in errors[0]["message"]
         assert API_KEY not in json.dumps(errors, ensure_ascii=False)
         assert not any(name == "card" for name, _ in out)
+
+
+# ---------------------------------------------------------------------------
+# 措辞改写（format=text）：同一个客户端承载两种任务
+# ---------------------------------------------------------------------------
+
+
+def test_text_mode_returns_plain_text_without_json_parsing():
+    """措辞改写要的是纯文本。
+
+    这里曾出过一个只在真实调用下才暴露的缺陷：``_attempt`` 无条件做 JSON
+    解析，于是每一句正常改写都被判成解析失败、静默回退模板——用模型替身的
+    测试完全看不出来，因为替身绕过了这一层。
+    """
+    model = _model(lambda request: _reply("您当前的余额是 5000.00 元。"))
+    text = model.predict({"instruction": "改写这段话", "facts": {}, "format": "text"})
+    assert text == "您当前的余额是 5000.00 元。"
+
+
+def test_text_mode_sends_neither_json_hint_nor_response_format():
+    """text 模式不能带 JSON 约束，否则模型会去写 JSON 而不是中文。"""
+    seen = {}
+
+    def handler(request):
+        seen.update(json.loads(request.content))
+        return _reply("您当前的余额是 5000.00 元。")
+
+    _model(handler).predict({"instruction": "把 reference_text 改写得更口语", "facts": {},
+                             "format": "text"})
+    assert "response_format" not in seen
+    assert "json" not in seen["messages"][0]["content"].lower()
+    # 意图识别的上下文不该混进改写请求。
+    assert set(seen["messages"][1]["content"]) and "catalog" not in seen["messages"][1]["content"]
+
+
+def test_text_mode_still_rejects_truncated_responses():
+    """截断是配置问题，不该被当成一次成功改写。"""
+    def handler(request):
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": "半句话"}, "finish_reason": "length"}]})
+
+    with pytest.raises(RuntimeError, match="TRUNCATED"):
+        _model(handler).predict({"instruction": "改写", "facts": {}, "format": "text"})
