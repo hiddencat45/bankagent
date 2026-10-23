@@ -108,6 +108,7 @@ def main() -> int:
         print(f"有 {failures} 项在协议层就失败了，先看错误码再判断是配置问题还是模型问题。")
         print("  MODEL_RESPONSE_TRUNCATED → 调大 BANKAGENT_MODEL_MAX_TOKENS")
         print("  MODEL_HTTP_401           → key 无效或过期")
+        print("  MODEL_HTTP_402           → 账户余额不足，需要充值")
         print("  MODEL_TIMEOUT            → 网络问题，或调大 BANKAGENT_MODEL_TIMEOUT")
     else:
         print("协议层全部通过。语义是否达标请对照上面的候选人工判断：")
