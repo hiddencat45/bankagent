@@ -242,3 +242,38 @@ def test_actual_inflight_graph_blocks_other_requests_and_reset(client, monkeypat
         finally:
             proceed.set()
         assert result(future.result(timeout=5))['data']['balance_minor'] == 500000
+
+# ---------------------------------------------------------------------------
+# 局域网开关：显式降级，默认关闭
+# ---------------------------------------------------------------------------
+
+
+def test_non_local_host_is_rejected_by_default():
+    """默认只认回环地址：把链接发给别人是打不开的。"""
+    with TestClient(create_app(demo=True), base_url='http://10.1.2.3:8021') as lan:
+        assert lan.get('/health').status_code == 403
+        assert lan.get('/health').json()['message'] == '仅允许本地同源演示。'
+
+
+def test_non_local_host_allowed_only_when_explicitly_enabled():
+    """设了 BANKAGENT_DEMO_ALLOW_LAN 才放宽，且只放宽 host。"""
+    with TestClient(create_app(demo=True, allow_lan=True), base_url='http://10.1.2.3:8021') as lan:
+        assert lan.get('/health').status_code == 200
+
+
+def test_allow_lan_keeps_same_origin_check():
+    """放行局域网不等于放行跨站：origin 与 host 不一致仍然拒绝。"""
+    with TestClient(create_app(demo=True, allow_lan=True), base_url='http://10.1.2.3:8021') as lan:
+        blocked = lan.get('/health', headers={'origin': 'http://evil.example'})
+        assert blocked.status_code == 403
+
+
+def test_allow_lan_does_not_open_a_non_demo_app():
+    """allow_lan 只放宽「谁能进来」，不放宽「是不是演示模式」。"""
+    with TestClient(create_app(demo=False, allow_lan=True), base_url='http://10.1.2.3:8021') as lan:
+        assert lan.post('/demo/session').status_code == 404
+
+
+def test_local_access_still_works_with_allow_lan():
+    with TestClient(create_app(demo=True, allow_lan=True), base_url='http://localhost') as local:
+        assert local.get('/health').status_code == 200
