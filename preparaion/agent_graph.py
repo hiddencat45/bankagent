@@ -24,6 +24,7 @@
 """
 
 import re
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Literal
 
@@ -63,6 +64,7 @@ STATUS_MAP: dict[str, TopLevelStatus] = {
 
 # 只读操作走直接执行；写操作必须经挑战。
 _WRITE_EFFECT = "WRITE"
+_WRITE_HESITATION = r"不|别|取消|停止|暂缓|等等|算了|放弃|能否|是否|可能|也许|考虑|想想"
 
 # 主图安全层自己产生的错误码与文案。这些不属于任何场景的业务错误，
 # 因此不要求各场景的 render 处理——场景只解释自己后端返回的错误码。
@@ -99,21 +101,36 @@ class BankAgentRuntime:
         self.challenges = challenges if challenges is not None else ChallengeStore(clock=self.clock)
         # 澄清续轮的期限元数据，按 (user_id, thread_id) 记，**不进 State**
         # （契约 §1.5：澄清期限保存在服务端待补任务元数据中）。
-        self._clarify_deadlines: dict[tuple[str, str], datetime] = {}
+        self._clarify_tasks: dict[tuple[str, str], dict[str, Any]] = {}
 
     # -- 澄清期限 ---------------------------------------------------------
 
-    def remember_clarification(self, user_id: str, thread_id: str) -> None:
-        self._clarify_deadlines[(user_id, thread_id)] = self.clock() + timedelta(
-            minutes=CLARIFICATION_TIMEOUT_MINUTES
-        )
+    def remember_clarification(self, state: BankAgentState, thread_id: str) -> None:
+        key = (state["user_id"], thread_id)
+        if not thread_id or not state.get("scenario") or not state.get("missing_fields"):
+            self._clarify_tasks.pop(key, None)
+            return
+        previous = self.pending_task(state["user_id"], state["account_id"], thread_id)
+        same = previous and (previous["scenario"], previous["intent"]) == (state["scenario"], state["intent"])
+        self._clarify_tasks[key] = {
+            "account_id": state["account_id"], "scenario": state["scenario"], "intent": state["intent"],
+            "candidate_params": deepcopy(state["candidate_params"]),
+            "missing_fields": list(state["missing_fields"]),
+            "expires_at": previous["expires_at"] if same else self.clock() + timedelta(minutes=CLARIFICATION_TIMEOUT_MINUTES),
+        }
 
-    def clarification_open(self, user_id: str, thread_id: str) -> bool:
-        deadline = self._clarify_deadlines.get((user_id, thread_id))
-        return deadline is not None and deadline > self.clock()
+    def pending_task(self, user_id: str, account_id: str, thread_id: str) -> dict[str, Any] | None:
+        key = (user_id, thread_id)
+        task = self._clarify_tasks.get(key)
+        if task and task["expires_at"] <= self.clock():
+            self._clarify_tasks.pop(key, None)
+            return None
+        if task and task["account_id"] == account_id:
+            return deepcopy(task)
+        return None
 
     def forget_clarification(self, user_id: str, thread_id: str) -> None:
-        self._clarify_deadlines.pop((user_id, thread_id), None)
+        self._clarify_tasks.pop((user_id, thread_id), None)
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +200,23 @@ def _extract_slots(message: str, slots: dict[str, str]) -> dict[str, Any]:
     return found
 
 
+def _followup_slots(message: str, pending: dict[str, Any]) -> dict[str, str]:
+    """离线补槽只接受完整短答；不从任意包含数字的句子截取金额。"""
+    if pending["scenario"] != "transfer":
+        return {}
+    missing = pending["missing_fields"]
+    found = {}
+    amount = re.fullmatch(r"(?:金额(?:改为|是|为)?\s*)?([+\-0-9][^\s元块。！？!?；;]*)\s*(?:元|块钱|块)?[。！!]?", message.strip())
+    if amount and ("amount" in missing or message.startswith("金额")):
+        found["amount"] = amount.group(1)
+    recipient = re.fullmatch(r"(?:收款人(?:改为|是)|改成|改为|换成|给)\s*([\u4e00-\u9fff]{2,12})", message.strip())
+    if recipient:
+        found["recipient_name"] = recipient.group(1)
+    elif ("recipient_name" in missing or "contact_id" in missing) and re.fullmatch(r"[\u4e00-\u9fff]{2,4}", message.strip()):
+        found["recipient_name"] = message.strip()
+    return found
+
+
 # ---------------------------------------------------------------------------
 # 节点
 # ---------------------------------------------------------------------------
@@ -232,15 +266,31 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
 
     # -- 2. 意图识别 -----------------------------------------------------
 
-    def understand_intent(state: BankAgentState) -> dict[str, Any]:
+    def understand_intent(state: BankAgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
         """用注册器的关键词收集**全部**候选，再决定意图。
 
         不按模块名顺序取第一个：多个不同操作同时命中时要求用户明确，
         猜错会直接把用户带到错误的业务流程。
         """
         message = state["message"]
+        thread = _thread_id(config)
+        pending = rt.pending_task(state["user_id"], state["account_id"], thread)
         hits = registry.match_intents(message)
+        if pending and re.search(_WRITE_HESITATION, message):
+            rt.forget_clarification(state["user_id"], thread)
+            pending = None
+        if pending and re.match(r"^(?:重新|另一个|另外|换个话题|新请求|新任务|从头)", message):
+            rt.forget_clarification(state["user_id"], thread)
+            pending = None
         if not hits:
+            additions = _followup_slots(message, pending) if pending else {}
+            if additions:
+                return {"scenario": pending["scenario"], "intent": pending["intent"],
+                        "candidate_params": {**pending["candidate_params"], **additions}, "missing_fields": []}
+            rt.forget_clarification(state["user_id"], thread)
+            if pending:
+                return {"status": "NEEDS_CLARIFICATION", "missing_fields": [],
+                        "response": "未能判断这是补充信息还是新需求，请完整描述要办理的业务。"}
             return {
                 "status": "REJECTED",
                 "result": _rejected("", "UNSUPPORTED_INTENT"),
@@ -253,6 +303,7 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
             spec = registry.get(scenario_name)
             operations.add(spec.intents[intent_name]["operation"])
         if len(operations) > 1:
+            rt.forget_clarification(state["user_id"], thread)
             labels = "、".join(sorted(
                 registry.get(s).intents[i]["operation"]
                 for s, i, _ in hits
@@ -268,12 +319,17 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
         intent_spec = spec.intents[intent_name]
 
         if intent_spec["effect"] == "WRITE" and re.search(
-            r"不|别|取消|停止|暂缓|等等|算了|放弃|能否|是否|可能|也许|考虑|想想", message
+            _WRITE_HESITATION, message
         ):
+            rt.forget_clarification(state["user_id"], thread)
             return {"status": "NEEDS_CLARIFICATION", "missing_fields": [],
                     "response": "尚未发起转账。如需办理，请明确收款人和金额。"}
 
         candidates = _extract_slots(message, intent_spec["slots"])
+        if pending and (pending["scenario"], pending["intent"]) == (scenario_name, intent_name):
+            candidates = {**pending["candidate_params"], **candidates}
+        else:
+            rt.forget_clarification(state["user_id"], thread)
         return {
             "scenario": scenario_name,
             "intent": intent_name,
@@ -350,8 +406,6 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
             ]
 
         if missing:
-            if config is not None:
-                rt.remember_clarification(state["user_id"], _thread_id(config))
             labels = [spec.clarify_labels.get(slot, slot) for slot in missing]
             return {
                 "operation": operation,
@@ -363,10 +417,11 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
 
         return {"operation": operation, "params": resolved, "missing_fields": []}
 
-    def route_resolution(state: BankAgentState) -> Literal["clarify", "security", "end"]:
+    def route_resolution(state: BankAgentState, config: RunnableConfig | None = None) -> Literal["clarify", "security", "end"]:
         status = state.get("status")
         if status == "NEEDS_CLARIFICATION":
             return "clarify"
+        rt.forget_clarification(state["user_id"], _thread_id(config))
         if status in {"REJECTED", "FAILED"}:
             return "end"
         return "security"
@@ -557,7 +612,7 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
 
     def ask_clarification(state: BankAgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
         if config is not None:
-            rt.remember_clarification(state["user_id"], _thread_id(config))
+            rt.remember_clarification(state, _thread_id(config))
         return {"status": "NEEDS_CLARIFICATION"}
 
     def reject_operation(state: BankAgentState) -> dict[str, Any]:
