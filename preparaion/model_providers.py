@@ -149,8 +149,9 @@ class OpenAICompatibleModel:
 
     def predict(self, request: dict[str, Any]) -> Any:
         payload = self._payload(request)
+        text_mode = request.get("format") == "text"
         for attempt in range(_EMPTY_RETRIES + 1):
-            outcome = self._attempt(payload)
+            outcome = self._attempt(payload, text_mode=text_mode)
             if outcome is not _RETRY:
                 return outcome
             if attempt < _EMPTY_RETRIES:
@@ -164,7 +165,7 @@ class OpenAICompatibleModel:
 
     # -- 内部 -------------------------------------------------------------
 
-    def _attempt(self, payload: dict[str, Any]) -> Any:
+    def _attempt(self, payload: dict[str, Any], *, text_mode: bool = False) -> Any:
         """一次调用。返回候选 / ``None`` / ``_RETRY``；协议级问题抛异常。"""
         try:
             response = self._client.post(
@@ -215,20 +216,32 @@ class OpenAICompatibleModel:
             return _RETRY
 
         self._last_error = None
+        # 措辞改写要的是纯文本。这里若也走 JSON 解析，正常回复会被当成
+        # 解析失败，措辞层每次都静默回退模板——测试用替身时看不出来。
+        if text_mode:
+            return content.strip()
         return _extract_json(content)
 
     def _payload(self, request: dict[str, Any]) -> dict[str, Any]:
+        """组装一次请求。同一个客户端承载两种任务，靠 ``format`` 区分。
+
+        ``format="text"`` 是措辞改写：只给 facts，要纯文本；
+        其余是意图识别：给 catalog/message/pending，要 JSON。
+        """
         instruction = request.get("instruction") or ""
-        # 提示词里必须有 json 字样与格式样例，否则 JSON 模式会一直吐空白。
-        system = instruction if "json" in instruction.lower() else instruction + _FORMAT_HINT
-        user = json.dumps(
-            {
+        text_mode = request.get("format") == "text"
+        if text_mode:
+            system = instruction
+            body = {"facts": request.get("facts")}
+        else:
+            # 提示词里必须有 json 字样与格式样例，否则 JSON 模式会一直吐空白。
+            system = instruction if "json" in instruction.lower() else instruction + _FORMAT_HINT
+            body = {
                 "catalog": request.get("catalog") or [],
                 "message": request.get("message") or "",
                 "pending": request.get("pending"),
-            },
-            ensure_ascii=False,
-        )
+            }
+        user = json.dumps(body, ensure_ascii=False)
         payload: dict[str, Any] = {
             "model": self._config.model,
             # 意图识别要稳定，温度压低。注意：思考模式下该参数不生效，
@@ -241,7 +254,7 @@ class OpenAICompatibleModel:
                 {"role": "user", "content": user},
             ],
         }
-        if self._config.json_mode:
+        if self._config.json_mode and not text_mode:
             payload["response_format"] = {"type": "json_object"}
         if self._config.thinking is not None:
             payload["thinking"] = {"type": self._config.thinking}
