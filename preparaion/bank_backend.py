@@ -144,20 +144,8 @@ class BankBackend:
             if not contact or contact["user_id"] != context.user_id:
                 return reject("CONTACT_NOT_ACCESSIBLE")
             now = self._now()
-            record = deepcopy(self._lookup(context.authorization_ref))
-            if not isinstance(record, dict) or self._hash is None:
-                return reject("AUTHORIZATION_INVALID")
-            identity = {"user_id": context.user_id, "account_id": context.account_id,
-                        "request_id": context.request_id, "idempotency_key": context.idempotency_key,
-                        "operation": "TRANSFER", "params": params, "decision": "APPROVED"}
-            expiry = record.get("expires_at")
-            if (any(record.get(k) != v for k, v in identity.items())
-                    or not record.get("challenge_id") or record.get("risk_level") not in {"YELLOW", "RED"}
-                    or not isinstance(expiry, datetime) or expiry.utcoffset() is None or expiry <= now):
-                return reject("AUTHORIZATION_INVALID")
-            base_context = TrustedContext(context.user_id, context.account_id, context.request_id)
-            expected_hash = self._hash(base_context, "TRANSFER", params)
-            if not isinstance(expected_hash, str) or not expected_hash or record.get("operation_hash") != expected_hash:
+            record = self._validated_authorization(context, "TRANSFER", params, now)
+            if record is None:
                 return reject("AUTHORIZATION_INVALID")
             if amount_minor > TRANSFER_SINGLE_LIMIT_MINOR:
                 return reject("TRANSFER_LIMIT_EXCEEDED")
@@ -220,20 +208,7 @@ class BankBackend:
             card = self._data["cards"].get(card_id)
             if not card or card["account_id"] != context.account_id:
                 return reject("CARD_NOT_ACCESSIBLE")
-            record = deepcopy(self._lookup(context.authorization_ref))
-            if not isinstance(record, dict) or self._hash is None:
-                return reject("AUTHORIZATION_INVALID")
-            identity = {"user_id": context.user_id, "account_id": context.account_id,
-                        "request_id": context.request_id, "idempotency_key": context.idempotency_key,
-                        "operation": operation, "params": params, "decision": "APPROVED"}
-            expiry = record.get("expires_at")
-            if (any(record.get(k) != v for k, v in identity.items())
-                    or not record.get("challenge_id") or record.get("risk_level") not in {"YELLOW", "RED"}
-                    or not isinstance(expiry, datetime) or expiry.utcoffset() is None or expiry <= self._now()):
-                return reject("AUTHORIZATION_INVALID")
-            base_context = TrustedContext(context.user_id, context.account_id, context.request_id)
-            expected_hash = self._hash(base_context, operation, params)
-            if not isinstance(expected_hash, str) or not expected_hash or record.get("operation_hash") != expected_hash:
+            if self._validated_authorization(context, operation, params, self._now()) is None:
                 return reject("AUTHORIZATION_INVALID")
             target = {"FREEZE_CARD": "FROZEN", "UNFREEZE_CARD": "ACTIVE"}[operation]
             # 先构造状态与回执，最后一次发布；不产生资金流水或修改余额。
@@ -244,6 +219,25 @@ class BankBackend:
             completed = {**self._completed, key: (fingerprint, deepcopy(result))}
             self._data, self._completed = updated, completed
             return result
+
+    def _validated_authorization(self, context, operation, params, now):
+        """共享服务端授权绑定校验；调用方已持锁并处理成功幂等重放。"""
+        record = deepcopy(self._lookup(context.authorization_ref))
+        if not isinstance(record, dict) or self._hash is None:
+            return None
+        identity = {"user_id": context.user_id, "account_id": context.account_id,
+                    "request_id": context.request_id, "idempotency_key": context.idempotency_key,
+                    "operation": operation, "params": params, "decision": "APPROVED"}
+        expiry = record.get("expires_at")
+        if (any(record.get(k) != v for k, v in identity.items())
+                or not record.get("challenge_id") or record.get("risk_level") not in {"YELLOW", "RED"}
+                or not isinstance(expiry, datetime) or expiry.utcoffset() is None or expiry <= now):
+            return None
+        base_context = TrustedContext(context.user_id, context.account_id, context.request_id)
+        expected_hash = self._hash(base_context, operation, params)
+        if not isinstance(expected_hash, str) or not expected_hash or record.get("operation_hash") != expected_hash:
+            return None
+        return record
 
     def reset_demo_data(self) -> None:
         """仅恢复内部数据；A 必须在同一锁内另行使会话/授权/Checkpoint 失效。"""
