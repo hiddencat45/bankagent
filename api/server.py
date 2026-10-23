@@ -183,7 +183,7 @@ class Service:
 
 
 def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=None,
-               registry=None):
+               registry=None, allow_lan=False):
     service = Service(clock=clock, authenticate=authenticate,
                       candidate_model=candidate_model, registry=registry)
     app = FastAPI(title='有度 · 本地银行 Demo')
@@ -198,7 +198,9 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
     async def local_only(request, call_next):
         host = request.url.hostname
         origin = request.headers.get('origin')
-        if host not in {'127.0.0.1', 'localhost', '::1'} or (
+        # allow_lan 是显式降级：只为临时让同一局域网的人访问演示，默认关闭。
+        # 打开后同一网段任何人都能拿到演示身份并操作演示账本。
+        if (not allow_lan and host not in {'127.0.0.1', 'localhost', '::1'}) or (
             origin and (urlsplit(origin).netloc != request.headers.get('host') or urlsplit(origin).scheme != request.url.scheme)
         ):
             return JSONResponse({'code': 'INVALID_REQUEST', 'message': '仅允许本地同源演示。'}, status_code=403)
@@ -219,7 +221,10 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
                 'backend': 'ok' if ok else 'unavailable', 'model': model}
 
     def require_demo(request):
-        if not demo or request.client is None or request.client.host not in {'127.0.0.1', '::1', 'testclient'}:
+        if not demo or request.client is None:
+            raise ApiError('NOT_FOUND', '入口未开放。', 404)
+        # allow_lan 只放宽「谁可以进来」，不放宽「是否演示模式」。
+        if not allow_lan and request.client.host not in {'127.0.0.1', '::1', 'testclient'}:
             raise ApiError('NOT_FOUND', '入口未开放。', 404)
 
     @app.post('/demo/session')
@@ -286,7 +291,15 @@ def create_demo_app():
 
     配置只写了一半会在这里抛错并终止启动——静默回退 offline 会让人以为
     模型已经在用，实际上在跑关键词规则。
+
+    ``BANKAGENT_DEMO_ALLOW_LAN=1`` 才会放宽「仅本地访问」的限制。默认关闭，
+    因为打开后同一网段任何人都能取到演示身份、操作演示账本、消耗模型额度。
+    临时给同事演示时才开，用完记得关。
     """
+    import os
+
     from model_providers import build_model_from_env
 
-    return create_app(demo=True, candidate_model=build_model_from_env())
+    allow_lan = os.environ.get('BANKAGENT_DEMO_ALLOW_LAN') == '1'
+    return create_app(demo=True, candidate_model=build_model_from_env(),
+                      allow_lan=allow_lan)
