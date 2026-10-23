@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>有度 · 银行 AI 助理</title><link rel="stylesheet" href="workbench.css">
+</head>
+<body>
+  <header class="topbar"><div class="brand"><span class="mark">度</span><div><strong>有度</strong><small>银行 AI 助理</small></div></div>
+    <span id="health" class="badge">检查服务中</span><span id="mode" class="mode">本地模拟银行 · 离线规则</span>
+    <button id="refresh" class="quiet">检查连接</button><button id="connect">开始演示</button></header>
+  <div class="workspace">
+    <aside class="sidebar"><span class="eyebrow">我的账户</span><section class="balance-panel"><span>最近确认余额</span><strong>¥ <span id="balance">—</span></strong><small>CNY · 模拟账户</small></section>
+      <h2>快捷查询</h2><button class="quick" data-query="查询余额" disabled>余额查询 <span>↗</span></button><button class="quick" data-query="本月账单" disabled>本月账单 <span>↗</span></button>
+      <button id="example" class="quick" disabled>填写转账示例 <span>＋</span></button>
+      <section class="scope"><h2>当前演示范围</h2><p>余额查询、账单分析、转账确认与取消。</p><p>理财、卡片、订阅及跨场景联动尚未开放。</p></section>
+      <div class="sidebar-bottom"><button id="new" class="quiet" disabled>新对话</button><button id="reset" class="quiet" disabled>重置演示数据</button><small>内存演示，重启后数据恢复。<br>未连接真实银行或大模型。</small></div>
+    </aside>
+    <main class="conversation"><div class="section-head"><div><span class="eyebrow">YOUR BANKING ASSISTANT</span><h1>把银行业务，说清楚就好。</h1></div><span id="phase" class="badge">等待连接</span></div>
+      <div id="notice" role="status">点击「开始演示」，由服务端建立模拟会话。转账会先展示确认卡，确认前不会扣款。</div>
+      <section id="messages" class="messages" aria-label="业务对话" aria-live="polite"><div class="welcome"><span class="welcome-symbol">有度</span><h2>从一笔有依据的查询开始</h2><p>可以查本月账单、查看疑似重复扣款的交易证据，<br>也可以输入「给张伟转 300 元」。</p></div></section>
+      <form id="composer"><label class="sr-only" for="input">业务请求</label><textarea id="input" rows="2" maxlength="2000" placeholder="例如：查看本月账单" disabled></textarea><button id="send" type="submit" disabled>发送 ↗</button></form><p class="composer-note">理解模式以服务端显示为准；缺少信息时请按提示补充或重新描述。每笔写操作均需本人确认。</p>
+    </main>
+    <aside class="activity"><div class="section-head"><h2>执行轨迹</h2><span class="live-dot"></span></div><p class="muted">仅显示服务端实际返回的业务步骤。</p><ol id="trace"><li class="empty-trace">尚未开始办理</li></ol><div class="safety-note"><strong>确认有边界</strong><p>金额、收款人与结果来自服务端。高风险转账的独立认证暂未接入，当前仅支持取消。</p></div></aside>
+  </div>
+  <dialog id="reset-dialog"><h2>恢复初始演示数据？</h2><p>所有模拟交易将恢复，现有会话和确认卡会失效。</p><form method="dialog"><button value="cancel" class="quiet">保留当前数据</button><button value="confirm">确认重置</button></form></dialog>
+  <script type="module" src="app.mjs"></script>
+</body></html>

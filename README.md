@@ -22,7 +22,7 @@
 | 公共场景注册器、安全层、主图 | 已复核并合入 main（PR #11–#13） |
 | 理财操作、卡片管理、订阅与代扣、跨场景联动 | **设计目标，尚未实现** |
 | `api/` | 已实现本地 HTTP/SSE：会话、查询、确认恢复、重置 |
-| 工作台页面 | [PR #16](https://github.com/hiddencat45/bankagent/pull/16) 已实现，待 A 复核后合并；已纳入 #21 页面修复，运行与验收见该 PR 的 `frontend/README.md` |
+| 工作台页面 | 已实现并合入 `main`（PR #16）；启动与浏览器验收见 [前端说明](frontend/README.md) |
 | 多轮槽位补全 | [PR #18](https://github.com/hiddencat45/bankagent/pull/18) 已实现补金额/改收款人，待合并；main 仍需重述完整请求 |
 | 模型候选边界 | [PR #19](https://github.com/hiddencat45/bankagent/pull/19) 已实现供应商无关校验，依赖 #18，待合并；不等于接通真实模型 |
 | 失败转账原确认恢复 | [PR #20](https://github.com/hiddencat45/bankagent/pull/20) 已修复并待合并；main 尚无此恢复能力 |
