@@ -224,6 +224,27 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
         return {'status': 'ok' if ok and model != 'unavailable' else 'degraded', 'mode': service.runtime.mode,
                 'backend': 'ok' if ok else 'unavailable', 'model': model}
 
+    @app.get('/model/usage')
+    def model_usage():
+        """模型调用的累计计数——「到底有没有真的在调模型」看这里。
+
+        ``/health`` 的 ``model: ok`` 只说明配置齐全、上次没失败；从没调用过
+        它同样是 ok。真正的凭据是这里：次数来自供应商响应里的 ``usage``，
+        没有真实请求就不会增长。
+        """
+        usage = {'calls': 0, 'prompt_tokens': 0, 'completion_tokens': 0}
+        for client in (service.candidate_model, getattr(service.phraser, 'model', None)):
+            stats = getattr(client, 'stats', None)
+            if not callable(stats):
+                continue
+            try:
+                measured = stats()
+            except Exception:
+                continue
+            for key in usage:
+                usage[key] += int(measured.get(key) or 0)
+        return {'mode': service.runtime.mode, **usage}
+
     def require_demo(request):
         if not demo or request.client is None:
             raise ApiError('NOT_FOUND', '入口未开放。', 404)

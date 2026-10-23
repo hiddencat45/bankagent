@@ -125,6 +125,12 @@ class OpenAICompatibleModel:
         self._config = config
         # 记最近一次失败，供 health() 快速回报，避免 /health 每次真打模型。
         self._last_error: str | None = None
+        # 计费口径的调用统计。用途很具体：让「到底有没有真的调模型」这件事
+        # 可以直接查，而不是靠 health() 猜——后者只反映「配置齐全 + 上次没失败」，
+        # 从没调用过也返回 True。
+        self._calls = 0
+        self._prompt_tokens = 0
+        self._completion_tokens = 0
         self._client = httpx.Client(
             timeout=httpx.Timeout(config.timeout, connect=min(10.0, config.timeout)),
             # 不跟重定向：跨域重定向会把 Authorization 带到别的主机。
@@ -137,6 +143,15 @@ class OpenAICompatibleModel:
     def health(self) -> bool:
         # 只反映「配置齐全 + 最近一次调用没失败」，不做网络探测。
         return self._last_error is None
+
+    def stats(self) -> dict[str, int]:
+        """累计调用次数与供应商计的 token 数。
+
+        ``calls`` 是**成功拿到响应**的次数（含重试后成功的）。它跟
+        ``health()`` 的区别就在于：从没调用过时这里是 0，而 health 仍是 True。
+        """
+        return {"calls": self._calls, "prompt_tokens": self._prompt_tokens,
+                "completion_tokens": self._completion_tokens}
 
     @property
     def last_error(self) -> str | None:
@@ -216,6 +231,11 @@ class OpenAICompatibleModel:
             return _RETRY
 
         self._last_error = None
+        usage = body.get("usage")
+        if isinstance(usage, dict):
+            self._calls += 1
+            self._prompt_tokens += usage.get("prompt_tokens") or 0
+            self._completion_tokens += usage.get("completion_tokens") or 0
         # 措辞改写要的是纯文本。这里若也走 JSON 解析，正常回复会被当成
         # 解析失败，措辞层每次都静默回退模板——测试用替身时看不出来。
         if text_mode:
