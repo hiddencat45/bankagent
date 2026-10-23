@@ -310,8 +310,33 @@ def test_non_transfer_failure_can_retry_with_same_challenge(card_app, monkeypatc
     assert len(attempts) == 2
 
 
-def test_non_transfer_retry_still_requires_approved_record(card_app, monkeypatch):
-    """重试不能绕过服务端授权记录：没有 APPROVED 记录就不重新执行。"""
+def test_rejected_record_cannot_be_retried_into_execution(card_app):
+    """拒绝后同一 challenge 再提交必须被拒，不能翻盘成执行。
+
+    挑战是一次性的：reject 把它消费为终态，服务端记录停在 REJECTED。
+    重试入口因此永远拿不到 ``decision == "APPROVED"``。
+    """
+    client, backend, _ = card_app
+    auth = login(client)
+    out = chat(client, auth, message="冻结 日常消费卡")
+    thread, intr = out[0][1]["thread_id"], _interrupt(out)
+
+    rejected = decision(client, auth, thread, intr, "reject")
+    assert rejected[-1][1]["status"] == "REJECTED"
+
+    again = client.post(
+        "/agent/chat", headers=auth,
+        json={"thread_id": thread,
+              "resume": {"challenge_id": intr["challenge_id"], "decision": "approve"}},
+    )
+    assert again.status_code == 409
+    assert again.json()["code"] == "CHALLENGE_INVALID"
+    assert backend.freeze_calls == []
+    assert backend.cards["card-001"]["status"] == "ACTIVE"
+
+
+def test_non_transfer_failed_operation_recovers_once_when_backend_returns(card_app, monkeypatch):
+    """持续失败时每次重试都重新执行；后端恢复后一次就成功，不会重复执行。"""
     client, backend, registry = card_app
     auth = login(client)
     out = chat(client, auth, message="冻结 日常消费卡")
@@ -329,9 +354,10 @@ def test_non_transfer_retry_still_requires_approved_record(card_app, monkeypatch
     failed = decision(client, auth, thread, intr)
     assert failed[-1][1]["status"] == "FAILED"
     assert len(attempts) == 1
+    assert backend.cards["card-001"]["status"] == "ACTIVE"
 
-    # 挑战已被消费为终态，但服务端记录仍是 APPROVED，因此允许重试一次。
     monkeypatch.setattr(spec, "execute", original)
     recovered = decision(client, auth, thread, intr)
     assert recovered[-1][1]["status"] == "COMPLETED"
     assert backend.cards["card-001"]["status"] == "FROZEN"
+    assert backend.freeze_calls == ["card-001"]
