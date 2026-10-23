@@ -183,7 +183,7 @@ def risk(operation: str, params: dict, context: TrustedContext) -> RiskLevel:
     return "RED" if projected > YELLOW_DAILY_LIMIT_MINOR else "YELLOW"
 
 
-def confirmation(*, params: dict, candidate_params: dict,
+def confirmation(*, operation: str, params: dict, candidate_params: dict,
                  context: TrustedContext) -> dict:
     """确认卡展示字段：收款人姓名、金额、币种。
 
