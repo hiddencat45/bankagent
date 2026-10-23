@@ -1,12 +1,12 @@
 """真实注册器、图、挑战表、后端与HTTP/SSE的订阅链路。"""
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
 
 from api.server import create_app
 from agent_security import SG_TZ
-from bank_backend import configure_backend, BankBackend
+from bank_backend import configure_backend
 from bank_types import TrustedContext
 from data.generator import build_demo_data
 from scenarios import REGISTRY, subscription
