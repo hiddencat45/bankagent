@@ -120,8 +120,10 @@ class BankBackend:
     def execute_transfer(self, *, context: WriteContext, contact_id: str,
                          amount_minor: int, currency: str = SUPPORTED_CURRENCY) -> BackendResult:
         with self.lock:
-            def reject(code):
-                return _result("TRANSFER", error=code)
+            def reject(code, **detail):
+                # 带上判断依据，让场景层能说清「为什么不行」而不只是「不行」。
+                # 空 detail 仍给 None，保持既有结果形状。
+                return _result("TRANSFER", data=detail or None, error=code)
             if not self._owned(context):
                 return reject("ACCOUNT_NOT_ACCESSIBLE")
             if not isinstance(context, WriteContext) or not context.authorization_ref:
@@ -160,13 +162,17 @@ class BankBackend:
             if not isinstance(expected_hash, str) or not expected_hash or record.get("operation_hash") != expected_hash:
                 return reject("AUTHORIZATION_INVALID")
             if amount_minor > TRANSFER_SINGLE_LIMIT_MINOR:
-                return reject("TRANSFER_LIMIT_EXCEEDED")
-            total = self._daily_total(context.account_id, now.date()) + amount_minor
+                return reject("TRANSFER_LIMIT_EXCEEDED", amount_minor=amount_minor,
+                              limit_minor=TRANSFER_SINGLE_LIMIT_MINOR)
+            spent_today = self._daily_total(context.account_id, now.date())
+            total = spent_today + amount_minor
             if total > YELLOW_DAILY_LIMIT_MINOR and record["risk_level"] != "RED":
-                return reject("REAUTHORIZATION_REQUIRED")
+                return reject("REAUTHORIZATION_REQUIRED", daily_total_minor=spent_today,
+                              amount_minor=amount_minor, limit_minor=YELLOW_DAILY_LIMIT_MINOR)
             account = self._data["accounts"][context.account_id]
             if amount_minor > account["balance_minor"]:
-                return reject("INSUFFICIENT_BALANCE")
+                return reject("INSUFFICIENT_BALANCE", balance_minor=account["balance_minor"],
+                              amount_minor=amount_minor)
             # 在锁内先构造完整副本与幂等结果，全部成功后一起发布，不留半笔账。
             updated = deepcopy(self._data)
             balance = account["balance_minor"] - amount_minor

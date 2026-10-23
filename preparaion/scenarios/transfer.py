@@ -240,6 +240,39 @@ def execute(operation: str, params: dict, context: TrustedContext) -> BackendRes
     )
 
 
+def _money(minor: Any) -> str | None:
+    """整数分转「元.分」文本；拒绝走 float，避免 0.1+0.2 那类差错。"""
+    if type(minor) is not int or minor < 0:
+        return None
+    return f"{minor // 100}.{minor % 100:02d}"
+
+
+def _rejection_detail(code: str, detail: dict) -> str | None:
+    """后端给了判断依据就把话说清楚；没给就返回 None，由兜底文案接手。
+
+    只解释**能证实**的部分：余额不足时说清余额和本次金额，超限时说清上限，
+    累计超标时把今天已转的也报出来。后端没带数据时一律退回原来的简单文案。
+    """
+    if code == "INSUFFICIENT_BALANCE":
+        balance = _money(detail.get("balance_minor"))
+        amount = _money(detail.get("amount_minor"))
+        if balance and amount:
+            return f"账户余额 {balance} 元，不足以支付这笔 {amount} 元，转账未执行。"
+    elif code == "REAUTHORIZATION_REQUIRED":
+        spent = _money(detail.get("daily_total_minor"))
+        amount = _money(detail.get("amount_minor"))
+        limit = _money(detail.get("limit_minor"))
+        if spent and amount and limit:
+            return (f"今天已经转出 {spent} 元，再转 {amount} 元会超过 {limit} 元的"
+                    f"当日累计限额，需要重新进行强认证。")
+    elif code == "TRANSFER_LIMIT_EXCEEDED":
+        amount = _money(detail.get("amount_minor"))
+        limit = _money(detail.get("limit_minor"))
+        if amount and limit:
+            return f"这笔 {amount} 元超过单笔上限 {limit} 元，转账未执行。"
+    return None
+
+
 def render(result: BackendResult) -> str:
     """只解释后端事实；失败或处理中不得显示成功。"""
     if result.get("operation") != "TRANSFER":
@@ -247,6 +280,11 @@ def render(result: BackendResult) -> str:
 
     status = result.get("status")
     if status != "COMPLETED":
+        code = result.get("error_code")
+        detail = result.get("data")
+        explained = _rejection_detail(code, detail if isinstance(detail, dict) else {})
+        if explained is not None:
+            return explained
         return {
             "AUTHORIZATION_REQUIRED": "这笔转账还没有完成确认，请先确认后再提交。",
             "AUTHORIZATION_INVALID": "确认已失效或不匹配，请重新发起转账。",
