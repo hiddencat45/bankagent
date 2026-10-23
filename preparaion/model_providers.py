@@ -241,6 +241,9 @@ class OpenAICompatibleModel:
                 "message": request.get("message") or "",
                 "pending": request.get("pending"),
             }
+            # 有历史才带上：首轮请求体与改造前完全一致。
+            if request.get("history"):
+                body["history"] = request["history"]
         user = json.dumps(body, ensure_ascii=False)
         payload: dict[str, Any] = {
             "model": self._config.model,

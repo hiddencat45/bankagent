@@ -68,6 +68,10 @@ STATUS_MAP: dict[str, TopLevelStatus] = {
 _WRITE_EFFECT = "WRITE"
 _WRITE_HESITATION = r"不|别|取消|停止|暂缓|等等|算了|放弃|能否|是否|可能|也许|考虑|想想"
 
+# 会话记忆保留最近 5 轮（一问一答算两条）。再多既不提升理解，也会让
+# 「上一轮说过的话」慢慢变成噪音。
+_HISTORY_LIMIT = 10
+
 # 主图安全层自己产生的错误码与文案。这些不属于任何场景的业务错误，
 # 因此不要求各场景的 render 处理——场景只解释自己后端返回的错误码。
 _PUBLIC_ERROR_TEXT: dict[str, str] = {
@@ -270,7 +274,16 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
                 "response": "请说明您要办理的业务。",
             }
 
-        return {**_cleared(), "status": "PROCESSING"}
+        # 会话记忆只在这里落地：``load_context`` 每轮恰好跑一次，而 resume 是
+        # 从事先保存的检查点继续、不会重跑它——放进别的节点会重复记账。
+        # 上一轮的回复此刻仍在 ``response`` 里，和本轮消息一起入栈。
+        history = list(state.get("history") or [])
+        previous = state.get("response")
+        if isinstance(previous, str) and previous:
+            history.append({"role": "assistant", "text": previous})
+        history.append({"role": "user", "text": message.strip()})
+
+        return {**_cleared(), "status": "PROCESSING", "history": history[-_HISTORY_LIMIT:]}
 
     def route_context(state: BankAgentState) -> Literal["continue", "end"]:
         return "continue" if state.get("status") == "PROCESSING" else "end"
@@ -312,7 +325,7 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
 
         if rt.interpreter is not None:
             try:
-                prediction = rt.interpreter.predict(message, pending)
+                prediction = rt.interpreter.predict(message, pending, state.get("history"))
             except UnderstandingError as exc:
                 rt.forget_clarification(state["user_id"], thread)
                 return _failed("", exc.code)

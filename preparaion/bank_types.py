@@ -135,6 +135,11 @@ class BankAgentState(TypedDict, total=False):
     # ── 输出 ──
     response: str
 
+    # ── 跨轮记忆 ──
+    # 唯一不随轮次清空的会话字段：只用来帮模型理解「它」「那张卡」这类指代，
+    # 不参与执行——历史里的文本和本轮消息一样不可信。
+    history: list[dict[str, str]]
+
 
 class IntentSpec(TypedDict):
     """场景内单个意图的声明。"""
