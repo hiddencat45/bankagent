@@ -4,8 +4,8 @@ const pptxgen = require('../../.dsh/pptx-tools/node_modules/pptxgenjs');
 
 const pptx = new pptxgen();
 pptx.layout = 'LAYOUT_WIDE';
-pptx.author = 'Banking Agent Project';
-pptx.title = '银行 Agent 前端工作台预览';
+pptx.author = '有度 YouDu';
+pptx.title = '有度 · 前端工作台预览';
 pptx.lang = 'zh-CN';
 pptx.theme = { headFontFace: 'Microsoft YaHei', bodyFontFace: 'Microsoft YaHei', lang: 'zh-CN' };
 
@@ -45,10 +45,10 @@ slide.addShape(S.rect, { x: 0.19, y: 0.17, w: 12.95, h: 0.66, fill: { color: C.w
 slide.addShape(S.line, { x: 0.19, y: 0.83, w: 12.95, h: 0, line: { color: C.line, width: 0.8 } });
 rounded(slide, 0.45, 0.32, 0.34, 0.34, C.navy, C.navy, 0.05);
 addIcon(slide, 'shield-check', 0.53, 0.40, 0.18, 0.18, C.white);
-text(slide, '智银 Agent', 0.92, 0.31, 1.25, 0.32, 14, C.ink, true);
-rounded(slide, 2.22, 0.34, 0.76, 0.28, C.softTeal, C.softTeal, 0.04);
-slide.addShape(S.ellipse, { x: 2.34, y: 0.435, w: 0.08, h: 0.08, fill: { color: C.green }, line: { color: C.green } });
-text(slide, '服务正常', 2.46, 0.37, 0.48, 0.17, 7.5, C.green, true);
+text(slide, '有度', 0.92, 0.31, 0.55, 0.32, 14, C.ink, true);
+rounded(slide, 1.58, 0.34, 0.76, 0.28, C.softTeal, C.softTeal, 0.04);
+slide.addShape(S.ellipse, { x: 1.70, y: 0.435, w: 0.08, h: 0.08, fill: { color: C.green }, line: { color: C.green } });
+text(slide, '服务正常', 1.82, 0.37, 0.48, 0.17, 7.5, C.green, true);
 addIcon(slide, 'search', 10.66, 0.39, 0.19, 0.19, C.muted);
 addIcon(slide, 'clock-3', 11.18, 0.39, 0.19, 0.19, C.muted);
 slide.addShape(S.ellipse, { x: 11.82, y: 0.29, w: 0.4, h: 0.4, fill: { color: C.navy2 }, line: { color: C.navy2 } });
@@ -173,4 +173,4 @@ text(slide, '当日累计：¥300 / ¥1,000', 10.4, 6.12, 1.8, 0.18, 8, C.muted)
 slide.addShape(S.rect, { x: 10.4, y: 6.43, w: 1.86, h: 0.08, fill: { color: 'E8EDF1' }, line: { color: 'E8EDF1' } });
 slide.addShape(S.rect, { x: 10.4, y: 6.43, w: 0.56, h: 0.08, fill: { color: C.amber }, line: { color: C.amber } });
 
-pptx.writeFile({ fileName: '银行Agent前端工作台预览.pptx' });
+pptx.writeFile({ fileName: '有度-前端工作台预览.pptx' });

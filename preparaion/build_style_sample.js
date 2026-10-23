@@ -2,10 +2,10 @@ const pptxgen = require('../../.dsh/pptx-tools/node_modules/pptxgenjs');
 
 const pptx = new pptxgen();
 pptx.layout = 'LAYOUT_WIDE';
-pptx.author = 'Banking Agent Team';
-pptx.subject = '银行 AI 智能体全流程规划风格样稿';
-pptx.title = '银行 AI 智能体全流程规划';
-pptx.company = 'Banking Agent Team';
+pptx.author = '有度 YouDu';
+pptx.subject = '有度 · 银行 AI 智能体全流程规划风格样稿';
+pptx.title = '有度 · 银行 AI 智能体全流程规划';
+pptx.company = '有度 YouDu';
 pptx.lang = 'zh-CN';
 pptx.theme = {
   headFontFace: 'Microsoft YaHei',
@@ -17,7 +17,7 @@ pptx.defineSlideMaster({
   background: { color: 'F5F7F9' },
   objects: [
     { rect: { x: 0, y: 0, w: 13.333, h: 0.12, fill: { color: '173B5E' }, line: { color: '173B5E' } } },
-    { text: { text: '银行 AI 智能体 · 全流程规划', options: { x: 0.55, y: 7.13, w: 4.2, h: 0.16, fontFace: 'Microsoft YaHei', fontSize: 8, color: '6D7A86', margin: 0 } } },
+    { text: { text: '有度 · 银行 AI 智能体 · 全流程规划', options: { x: 0.55, y: 7.13, w: 4.2, h: 0.16, fontFace: 'Microsoft YaHei', fontSize: 8, color: '6D7A86', margin: 0 } } },
     { text: { text: '内部启动会', options: { x: 11.65, y: 7.13, w: 1.05, h: 0.16, fontFace: 'Microsoft YaHei', fontSize: 8, color: '6D7A86', align: 'right', margin: 0 } } },
   ],
   slideNumber: { x: 12.78, y: 7.12, w: 0.25, h: 0.16, fontFace: 'Microsoft YaHei', fontSize: 8, color: '6D7A86', align: 'right', margin: 0 }
@@ -61,7 +61,7 @@ function node(slide, {x,y,w,h,title,body,fill=C.white,stroke=C.line,accent=C.tea
   slide.background = { color: C.bg };
   slide.addShape(S.rect, { x: 0, y: 0, w: 4.0, h: 7.5, fill: { color: C.navy }, line: { color: C.navy } });
   slide.addShape(S.rect, { x: 0.56, y: 0.72, w: 0.52, h: 0.07, fill: { color: C.teal }, line: { color: C.teal } });
-  slide.addText('BANKING AGENT', { x: 0.56, y: 0.92, w: 2.7, h: 0.28, fontSize: 11, bold: true, color: 'BFD2E1', charSpacing: 1.4, margin: 0 });
+  slide.addText('YOUDU · BANKING AGENT', { x: 0.56, y: 0.92, w: 2.7, h: 0.28, fontSize: 11, bold: true, color: 'BFD2E1', charSpacing: 1.4, margin: 0 });
   slide.addText('安全可信的\n自主执行', { x: 0.56, y: 1.7, w: 2.9, h: 1.3, fontSize: 29, bold: true, color: C.white, breakLine: false, margin: 0, valign: 'mid' });
   slide.addText('LLM 提议 · Python 决策 · 银行后端执行', { x: 0.56, y: 3.28, w: 2.85, h: 0.6, fontSize: 11, color: 'D7E4EC', margin: 0, breakLine: false });
   const risks = [
@@ -71,7 +71,8 @@ function node(slide, {x,y,w,h,title,body,fill=C.white,stroke=C.line,accent=C.tea
     slide.addShape(S.ellipse, { x: 0.58 + i * 0.88, y: 5.9, w: 0.18, h: 0.18, fill: { color: r[1] }, line: { color: r[1] } });
     slide.addText(r[0], { x: 0.82 + i * 0.88, y: 5.87, w: 0.5, h: 0.22, fontSize: 9, color: C.white, margin: 0 });
   });
-  slide.addText('银行 AI 智能体\n全流程规划', { x: 4.75, y: 1.38, w: 7.4, h: 1.22, fontSize: 31, bold: true, color: C.ink, margin: 0, breakLine: false });
+  slide.addText('有度', { x: 4.75, y: 1.32, w: 7.4, h: 0.62, fontSize: 40, bold: true, color: C.ink, margin: 0, breakLine: false });
+  slide.addText('银行 AI 智能体全流程规划', { x: 4.78, y: 1.98, w: 7.4, h: 0.45, fontSize: 19, bold: true, color: C.ink, margin: 0, breakLine: false });
   slide.addText('团队内部启动会 · 风格样稿', { x: 4.78, y: 2.9, w: 4.8, h: 0.34, fontSize: 15, color: C.teal, bold: true, margin: 0 });
   slide.addText('从自然语言交互，到可审计、可验证、可恢复的银行业务执行。', { x: 4.78, y: 3.5, w: 6.9, h: 0.5, fontSize: 14, color: C.muted, margin: 0 });
   line(slide, 4.78, 4.45, 11.9, 4.45, C.line, 1);
@@ -100,7 +101,7 @@ function node(slide, {x,y,w,h,title,body,fill=C.white,stroke=C.line,accent=C.tea
     slide.addText(it[0], { x: x + 0.2, y: 5.31, w: 0.7, h: 0.3, fontSize: 13, bold: true, color: it[3], margin: 0 });
     slide.addText(it[1], { x: x + 0.2, y: 5.74, w: 2.1, h: 0.25, fontSize: 10, color: 'D7E4EC', margin: 0 });
   });
-  slide.addText('银行 AI 智能体 · 内部启动会', { x: 0.75, y: 7.05, w: 3.2, h: 0.18, fontSize: 8, color: '93ADC1', margin: 0 });
+  slide.addText('有度 · 内部启动会 · 风格样稿', { x: 0.75, y: 7.05, w: 3.2, h: 0.18, fontSize: 8, color: '93ADC1', margin: 0 });
 }
 
 // 3. 架构内容页
@@ -190,4 +191,4 @@ function node(slide, {x,y,w,h,title,body,fill=C.white,stroke=C.line,accent=C.tea
   slide.addText('完成定义：六场景闭环 + 三级权限不可绕过 + 重复扣款为 0 + 所有成功均有结构化证据。', { x: 0.72, y: 6.55, w: 11.8, h: 0.26, fontSize: 10.5, bold: true, color: C.ink, margin: 0 });
 }
 
-pptx.writeFile({ fileName: '银行AI智能体-风格样稿.pptx' });
+pptx.writeFile({ fileName: '有度-银行AI智能体风格样稿.pptx' });
