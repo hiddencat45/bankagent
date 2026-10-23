@@ -17,6 +17,7 @@ from bank_backend import configure_backend, get_balance, reset_demo_data
 from bank_types import TrustedContext
 from data.generator import REFERENCE_DATE, build_demo_data
 from scenarios.bills import configure_clock
+from scenarios.subscription import configure_clock as subscription_clock
 from api import events
 from api.contracts import ApiError, parse_chat_request
 from api.session import DemoSessionStore
@@ -45,6 +46,7 @@ class Service:
                                         candidate_model=self.candidate_model, registry=registry)
         self.graph = build_graph(self.runtime, checkpointer=self.saver)
         configure_clock(clock=self.clock)
+        subscription_clock(clock=self.clock)
         configure_backend(data_factory=build_demo_data, lookup_authorization=self.challenges.lookup,
                           operation_hash=compute_operation_hash, lock=self.lock, clock=self.clock)
 
