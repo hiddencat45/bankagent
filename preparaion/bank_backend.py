@@ -266,6 +266,8 @@ def unfreeze_card(*, context: WriteContext, card_id: str) -> BackendResult:
     REJECTED/CARD_NOT_ACCESSIBLE。账户、授权、幂等错误沿用转账错误码。
     新写入在共享锁内重查授权/期限/操作参数；同键同参数返回首次结果，
     同键异参数为 IDEMPOTENCY_CONFLICT，状态与幂等结果原子保存。
+    首次结果是历史操作回执，不代表当前状态；冻结后解冻，再重放原冻结
+    只能返回原回执，不得再次冻结。当前状态另用 query_cards 查询。
     """
     raise NotImplementedError("UNFREEZE_CARD is not implemented")
 

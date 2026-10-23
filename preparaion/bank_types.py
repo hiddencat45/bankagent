@@ -264,6 +264,8 @@ class StateChangeConfirmation(TypedDict):
 
     服务端从已绑定操作及受控查询生成；不含实体 ID，不接受前端修改。
     current_status 是生成卡片时的状态，target_status 由 operation 唯一确定。
+    display_name 不保证唯一；同名对象的选择与可区分展示须先完成接口对齐，
+    不能仅凭展示名确定执行对象。
     """
 
     operation: Literal["FREEZE_CARD", "UNFREEZE_CARD", "PAUSE_SUBSCRIPTION"]
