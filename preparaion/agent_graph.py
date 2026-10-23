@@ -80,7 +80,8 @@ _PUBLIC_ERROR_TEXT: dict[str, str] = {
     "INVALID_PARAMS": "您提供的信息有误，请重新确认后再试。",
     "USER_CANCELLED": "您已取消这笔操作，账户未发生任何变动。",
     "AUTHORIZATION_REQUIRED": "这笔操作尚未确认，账户未发生任何变动。",
-    "INTERNAL": "系统处理异常，操作未执行，请稍后重试。",
+    # 无法确定写入结果时不能声称"未执行"：落账后响应丢失时那是在骗用户。
+    "INTERNAL": "系统处理异常，办理结果尚未确认，请核对后重试。",
     "MODEL_UNAVAILABLE": "模型暂时不可用，本次未生成操作；请稍后重试。",
     "MODEL_OUTPUT_INVALID": "模型返回了无法使用的候选，本次未生成操作，请重新描述。",
 }
