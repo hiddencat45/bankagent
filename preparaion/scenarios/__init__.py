@@ -47,7 +47,13 @@ _VALID_RISKS: frozenset[str] = frozenset({"GREEN", "YELLOW", "RED", "DENY"})
 _REQUIRED_ATTRS: tuple[str, ...] = ("SCENARIO", "INTENTS", "execute", "render")
 
 # 场景模块可选提供的钩子。
-_OPTIONAL_HOOKS: tuple[str, ...] = ("resolve", "validate", "risk", "CLARIFY_LABELS")
+_OPTIONAL_HOOKS: tuple[str, ...] = (
+    "resolve",
+    "validate",
+    "risk",
+    "confirmation",
+    "CLARIFY_LABELS",
+)
 
 # 风险等级的高低顺序，用于「只能升高」的比较。
 _RISK_ORDER: dict[str, int] = {"GREEN": 0, "YELLOW": 1, "RED": 2, "DENY": 3}
@@ -76,6 +82,7 @@ class ScenarioSpec:
         "resolve",
         "validate",
         "risk",
+        "confirmation",
         "clarify_labels",
     )
 
@@ -88,6 +95,9 @@ class ScenarioSpec:
         self.resolve: Callable[..., dict] | None = getattr(module, "resolve", None)
         self.validate: Callable[..., bool] | None = getattr(module, "validate", None)
         self.risk: Callable[..., str] | None = getattr(module, "risk", None)
+        # 确认卡展示字段由场景自己决定：server 只负责序列化，不需要按 operation
+        # 写死分支。返回 None 表示该场景没有额外展示字段。
+        self.confirmation: Callable[..., dict] | None = getattr(module, "confirmation", None)
         self.clarify_labels: dict[str, str] = getattr(module, "CLARIFY_LABELS", {}) or {}
 
     # -- 声明查询 ---------------------------------------------------------
@@ -232,6 +242,19 @@ class ScenarioRegistry:
 
     def specs(self) -> list[ScenarioSpec]:
         return [self._by_name[name] for name in sorted(self._by_name)]
+
+    def spec_for_operation(self, operation: str) -> "ScenarioSpec | None":
+        """按 operation 反查场景。
+
+        确认卡投影需要它：挑战记录里只有 ``operation`` 与已绑定 ``params``，
+        没有场景名。找不到返回 ``None`` 而不是抛异常——投影失败不该把一次
+        已经通过风控的确认变成系统故障。
+        """
+        for name in sorted(self._by_name):
+            spec = self._by_name[name]
+            if operation in spec.operations():
+                return spec
+        return None
 
     # -- 意图识别（离线规则模式）------------------------------------------
 

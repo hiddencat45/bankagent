@@ -183,6 +183,37 @@ def risk(operation: str, params: dict, context: TrustedContext) -> RiskLevel:
     return "RED" if projected > YELLOW_DAILY_LIMIT_MINOR else "YELLOW"
 
 
+def confirmation(*, params: dict, candidate_params: dict,
+                 context: TrustedContext) -> dict:
+    """确认卡展示字段：收款人姓名、金额、币种。
+
+    ``params['contact_id']`` 是已绑定的受控结果。这里按同一次姓名候选回查
+    后端再核对这个 ID，**不把内部 ID 当展示名**，也不重新解析一个新的收款人
+    （确认卡必须反映用户将要确认的那笔操作，不能悄悄换人）。
+
+    核对不上说明绑定事实与查询结果不一致，直接抛错让上层按失败处理——
+    弹一张收款人为空的确认卡让用户去点"确认"更危险。
+    """
+    from bank_backend import find_contacts
+
+    contact_id = params.get("contact_id")
+    name = candidate_params.get("recipient_name")
+    recipient = None
+    if isinstance(contact_id, str) and contact_id and isinstance(name, str) and name.strip():
+        for row in find_contacts(context=context, name=name.strip()):
+            if row["contact_id"] == contact_id:
+                recipient = row["display_name"]
+                break
+    if recipient is None:
+        raise ValueError("收款人绑定已失效，无法生成确认卡")
+
+    return {
+        "recipient": recipient,
+        "amount_minor": params.get("amount_minor"),
+        "currency": params.get("currency"),
+    }
+
+
 def execute(operation: str, params: dict, context: TrustedContext) -> BackendResult:
     """分发到后端执行转账。
 
