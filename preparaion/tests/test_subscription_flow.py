@@ -40,6 +40,9 @@ def test_registered_scene_resolves_only_backend_owned_names(service):
     assert subscription.resolve({'subscription_name': 'unknown'}, ctx) == {}
     with pytest.raises(PermissionError):
         subscription.resolve({'subscription_name': '演示订阅'}, TrustedContext('user-002', 'account-001', 'other'))
+    card = subscription.confirmation(operation='PAUSE_SUBSCRIPTION', params={'subscription_id': 'subscription-001'},
+        candidate_params={'subscription_name': '演示订阅'}, context=ctx)
+    assert card == {'display_name': '演示订阅', 'current_status': 'ACTIVE', 'target_status': 'PAUSED'}
 
 
 def test_bill_evidence_to_subscription_confirm_pause_and_history(service):

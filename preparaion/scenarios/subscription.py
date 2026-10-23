@@ -40,8 +40,11 @@ def validate(operation: str, params: dict) -> bool:
             and isinstance(params["subscription_id"], str) and bool(params["subscription_id"]))
 
 
-def confirmation(*, params: dict, candidate_params: dict, context: TrustedContext) -> dict:
+def confirmation(*, params: dict, candidate_params: dict, context: TrustedContext,
+                 operation: str = "PAUSE_SUBSCRIPTION") -> dict:
     """只投影已绑定协议的展示字段；复用公共确认卡钩子。"""
+    if operation != "PAUSE_SUBSCRIPTION":
+        raise ValueError("unsupported subscription confirmation")
     rows = find_subscriptions(context=context, name=candidate_params.get("subscription_name", ""))
     row = next((r for r in rows if r["subscription_id"] == params.get("subscription_id")), None)
     if row is None:
