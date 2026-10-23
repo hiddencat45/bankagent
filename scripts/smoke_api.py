@@ -40,7 +40,10 @@ def main():
             def result(out):
                 return next(d['payload'] for n, d in out if n == 'card' and d['type'] == 'result')
             assert result(chat({'message': '本月账单'}))['data']['total_minor'] == 100000
-            out = chat({'message': '给张伟转 300 元'})
+            pending = chat({'message': '给张伟转钱'})
+            assert pending[-1][1]['status'] == 'NEEDS_CLARIFICATION'
+            out = chat({'thread_id': pending[0][1]['thread_id'], 'message': '300 元'})
+            assert out[0][1]['request_id'] != pending[0][1]['request_id']
             intr = next(d for n, d in out if n == 'interrupt')
             assert out[-1][1]['status'] == 'AWAITING_CONFIRMATION'
             payload = {'thread_id': intr['thread_id'], 'resume': {
@@ -51,7 +54,7 @@ def main():
             assert result(chat({'message': '余额'}))['data']['balance_minor'] == 470000
             assert client.post('/demo/reset', headers=auth).json()['status'] == 'COMPLETED'
             assert client.post('/agent/chat', headers=auth, json=payload).status_code == 401
-        print('HTTP smoke passed: bills, confirmation, transfer, replay, balance, reset')
+        print('HTTP smoke passed: bills, clarification, confirmation, transfer, replay, balance, reset')
     finally:
         process.terminate()
         try:
