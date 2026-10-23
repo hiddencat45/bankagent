@@ -37,7 +37,19 @@ class CandidateInterpreter:
 
     def predict(self, message: str, pending: dict[str, Any] | None) -> dict[str, Any]:
         catalog = [
-            {'scenario': name, 'intent': intent, 'slots': sorted(set(declaration['slots']) - _FORBIDDEN)}
+            {
+                'scenario': name,
+                'intent': intent,
+                'slots': sorted(set(declaration['slots']) - _FORBIDDEN),
+                # 槽位在用户原话里的常见说法。真实模型会自然地输出「上个月」，
+                # 而 bills 只认「上月」——不给这个参照它只能猜。这里只是用词
+                # 提示，不参与校验：非法值仍然由场景自己拒绝。
+                'slot_patterns': {
+                    key: str(pattern)
+                    for key, pattern in declaration['slots'].items()
+                    if key not in _FORBIDDEN
+                },
+            }
             for name in self.registry.scenario_names()
             for intent, declaration in self.registry.get(name).intents.items()
         ]
@@ -51,6 +63,8 @@ class CandidateInterpreter:
         request = {
             'instruction': '只识别一个明确的业务意图与本轮明确提供的候选槽位；金额用十进制字符串。'
                            '不要继承旧槽位或猜测缺失值。多意图、否定或含糊请求请返回空候选。'
+                           'catalog 的 slot_patterns 是该槽位在用户原话里的常见说法，'
+                           'candidate_params 的取值用词请与之一致（例如时间范围用「上月」而非「上个月」）。'
                            '只返回 scenario、intent、candidate_params；空候选为 null、null、{}。',
             'catalog': catalog, 'message': message, 'pending': deepcopy(context),
         }

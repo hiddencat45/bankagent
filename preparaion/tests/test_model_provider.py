@@ -175,6 +175,45 @@ def test_timeout_maps_to_timeout_code():
     assert model.health() is False
 
 
+def test_catalog_exposes_slot_patterns():
+    """catalog 必须告诉模型槽位的常见说法。
+
+    不给参照时模型会自然地说「上个月」，而场景只认「上月」，于是被拒。
+    这里用真实 registry 构造 catalog，而不是测试里的固定请求。
+    """
+    from agent_understanding import CandidateInterpreter
+    from scenarios import REGISTRY
+
+    seen = {}
+
+    def handler(request):
+        # catalog 在 user 消息的 JSON 体里，不在请求顶层
+        payload = json.loads(request.content)
+        seen.update(json.loads(payload["messages"][1]["content"]))
+        return _reply(_candidate())
+
+    CandidateInterpreter(_model(handler), REGISTRY).predict("看看上个月的账单", None)
+    entries = {entry["intent"]: entry for entry in seen["catalog"]}
+    assert "上月" in entries["BILLS_QUERY"]["slot_patterns"]["period"]
+    # 没有槽位的意图不该带空字典噪声
+    assert entries["BALANCE_QUERY"]["slot_patterns"] == {}
+
+
+def test_slot_patterns_do_not_loosen_validation(clock):
+    """提示词只影响用词，不放松校验：给了不支持的期间仍然被拒。"""
+    def handler(request):
+        return _reply(_candidate("bills", "BILLS_QUERY", period="上个月"))
+
+    with TestClient(create_app(demo=True, clock=clock, candidate_model=_model(handler)),
+                    base_url="http://localhost") as client:
+        auth = login(client)
+        out = chat(client, auth, message="看看上个月的账单")
+
+        assert out[-1][1]["status"] == "REJECTED"
+        # 拒绝了就不会有确认卡（错误卡不算）
+        assert not any(n == "card" and d.get("type") == "confirm" for n, d in out)
+
+
 def test_network_error_maps_to_network_code():
     def handler(request):
         raise httpx.ConnectError("refused", request=request)
