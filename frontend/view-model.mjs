@@ -11,13 +11,21 @@ export function money(value) {
 }
 
 export function readConfirmation(value) {
-  if (!object(value) || value.operation !== 'TRANSFER' || !text(value.recipient)
-      || !minor(value.amount_minor) || value.amount_minor === 0 || value.currency !== 'CNY'
-      || !['YELLOW', 'RED'].includes(value.risk_level) || !text(value.challenge_id)
+  if (!object(value) || !['YELLOW', 'RED'].includes(value.risk_level) || !text(value.challenge_id)
       || !text(value.operation_hash) || !text(value.expires_at)
       || !Number.isFinite(Date.parse(value.expires_at))) invalid();
-  const keys = ['operation', 'recipient', 'amount_minor', 'currency', 'risk_level',
-    'challenge_id', 'operation_hash', 'expires_at'];
+  let fields;
+  if (value.operation === 'TRANSFER') {
+    if (!text(value.recipient) || !minor(value.amount_minor) || value.amount_minor === 0
+        || value.currency !== 'CNY') invalid();
+    fields = ['recipient', 'amount_minor', 'currency'];
+  } else if (['FREEZE_CARD', 'UNFREEZE_CARD'].includes(value.operation)) {
+    const target = value.operation === 'FREEZE_CARD' ? 'FROZEN' : 'ACTIVE';
+    if (!text(value.display_name) || !['ACTIVE', 'FROZEN'].includes(value.current_status)
+        || value.target_status !== target) invalid();
+    fields = ['display_name', 'current_status', 'target_status'];
+  } else invalid();
+  const keys = ['operation', ...fields, 'risk_level', 'challenge_id', 'operation_hash', 'expires_at'];
   return Object.fromEntries(keys.map(key => [key, value[key]]));
 }
 
@@ -71,7 +79,26 @@ export function readResult(result) {
   } else if (result.operation === 'TRANSFER') {
     if (!minor(data.amount_minor) || !data.amount_minor || !minor(data.remaining_balance_minor)
         || data.currency !== 'CNY' || !text(data.recipient) || !text(data.transaction_id)) invalid();
+  } else if (result.operation === 'QUERY_CARDS') {
+    if (!Array.isArray(data.cards)) invalid();
+    const ids = new Set();
+    for (const card of data.cards) {
+      readCard(card);
+      if (ids.has(card.card_id)) invalid();
+      ids.add(card.card_id);
+    }
+  } else if (['FREEZE_CARD', 'UNFREEZE_CARD'].includes(result.operation)) {
+    readCard(data);
+    const target = result.operation === 'FREEZE_CARD' ? 'FROZEN' : 'ACTIVE';
+    if (data.status !== target || !['ACTIVE', 'FROZEN'].includes(data.previous_status)
+        || typeof data.changed !== 'boolean'
+        || data.changed !== (data.previous_status !== data.status)) invalid();
   } else if (result.operation === 'QUERY_BILLS') readBills(data);
   else invalid();
   return result;
+}
+
+function readCard(value) {
+  if (!object(value) || !text(value.card_id) || !text(value.display_name)
+      || !['ACTIVE', 'FROZEN'].includes(value.status)) invalid();
 }

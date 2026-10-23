@@ -183,6 +183,68 @@ class BankBackend:
             self._data, self._completed = updated, completed
             return result
 
+    def query_cards(self, *, context: TrustedContext) -> BackendResult:
+        with self.lock:
+            if not self._owned(context):
+                return _result("QUERY_CARDS", error="ACCOUNT_NOT_ACCESSIBLE")
+            return _result("QUERY_CARDS", {"cards": [
+                {"card_id": key, "display_name": row["display_name"], "status": row["status"]}
+                for key, row in sorted(self._data["cards"].items())
+                if row["account_id"] == context.account_id
+            ]})
+
+    def freeze_card(self, *, context: WriteContext, card_id: str) -> BackendResult:
+        return self._change_card_status(context, card_id, "FREEZE_CARD")
+
+    def unfreeze_card(self, *, context: WriteContext, card_id: str) -> BackendResult:
+        return self._change_card_status(context, card_id, "UNFREEZE_CARD")
+
+    def _change_card_status(self, context, card_id, operation):
+        with self.lock:
+            def reject(code):
+                return _result(operation, error=code)
+            if not self._owned(context):
+                return reject("ACCOUNT_NOT_ACCESSIBLE")
+            if not isinstance(context, WriteContext) or not context.authorization_ref:
+                return reject("AUTHORIZATION_REQUIRED")
+            if not isinstance(context.idempotency_key, str) or not context.idempotency_key:
+                return reject("AUTHORIZATION_INVALID")
+            if not isinstance(card_id, str):
+                return reject("CARD_NOT_ACCESSIBLE")
+            params = {"card_id": card_id}
+            key = (context.user_id, context.account_id, context.idempotency_key)
+            fingerprint = (context.request_id, operation, card_id)
+            previous = self._completed.get(key)
+            if previous:
+                return deepcopy(previous[1]) if previous[0] == fingerprint else reject("IDEMPOTENCY_CONFLICT")
+            card = self._data["cards"].get(card_id)
+            if not card or card["account_id"] != context.account_id:
+                return reject("CARD_NOT_ACCESSIBLE")
+            record = deepcopy(self._lookup(context.authorization_ref))
+            if not isinstance(record, dict) or self._hash is None:
+                return reject("AUTHORIZATION_INVALID")
+            identity = {"user_id": context.user_id, "account_id": context.account_id,
+                        "request_id": context.request_id, "idempotency_key": context.idempotency_key,
+                        "operation": operation, "params": params, "decision": "APPROVED"}
+            expiry = record.get("expires_at")
+            if (any(record.get(k) != v for k, v in identity.items())
+                    or not record.get("challenge_id") or record.get("risk_level") not in {"YELLOW", "RED"}
+                    or not isinstance(expiry, datetime) or expiry.utcoffset() is None or expiry <= self._now()):
+                return reject("AUTHORIZATION_INVALID")
+            base_context = TrustedContext(context.user_id, context.account_id, context.request_id)
+            expected_hash = self._hash(base_context, operation, params)
+            if not isinstance(expected_hash, str) or not expected_hash or record.get("operation_hash") != expected_hash:
+                return reject("AUTHORIZATION_INVALID")
+            target = {"FREEZE_CARD": "FROZEN", "UNFREEZE_CARD": "ACTIVE"}[operation]
+            # 先构造状态与回执，最后一次发布；不产生资金流水或修改余额。
+            updated = deepcopy(self._data)
+            updated["cards"][card_id]["status"] = target
+            result = _result(operation, {"card_id": card_id, "display_name": card["display_name"],
+                "status": target, "previous_status": card["status"], "changed": card["status"] != target})
+            completed = {**self._completed, key: (fingerprint, deepcopy(result))}
+            self._data, self._completed = updated, completed
+            return result
+
     def reset_demo_data(self) -> None:
         """仅恢复内部数据；A 必须在同一锁内另行使会话/授权/Checkpoint 失效。"""
         with self.lock:
@@ -233,8 +295,8 @@ def reset_demo_data() -> None:
     _configured().reset_demo_data()
 
 
-# 以下接口属于卡片/订阅契约提案，确认后另一个 feat/ PR 实现。
-# 目前不注册场景、不启用白名单、不更换数据集，不把占位函数当成功能力。
+# 卡片接口按 #26 提案在本功能分支实现，订阅接口仍为占位。
+# 尚未接入图/API/页面，不注册可用场景，不把后端完成当作页面已交付。
 # 共用已建立的 TrustedContext/WriteContext、BackendResult 和整数分。
 
 def query_cards(*, context: TrustedContext) -> BackendResult:
@@ -244,7 +306,7 @@ def query_cards(*, context: TrustedContext) -> BackendResult:
     账户归属失败为 REJECTED/ACCOUNT_NOT_ACCESSIBLE。
     场景以 display_name 精确匹配候选，零个或多个匹配都澄清，不任选。
     """
-    raise NotImplementedError("QUERY_CARDS is not implemented")
+    return _configured().query_cards(context=context)
 
 
 def freeze_card(*, context: WriteContext, card_id: str) -> BackendResult:
@@ -255,7 +317,7 @@ def freeze_card(*, context: WriteContext, card_id: str) -> BackendResult:
     失败及幂等语义同 unfreeze_card；不改变余额或创建资金流水。
     本轮仅模拟卡片状态，没有刷卡扣款路径，也不联动账户转账或代扣协议。
     """
-    raise NotImplementedError("FREEZE_CARD is not implemented")
+    return _configured().freeze_card(context=context, card_id=card_id)
 
 
 def unfreeze_card(*, context: WriteContext, card_id: str) -> BackendResult:
@@ -269,7 +331,7 @@ def unfreeze_card(*, context: WriteContext, card_id: str) -> BackendResult:
     首次结果是历史操作回执，不代表当前状态；冻结后解冻，再重放原冻结
     只能返回原回执，不得再次冻结。当前状态另用 query_cards 查询。
     """
-    raise NotImplementedError("UNFREEZE_CARD is not implemented")
+    return _configured().unfreeze_card(context=context, card_id=card_id)
 
 
 def query_subscriptions(*, context: TrustedContext, start: date,

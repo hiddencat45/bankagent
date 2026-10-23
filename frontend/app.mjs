@@ -18,6 +18,7 @@ const phases = { IDLE: '等待请求', PROCESSING: '正在办理', COMPLETED: '�
 const steps = { started: '服务端已接收请求', understood: '已识别业务意图',
   validated: '已校验业务信息', awaiting_confirmation: '已生成确认操作',
   awaiting_authentication: '需要独立认证', executing: '正在执行操作', finished: '本轮处理结束' };
+const cardStatus = { ACTIVE: '可用', FROZEN: '已冻结' };
 let pendingNode;
 
 function notice(text, warning = false) {
@@ -89,11 +90,22 @@ function confirmation(payload) {
     return;
   }
   state.pending = value; state.signal = null;
-  pendingNode = card('转账需要本人确认', 'confirm-card');
-  pendingNode.append(node('p', '', `收款人：${value.recipient}`), node('div', 'amount', `¥ ${money(value.amount_minor)}`),
-    node('p', '', value.risk_level === 'RED' ? '高风险：独立认证尚未接入，当前不能批准；可以取消。' : '请核对收款人与金额。确认前不会扣款，有效期由服务端重新校验。'));
+  const transfer = value.operation === 'TRANSFER';
+  const action = transfer ? '转账' : value.operation === 'FREEZE_CARD' ? '冻结卡片' : '解冻卡片';
+  pendingNode = card(`${action}需要本人确认`, 'confirm-card');
+  if (transfer) {
+    pendingNode.append(node('p', '', `收款人：${value.recipient}`), node('div', 'amount', `¥ ${money(value.amount_minor)}`));
+  } else {
+    pendingNode.append(node('p', '', `卡片：${value.display_name}`),
+      node('p', '', `${cardStatus[value.current_status]} → ${cardStatus[value.target_status]}`),
+      node('p', '', '仅变更模拟卡片状态，不涉及余额或历史账单；尚未模拟刷卡扣款。'));
+  }
+  pendingNode.append(node('p', '', value.risk_level === 'RED'
+    ? '高风险：独立认证尚未接入，当前不能批准；可以取消。'
+    : transfer ? '请核对收款人与金额。确认前不会扣款，有效期由服务端重新校验。'
+      : '请核对卡片和目标状态。确认前不会变更，有效期由服务端重新校验。'));
   const actions = node('div', 'actions');
-  for (const [decision, label] of [['reject', '取消转账'], ['approve', '确认转账']]) {
+  for (const [decision, label] of [['reject', `取消${action}`], ['approve', `确认${action}`]]) {
     const button = node('button', `decision ${decision === 'approve' ? 'approve' : 'quiet'}`, label);
     button.dataset.decision = decision; button.dataset.challenge = value.challenge_id; button.disabled = true;
     button.addEventListener('click', () => respond(decision, false, value.challenge_id)); actions.append(button);
@@ -119,6 +131,19 @@ function accept({ event, data }) {
           $('balance').textContent = money(result.data.remaining_balance_minor);
           const box = card('转账已完成'); box.append(node('div', 'amount', `¥ ${money(result.data.amount_minor)}`),
             node('p', '', `收款人：${result.data.recipient}`), node('p', '', `交易流水：${result.data.transaction_id}`));
+        }
+        if (result.operation === 'QUERY_CARDS') {
+          const box = card('卡片状态 · 本次查询结果');
+          if (result.data.cards.length === 0) box.append(node('p', '', '本账户暂无卡片。'));
+          for (const row of result.data.cards) {
+            box.append(node('p', '', `${row.display_name} · ${cardStatus[row.status]}`));
+          }
+        }
+        if (['FREEZE_CARD', 'UNFREEZE_CARD'].includes(result.operation)) {
+          const box = card('卡片操作回执');
+          box.append(node('p', '', `${result.data.display_name} · ${cardStatus[result.data.status]}`),
+            node('p', '', result.data.changed ? '本次请求已完成状态变更。' : '办理时已是目标状态，本次未重复变更。'),
+            node('p', '', '这是该请求的办理回执。后续操作可能已改变状态，请重新查询卡片核对当前状态。'));
         }
       } else trace(phases[result.status], result.error_code === 'USER_CANCELLED'
         ? '本次操作已取消，账户未发生变动。' : '请查看对话中的办理说明。');
