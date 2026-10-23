@@ -27,12 +27,12 @@ preparaion/frontend-mockup-render/
 preparaion/银行AI智能体全流程规划-*预览.png
 
 # ---- 过程稿：已被正式主文件取代，不留（含其预览图）----
-preparaion/银行AI智能体-风格样稿*
-preparaion/银行Agent前端工作台预览.pptx
+preparaion/*风格样稿*
+preparaion/*前端工作台预览*.pptx
 
 # ⚠️ 不要忽略以下文件，它们是构建依赖，不是转储：
 #   preparaion/银行Agent前端工作台预览.png  ← build_bank_agent_deck.js 第 3 页 addImage 直接读取
-#   preparaion/银行AI智能体全流程规划.pptx  ← 交付物成品
+#   preparaion/有度-银行AI智能体全流程规划.pptx  ← 交付物成品
 #   preparaion/assets/**                    ← 流程图源与导出
 
 # ---- 本地配置与密钥 ----

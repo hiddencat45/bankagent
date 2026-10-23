@@ -2,10 +2,10 @@ const pptxgen = require('../../.dsh/pptx-tools/node_modules/pptxgenjs');
 
 const pptx = new pptxgen();
 pptx.layout = 'LAYOUT_WIDE';
-pptx.author = 'Banking Agent Project';
-pptx.subject = '银行 AI 智能体全流程规划';
-pptx.title = '银行 AI 智能体全流程规划';
-pptx.company = 'Banking Agent Project';
+pptx.author = '有度 YouDu';
+pptx.subject = '有度 · 银行 AI 智能体全流程规划';
+pptx.title = '有度 · 银行 AI 智能体全流程规划';
+pptx.company = '有度 YouDu';
 pptx.lang = 'zh-CN';
 pptx.theme = {
   headFontFace: 'Microsoft YaHei',
@@ -32,7 +32,7 @@ slide.addShape(S.rect, {
   x: 0.56, y: 0.72, w: 0.52, h: 0.07,
   fill: { color: C.teal }, line: { color: C.teal }
 });
-slide.addText('BANKING AGENT', {
+slide.addText('YOUDU · BANKING AGENT', {
   x: 0.56, y: 0.92, w: 2.7, h: 0.28,
   fontSize: 11, bold: true, color: 'BFD2E1', charSpacing: 1.4, margin: 0
 });
@@ -58,9 +58,13 @@ slide.addText('LLM 提议 · Python 决策 · 银行后端执行', {
 });
 
 // 右侧为正式封面信息，不再出现“团队内部启动会”或“风格样稿”。
-slide.addText('银行 AI 智能体\n全流程规划', {
-  x: 4.75, y: 1.62, w: 7.4, h: 1.22,
-  fontSize: 31, bold: true, color: C.ink, margin: 0
+slide.addText('有度', {
+  x: 4.75, y: 1.55, w: 7.4, h: 0.62,
+  fontSize: 40, bold: true, color: C.ink, margin: 0
+});
+slide.addText('银行 AI 智能体全流程规划', {
+  x: 4.78, y: 2.21, w: 7.4, h: 0.45,
+  fontSize: 19, bold: true, color: C.ink, margin: 0
 });
 slide.addText('从自然语言交互，到可审计、可验证、可恢复的银行业务执行。', {
   x: 4.78, y: 3.18, w: 6.9, h: 0.5,
@@ -254,7 +258,7 @@ slide.addText('V0.1  |  项目启动前规划', {
     fontSize: 9.4, bold: true, color: C.navy, margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.17, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -345,7 +349,7 @@ slide.addText('V0.1  |  项目启动前规划', {
     fontSize: 8, color: C.muted, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.17, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -518,7 +522,7 @@ slide.addText('V0.1  |  项目启动前规划', {
     });
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.17, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -674,7 +678,7 @@ if (false) {
     });
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.17, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -719,7 +723,7 @@ if (false) {
     x: 0.68, y: 2.17, w: 2.55, h: 0.48,
     fill: { color: C.navy }, line: { color: C.navy }
   });
-  slide.addText('智银 Agent', {
+  slide.addText('有度', {
     x: 0.94, y: 2.32, w: 1.1, h: 0.18,
     fontSize: 10, bold: true, color: C.white, margin: 0
   });
@@ -873,7 +877,7 @@ if (false) {
     fontFace: 'Consolas', fontSize: 8.4, bold: true, color: C.red, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.17, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -1049,7 +1053,7 @@ if (false) {
     fontSize: 8.2, bold: true, color: '8A6212', align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.17, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -1229,7 +1233,7 @@ if (false) {
     fontSize: 6.7, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.17, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -1486,7 +1490,7 @@ if (false) {
     }
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.17, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -1694,7 +1698,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.17, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -1920,7 +1924,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.17, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -2150,7 +2154,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.17, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -2333,7 +2337,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.red, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.17, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -2514,7 +2518,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.17, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -2704,7 +2708,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.14, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -2921,7 +2925,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.red, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.14, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -3088,7 +3092,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -3235,7 +3239,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.green, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -3413,7 +3417,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -3577,7 +3581,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.red, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -3742,7 +3746,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -3911,7 +3915,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -4131,7 +4135,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.red, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -4306,7 +4310,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -4487,7 +4491,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.red, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -4663,7 +4667,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -4839,7 +4843,7 @@ if (false) {
     fontSize: 8.0, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -5007,7 +5011,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.red, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -5150,7 +5154,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -5326,7 +5330,7 @@ if (false) {
     fontSize: 8.0, bold: true, color: C.red, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -5501,7 +5505,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.red, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -5664,7 +5668,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 6.88, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -5822,7 +5826,7 @@ if (false) {
     fontSize: 7.3, color: C.red, margin: 0, fit: 'shrink'
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -5990,7 +5994,7 @@ if (false) {
     });
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 7.1, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -6161,7 +6165,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 6.88, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -6313,7 +6317,7 @@ if (false) {
     fontSize: 8.4, bold: true, color: C.navy, align: 'center', margin: 0
   });
 
-  slide.addText('银行 AI 智能体 · 全流程规划', {
+  slide.addText('有度 · 银行 AI 智能体 · 全流程规划', {
     x: 0.62, y: 6.88, w: 3.6, h: 0.14,
     fontSize: 7.5, color: C.muted, margin: 0
   });
@@ -6323,4 +6327,4 @@ if (false) {
   });
 }
 
-pptx.writeFile({ fileName: '银行AI智能体全流程规划.pptx' });
+pptx.writeFile({ fileName: '有度-银行AI智能体全流程规划.pptx' });
