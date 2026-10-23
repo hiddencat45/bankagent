@@ -13,7 +13,7 @@ from starlette.concurrency import iterate_in_threadpool
 
 from agent_graph import BankAgentRuntime, SG_TZ, build_graph
 from agent_security import ChallengeError, ChallengeStore, compute_operation_hash
-from bank_backend import configure_backend, find_subscriptions, get_balance, query_cards, reset_demo_data
+from bank_backend import configure_backend, get_balance, reset_demo_data
 from bank_types import TrustedContext
 from data.generator import REFERENCE_DATE, build_demo_data
 from scenarios.bills import configure_clock
@@ -26,12 +26,14 @@ _RETRY_EXECUTION = object()
 
 
 class Service:
-    def __init__(self, *, clock=None, authenticate=None, candidate_model=None):
+    def __init__(self, *, clock=None, authenticate=None, candidate_model=None,
+                 registry=None):
         # 固定业务参考日，挑战仍随真实经过时间过期。
         started = datetime.now(SG_TZ)
         reference = datetime.combine(REFERENCE_DATE, datetime.min.time(), SG_TZ).replace(hour=12)
         self.clock = clock or (lambda: reference + (datetime.now(SG_TZ) - started))
         self.candidate_model = candidate_model
+        self.registry = registry
         self.authenticate = authenticate or (lambda context, otp: False)
         self.lock = threading.RLock()
         self.running = threading.Lock()
@@ -39,7 +41,8 @@ class Service:
         self.challenges = ChallengeStore(lock=self.lock, clock=self.clock)
         self.challenge_by_thread = {}
         self.saver = InMemorySaver()
-        self.runtime = BankAgentRuntime(challenges=self.challenges, clock=self.clock, candidate_model=self.candidate_model)
+        self.runtime = BankAgentRuntime(challenges=self.challenges, clock=self.clock,
+                                        candidate_model=self.candidate_model, registry=registry)
         self.graph = build_graph(self.runtime, checkpointer=self.saver)
         configure_clock(clock=self.clock)
         configure_backend(data_factory=build_demo_data, lookup_authorization=self.challenges.lookup,
@@ -84,8 +87,10 @@ class Service:
                     decision=req.resume.decision, authenticated=authenticated)
                 # 不把 decision 或凭证交给图/Checkpoint。
                 graph_input = Command(resume=True) if snapshot.next else None
+                # 已批准、绑定匹配、处于 FAILED 的写操作可以重试执行。
+                # 不限定 operation：是否经过确认由 challenge_id 绑定、authorized
+                # 与服务端 APPROVED 记录三者共同证明，与具体是哪个写操作无关。
                 if (not snapshot.next and state.get('status') == 'FAILED'
-                        and state.get('operation') in {'TRANSFER', 'FREEZE_CARD', 'UNFREEZE_CARD', 'PAUSE_SUBSCRIPTION'}
                         and state.get('challenge_id') == cid and state.get('authorized') is True
                         and settled['decision'] == 'APPROVED'):
                     graph_input = _RETRY_EXECUTION
@@ -108,31 +113,6 @@ class Service:
         except Exception:
             self.running.release()
             raise
-
-    def confirmation_payload(self, state, record):
-        context = TrustedContext(state['user_id'], state['account_id'], state['request_id'])
-        operation = record['operation']
-        payload = {k: record[k] for k in ('operation', 'risk_level', 'challenge_id', 'operation_hash')}
-        payload['expires_at'] = record['expires_at'].isoformat()
-        if operation == 'TRANSFER':
-            from bank_backend import find_contacts
-            rows = find_contacts(context=context, name=state['candidate_params'].get('recipient_name', ''))
-            row = next(r for r in rows if r['contact_id'] == record['params']['contact_id'])
-            payload.update(recipient=row['display_name'], amount_minor=record['params']['amount_minor'],
-                           currency=record['params']['currency'])
-        elif operation in {'FREEZE_CARD', 'UNFREEZE_CARD', 'PAUSE_SUBSCRIPTION'}:
-            if operation == 'PAUSE_SUBSCRIPTION':
-                rows = find_subscriptions(context=context, name=state['candidate_params'].get('subscription_name', ''))
-                row = next(r for r in rows if r['subscription_id'] == record['params']['subscription_id'])
-                target = 'PAUSED'
-            else:
-                rows = query_cards(context=context)['data']['cards']
-                row = next(r for r in rows if r['card_id'] == record['params']['card_id'])
-                target = 'FROZEN' if operation == 'FREEZE_CARD' else 'ACTIVE'
-            payload.update(display_name=row['display_name'], current_status=row['status'], target_status=target)
-        else:
-            raise ValueError('unsupported confirmation operation')
-        return payload
 
     def stream(self, cfg, graph_input, previous, base):
         def frame(name, **kw):
@@ -162,7 +142,18 @@ class Service:
                     record = self.challenges.lookup(intr['challenge_id'])
                     status = 'AWAITING_AUTHENTICATION' if intr['kind'] == 'STRONG_AUTH' else 'AWAITING_CONFIRMATION'
                     yield frame('status', step='awaiting_authentication' if intr['kind'] == 'STRONG_AUTH' else 'awaiting_confirmation', status_value=status)
-                    payload = self.confirmation_payload(state, record)
+                    context = TrustedContext(state['user_id'], state['account_id'], state['request_id'])
+                    payload = {k: record[k] for k in ('operation', 'risk_level', 'challenge_id', 'operation_hash')}
+                    payload['expires_at'] = record['expires_at'].isoformat()
+                    # 展示字段由场景自己提供：server 不再按 operation 写死分支，
+                    # 新增写操作只要实现 confirmation 钩子即可复用这条流。
+                    spec = self.runtime.registry.spec_for_operation(record['operation'])
+                    if spec is not None and spec.confirmation is not None:
+                        payload.update(spec.confirmation(
+                            params=record['params'],
+                            candidate_params=state.get('candidate_params') or {},
+                            context=context,
+                        ))
                     yield frame('card', card_type='confirm', payload=payload)
                     yield frame('interrupt', kind=intr['kind'], challenge_id=record['challenge_id'],
                                 operation_hash=record['operation_hash'], prompt='请确认本次操作；高风险操作需要独立认证。')
@@ -190,8 +181,10 @@ class Service:
             yield frame('done', status_value='FAILED')
 
 
-def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=None):
-    service = Service(clock=clock, authenticate=authenticate, candidate_model=candidate_model)
+def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=None,
+               registry=None):
+    service = Service(clock=clock, authenticate=authenticate,
+                      candidate_model=candidate_model, registry=registry)
     app = FastAPI(title='有度 · 本地银行 Demo')
     app.state.service = service
 
@@ -254,7 +247,9 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
                 service.challenges.invalidate_all()
                 service.challenge_by_thread.clear()
                 service.saver = InMemorySaver()
-                service.runtime = BankAgentRuntime(challenges=service.challenges, clock=service.clock, candidate_model=service.candidate_model)
+                service.runtime = BankAgentRuntime(challenges=service.challenges, clock=service.clock,
+                                           candidate_model=service.candidate_model,
+                                           registry=service.registry)
                 service.graph = build_graph(service.runtime, checkpointer=service.saver)
             return {'status': 'COMPLETED'}
         finally:

@@ -40,6 +40,15 @@ def validate(operation: str, params: dict) -> bool:
             and isinstance(params["subscription_id"], str) and bool(params["subscription_id"]))
 
 
+def confirmation(*, params: dict, candidate_params: dict, context: TrustedContext) -> dict:
+    """只投影已绑定协议的展示字段；复用公共确认卡钩子。"""
+    rows = find_subscriptions(context=context, name=candidate_params.get("subscription_name", ""))
+    row = next((r for r in rows if r["subscription_id"] == params.get("subscription_id")), None)
+    if row is None:
+        raise ValueError("subscription binding no longer matches")
+    return {"display_name": row["display_name"], "current_status": row["status"], "target_status": "PAUSED"}
+
+
 def execute(operation: str, params: dict, context: TrustedContext) -> BackendResult:
     if not validate(operation, params):
         return {"operation": operation, "status": "REJECTED", "data": None, "error_code": "INVALID_PARAMS"}
