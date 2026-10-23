@@ -15,6 +15,9 @@ from fastapi.testclient import TestClient
 from agent_security import SG_TZ
 from api.server import create_app
 from model_providers import (
+    DEFAULT_BASE_URL,
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_MODEL_NAME,
     DEFAULT_TIMEOUT,
     OpenAICompatibleModel,
     ProviderConfig,
@@ -22,7 +25,9 @@ from model_providers import (
     build_model_from_env,
     ENV_API_KEY,
     ENV_BASE_URL,
+    ENV_MAX_TOKENS,
     ENV_MODEL_NAME,
+    ENV_THINKING,
     ENV_TIMEOUT,
 )
 from test_api_http import chat, login
@@ -285,19 +290,34 @@ def test_env_all_empty_means_offline():
 
 def test_env_complete_builds_model():
     model = build_model_from_env({
-        ENV_BASE_URL: BASE, ENV_API_KEY: API_KEY, ENV_MODEL_NAME: "deepseek-chat",
+        ENV_BASE_URL: BASE, ENV_API_KEY: API_KEY, ENV_MODEL_NAME: "deepseek-flash",
     })
     assert isinstance(model, OpenAICompatibleModel)
     assert model.health() is True
 
 
-@pytest.mark.parametrize("missing", [ENV_BASE_URL, ENV_API_KEY, ENV_MODEL_NAME])
-def test_partial_env_fails_loudly_instead_of_silently_going_offline(missing):
-    """只配一半时静默回退 offline，是最难在答辩现场自证的问题。"""
-    env = {ENV_BASE_URL: BASE, ENV_API_KEY: API_KEY, ENV_MODEL_NAME: "m"}
-    env.pop(missing)
-    with pytest.raises(ProviderConfigError, match=missing):
+@pytest.mark.parametrize("env", [
+    {ENV_BASE_URL: BASE},
+    {ENV_MODEL_NAME: "deepseek-flash"},
+    {ENV_BASE_URL: BASE, ENV_MODEL_NAME: "deepseek-flash"},
+])
+def test_missing_api_key_fails_loudly_instead_of_silently_going_offline(env):
+    """没有 key 就等于没配模型；静默回退 offline 是最难自证的状态。
+
+    地址与模型名有默认值，所以「只缺这两项」不算错误——但只要设了其中
+    任意一项却没给 key，就是漏配，必须报出来。
+    """
+    with pytest.raises(ProviderConfigError, match=ENV_API_KEY):
         build_model_from_env(env)
+
+
+def test_api_key_alone_uses_deepseek_defaults():
+    """最少只设一个 key 就能用。"""
+    model = build_model_from_env({ENV_API_KEY: API_KEY})
+    assert model._config.base_url == DEFAULT_BASE_URL
+    assert model._config.model == DEFAULT_MODEL_NAME
+    assert model._config.endpoint == "https://api.deepseek.com/chat/completions"
+
 
 
 def test_env_timeout_must_be_numeric():
@@ -310,6 +330,110 @@ def test_default_timeout_is_used_when_unset():
     env = {ENV_BASE_URL: BASE, ENV_API_KEY: API_KEY, ENV_MODEL_NAME: "m"}
     assert DEFAULT_TIMEOUT == 20.0
     build_model_from_env(env)  # 不抛即通过
+
+
+# ---------------------------------------------------------------------------
+# DeepSeek 特有的三处差异（按官方文档）
+# ---------------------------------------------------------------------------
+
+
+def test_deepseek_disables_thinking_by_default():
+    """DeepSeek 的 thinking 默认开启，而思考模式下 temperature 不生效。
+
+    不关掉就等于把 temperature: 0 白设了，还更慢更贵。
+    """
+    model = build_model_from_env({ENV_API_KEY: API_KEY})
+    assert model._config.thinking == "disabled"
+
+
+def test_non_deepseek_base_does_not_send_thinking():
+    """其它供应商可能不认识 thinking 字段，不认识就别发。"""
+    model = build_model_from_env({
+        ENV_API_KEY: API_KEY, ENV_BASE_URL: "https://api.openai.com/v1",
+    })
+    assert model._config.thinking is None
+
+
+def test_thinking_can_be_overridden_by_env():
+    model = build_model_from_env({ENV_API_KEY: API_KEY, ENV_THINKING: "enabled"})
+    assert model._config.thinking == "enabled"
+
+
+def test_thinking_and_max_tokens_reach_the_payload():
+    seen = {}
+
+    def handler(request):
+        seen.update(json.loads(request.content))
+        return _reply(_candidate())
+
+    _model(handler, thinking="disabled", max_tokens=256).predict(REQUEST)
+    assert seen["thinking"] == {"type": "disabled"}
+    assert seen["max_tokens"] == 256
+
+
+def test_system_prompt_mentions_json_and_gives_example():
+    """DeepSeek 文档：JSON 模式必须在提示词里指示输出 JSON 并给样例，
+    否则模型会一直吐空白直到撞上 token 上限，看起来像卡住。"""
+    seen = {}
+
+    def handler(request):
+        seen["system"] = json.loads(request.content)["messages"][0]["content"]
+        return _reply(_candidate())
+
+    # REQUEST 的 instruction 来自公共边界，不含 json 字样
+    assert "json" not in REQUEST["instruction"].lower()
+    _model(handler).predict(REQUEST)
+    assert "json" in seen["system"].lower()
+    # 必须有格式样例，光说「返回 JSON」不够
+    assert "candidate_params" in seen["system"]
+
+
+def test_truncated_response_is_a_config_error_not_a_user_error():
+    """撞上 max_tokens 时 content 是半截 JSON。判成「请重新描述」会让用户
+    白试——重述一次还是会截断，这是配置问题。"""
+    def handler(request):
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": '{"scenario": "trans'}, "finish_reason": "length"}],
+        })
+
+    model = _model(handler)
+    with pytest.raises(RuntimeError, match="TRUNCATED"):
+        model.predict(REQUEST)
+    assert model.health() is False
+
+
+def test_empty_content_is_retried_once():
+    """DeepSeek JSON 模式有概率返回空 content，这是供应商侧偶发问题。"""
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(200, json={
+                "choices": [{"message": {"content": ""}, "finish_reason": "stop"}],
+            })
+        return _reply(_candidate("transfer", "TRANSFER", amount="300"))
+
+    model = _model(handler)
+    assert model.predict(REQUEST)["intent"] == "TRANSFER"
+    assert calls["n"] == 2
+    assert model.health() is True, "重试成功不应留下故障状态"
+
+
+def test_two_empty_responses_give_up_and_return_none():
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": "   "}, "finish_reason": "stop"}],
+        })
+
+    model = _model(handler)
+    assert model.predict(REQUEST) is None
+    assert calls["n"] == 2, "只重试一次，不能无限重试"
+    assert model.health() is False
+
 
 
 # ---------------------------------------------------------------------------

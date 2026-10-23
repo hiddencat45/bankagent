@@ -1,11 +1,14 @@
-"""真实模型冒烟检查：填好环境变量后跑一次，确认能拿到合法候选。
+"""真实模型冒烟检查：填好 key 后跑一次，确认能拿到合法候选。
 
-用法（PowerShell）：
+默认按 DeepSeek 调好，最少只要一个 key：
 
-    $env:BANKAGENT_MODEL_BASE_URL = "https://api.deepseek.com/v1"
-    $env:BANKAGENT_MODEL_API_KEY  = "<你的 key>"
-    $env:BANKAGENT_MODEL_NAME     = "deepseek-chat"
+    $env:BANKAGENT_MODEL_API_KEY = "<你的 key>"
     python scripts/check_model.py
+
+想换地址或模型再加：
+
+    $env:BANKAGENT_MODEL_BASE_URL = "https://api.deepseek.com"
+    $env:BANKAGENT_MODEL_NAME     = "deepseek-v4-pro"
 
 它刻意只做**观测**，不判定对错：模型能不能正确理解同义表达、会不会在无关
 问题上乱答，需要人看一眼输出再决定。脚本给的是证据，不是结论。
@@ -22,7 +25,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 import time
 from pathlib import Path
@@ -55,19 +57,25 @@ def main() -> int:
         return 1
 
     if model is None:
-        print("未配置模型，当前会用 offline 关键词规则。要验收真实模型，先设置：")
-        print(f"  {ENV_BASE_URL}=https://api.deepseek.com/v1")
+        print("未配置模型，当前会用 offline 关键词规则。要验收真实模型，至少设置：")
         print(f"  {ENV_API_KEY}=<你的 key>")
-        print(f"  {ENV_MODEL_NAME}=deepseek-chat")
+        print()
+        print("可选（已按 DeepSeek 配好默认值）：")
+        print(f"  {ENV_BASE_URL}=https://api.deepseek.com")
+        print(f"  {ENV_MODEL_NAME}=deepseek-flash")
         return 1
 
-    interpreter = CandidateInterpreter(model, REGISTRY)
-    base_url = os.environ.get(ENV_BASE_URL, "")
-    model_name = os.environ.get(ENV_MODEL_NAME, "")
-    print(f"供应商地址：{base_url}")
-    print(f"模型名称：{model_name}")
-    print(f"凭据：已设置（{len(os.environ.get(ENV_API_KEY, ''))} 字符，不回显）")
+    config = model._config
+    print(f"供应商地址：{config.base_url}")
+    print(f"模型名称：{config.model}")
+    # 凭据只报长度，不回显。
+    print(f"凭据：已设置（{len(config.api_key)} 字符）")
+    print(f"输出上限：{config.max_tokens} tokens")
+    # DeepSeek 的 thinking 默认开启，而思考模式下 temperature 不生效。
+    print(f"思考模式：{config.thinking or '不发送该字段'}")
     print()
+
+    interpreter = CandidateInterpreter(model, REGISTRY)
 
     failures = 0
     for label, message in CASES:
@@ -78,6 +86,9 @@ def main() -> int:
             elapsed = (time.monotonic() - started) * 1000
             print(f"[{label}] {message}")
             print(f"  失败：{exc.code}  （{elapsed:.0f} ms）")
+            # 边界对用户只报 MODEL_UNAVAILABLE；真正原因（状态码/网络）在这里。
+            if model.last_error:
+                print(f"  技术原因：{model.last_error}")
             failures += 1
             print()
             continue
@@ -95,6 +106,9 @@ def main() -> int:
     print(f"健康状态：{'ok' if interpreter.health() else 'unavailable'}")
     if failures:
         print(f"有 {failures} 项在协议层就失败了，先看错误码再判断是配置问题还是模型问题。")
+        print("  MODEL_RESPONSE_TRUNCATED → 调大 BANKAGENT_MODEL_MAX_TOKENS")
+        print("  MODEL_HTTP_401           → key 无效或过期")
+        print("  MODEL_TIMEOUT            → 网络问题，或调大 BANKAGENT_MODEL_TIMEOUT")
     else:
         print("协议层全部通过。语义是否达标请对照上面的候选人工判断：")
         print("  · 第 2 项应能识别出 TRANSFER，并尽量抽出金额与收款人")
