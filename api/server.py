@@ -21,6 +21,9 @@ from api import events
 from api.contracts import ApiError, parse_chat_request
 from api.session import DemoSessionStore
 
+# 仅由服务端在归属、操作哈希与原授权校验后产生，不接收客户端执行入口。
+_RETRY_EXECUTION = object()
+
 
 class Service:
     def __init__(self, *, clock=None, authenticate=None, candidate_model=None):
@@ -76,11 +79,16 @@ class Service:
                         authenticated = self.authenticate(context, req.resume.otp) is True
                     except Exception:
                         raise ApiError('CHALLENGE_INVALID', '认证服务暂时不可用，尚未执行。', 409) from None
-                self.challenges.decide(challenge_id=cid, user_id=session.user_id,
+                settled = self.challenges.decide(challenge_id=cid, user_id=session.user_id,
                     request_id=context.request_id, operation_hash=expected,
                     decision=req.resume.decision, authenticated=authenticated)
                 # 不把 decision 或凭证交给图/Checkpoint。
                 graph_input = Command(resume=True) if snapshot.next else None
+                if (not snapshot.next and state.get('status') == 'FAILED'
+                        and state.get('operation') == 'TRANSFER'
+                        and state.get('challenge_id') == cid and state.get('authorized') is True
+                        and settled['decision'] == 'APPROVED'):
+                    graph_input = _RETRY_EXECUTION
                 request_id = context.request_id
             else:
                 if waiting:
@@ -106,10 +114,19 @@ class Service:
             return events.format_sse(name, getattr(events, name)(**base, **kw))
         yield frame('status', step='started', status_value='PROCESSING')
         try:
+            retry = graph_input is _RETRY_EXECUTION
+            if retry:
+                # 原执行失败已经走到 END，不能把它当作成功终态永远重放。
+                # 仅调度原执行节点；保留身份/请求/参数/挑战，幂等键仍回查授权表。
+                # 后端先查成功幂等结果；未落账时才复核授权期限/风险并写入。
+                predecessor = ('interrupt_for_authentication' if previous['risk_level'] == 'RED'
+                               else 'interrupt_for_confirmation')
+                self.graph.update_state(cfg, {'status': 'PROCESSING', 'result': {}, 'response': ''},
+                                        as_node=predecessor)
             if graph_input is None:
                 state = previous  # 相同决定重放已完成结果，不再执行图。
             else:
-                for _ in self.graph.stream(graph_input, cfg, stream_mode='updates'):
+                for _ in self.graph.stream(None if retry else graph_input, cfg, stream_mode='updates'):
                     pass
                 snapshot = self.graph.get_state(cfg)
                 state = snapshot.values
