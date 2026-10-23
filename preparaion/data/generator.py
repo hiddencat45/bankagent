@@ -13,7 +13,7 @@ REFERENCE_DATE = date(2026, 10, 18)
 
 
 def build_demo_data() -> dict:
-    """返回已校验、彼此独立的固定账户/联系人/账本，金额单位为分。"""
+    """返回已校验、彼此独立的固定账户/联系人/卡片/账本，金额单位为分。"""
     accounts = {
         "account-001": {"user_id": "user-001", "balance_minor": 500000,
                         "currency": "CNY"},
@@ -23,6 +23,15 @@ def build_demo_data() -> dict:
     contacts = {
         "contact-001": {"user_id": "user-001", "display_name": "张伟"},
         "contact-002": {"user_id": "user-001", "display_name": "李娜"},
+    }
+    # 只准备内部状态；不含卡号，也不表示冻结/解冻接口已经启用。
+    cards = {
+        "card-001": {"account_id": "account-001", "display_name": "日常消费卡",
+                     "status": "ACTIVE"},
+        "card-002": {"account_id": "account-001", "display_name": "备用卡",
+                     "status": "FROZEN"},
+        "card-003": {"account_id": "account-002", "display_name": "日常消费卡",
+                     "status": "ACTIVE"},
     }
     rows = (
         ("txn-001", "account-001", "2026-10-01T09:00:00+08:00",
@@ -46,6 +55,7 @@ def build_demo_data() -> dict:
         "reference_date": REFERENCE_DATE,
         "accounts": accounts,
         "contacts": contacts,
+        "cards": cards,
         "transactions": [dict(zip(fields, row)) for row in rows],
     }
     validate_demo_data(data)

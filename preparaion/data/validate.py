@@ -23,7 +23,7 @@ def validate_demo_data(data: dict) -> None:
     失败抛 ValueError，错误消息不回显整笔业务数据。
     """
     _require(isinstance(data, dict), "dataset must be a mapping")
-    _require(set(data) == {"reference_date", "accounts", "contacts", "transactions"},
+    _require(set(data) == {"reference_date", "accounts", "contacts", "cards", "transactions"},
              "unexpected dataset fields")
     reference = data["reference_date"]
     _require(type(reference) is date, "reference_date must be a date")
@@ -47,6 +47,16 @@ def validate_demo_data(data: dict) -> None:
                  "unexpected contact fields")
         _require(contact["user_id"] in owners, "unknown contact owner")
         _require(_text(contact["display_name"]), "contact display name required")
+
+    cards = data["cards"]
+    _require(isinstance(cards, dict), "cards must be a mapping")
+    for card_id, card in cards.items():
+        _require(_text(card_id) and isinstance(card, dict), "invalid card")
+        _require(set(card) == {"account_id", "display_name", "status"},
+                 "unexpected card fields")
+        _require(card["account_id"] in accounts, "unknown card account")
+        _require(_text(card["display_name"]), "card display name required")
+        _require(card["status"] in {"ACTIVE", "FROZEN"}, "invalid card status")
 
     fields = {"transaction_id", "account_id", "occurred_at", "kind",
               "amount_minor", "category", "merchant"}

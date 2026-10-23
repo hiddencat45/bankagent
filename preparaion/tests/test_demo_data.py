@@ -106,3 +106,41 @@ def test_validator_accepts_order_independent_ledger_and_consistent_transfer():
     data["accounts"]["account-001"]["balance_minor"] += 1
     with pytest.raises(ValueError, match="ledger balance mismatch"):
         validate_demo_data(data)
+
+
+def test_card_samples_cover_both_states_account_isolation_and_fresh_copies():
+    first, second = build_demo_data(), build_demo_data()
+    own = [c for c in first["cards"].values() if c["account_id"] == "account-001"]
+    foreign = [c for c in first["cards"].values() if c["account_id"] == "account-002"]
+    assert {c["status"] for c in own} == {"ACTIVE", "FROZEN"}
+    assert len(foreign) == 1
+    # 同名跨账户，后续解析不能按全局名称选择第一条。
+    assert foreign[0]["display_name"] == first["cards"]["card-001"]["display_name"]
+    first["cards"]["card-001"]["status"] = "FROZEN"
+    first["cards"]["card-002"]["display_name"] = "已修改"
+    assert second["cards"]["card-001"]["status"] == "ACTIVE"
+    assert second["cards"]["card-002"]["display_name"] == "备用卡"
+
+
+@pytest.mark.parametrize("field,value,reason", [
+    ("account_id", "missing", "unknown card account"),
+    ("display_name", " ", "card display name required"),
+    ("status", "LOST", "invalid card status"),
+])
+def test_rejects_invalid_card_data(field, value, reason):
+    data = build_demo_data()
+    data["cards"]["card-001"][field] = value
+    with pytest.raises(ValueError, match=reason):
+        validate_demo_data(data)
+
+
+def test_card_data_allows_empty_and_same_name_but_rejects_extra_fields():
+    data = build_demo_data()
+    data["cards"]["card-002"]["display_name"] = "日常消费卡"
+    validate_demo_data(data)  # 名称可重名，后续解析必须处理歧义。
+    data["cards"] = {}
+    validate_demo_data(data)
+    data = build_demo_data()
+    data["cards"]["card-001"]["authorized"] = True
+    with pytest.raises(ValueError, match="unexpected card fields"):
+        validate_demo_data(data)
