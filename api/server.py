@@ -282,4 +282,11 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
 
 
 def create_demo_app():
-    return create_app(demo=True)
+    """启动入口：有模型环境变量就用模型模式，全空则保持 offline。
+
+    配置只写了一半会在这里抛错并终止启动——静默回退 offline 会让人以为
+    模型已经在用，实际上在跑关键词规则。
+    """
+    from model_providers import build_model_from_env
+
+    return create_app(demo=True, candidate_model=build_model_from_env())
