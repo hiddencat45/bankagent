@@ -23,7 +23,8 @@ def validate_demo_data(data: dict) -> None:
     失败抛 ValueError，错误消息不回显整笔业务数据。
     """
     _require(isinstance(data, dict), "dataset must be a mapping")
-    _require(set(data) == {"reference_date", "accounts", "contacts", "cards", "transactions"},
+    _require(set(data) == {"reference_date", "accounts", "contacts", "cards", "transactions",
+                          "subscriptions", "subscription_payments"},
              "unexpected dataset fields")
     reference = data["reference_date"]
     _require(type(reference) is date, "reference_date must be a date")
@@ -58,6 +59,25 @@ def validate_demo_data(data: dict) -> None:
         _require(_text(card["display_name"]), "card display name required")
         _require(card["status"] in {"ACTIVE", "FROZEN"}, "invalid card status")
 
+    subscriptions = data["subscriptions"]
+    _require(isinstance(subscriptions, dict), "subscriptions must be a mapping")
+    for sub_id, row in subscriptions.items():
+        _require(_text(sub_id) and isinstance(row, dict), "invalid subscription")
+        _require(set(row) == {"account_id", "display_name", "status", "amount_minor",
+                              "currency", "next_payment_date"}, "unexpected subscription fields")
+        _require(row["account_id"] in accounts, "unknown subscription account")
+        _require(_text(row["display_name"]), "subscription display name required")
+        _require(_minor(row["amount_minor"]) and row["amount_minor"] > 0, "invalid subscription amount")
+        _require(row["currency"] == "CNY", "unsupported subscription currency")
+        _require(row["status"] in {"ACTIVE", "PAUSED"}, "invalid subscription status")
+        if row["status"] == "PAUSED":
+            _require(row["next_payment_date"] is None, "paused subscription has scheduled payment")
+        else:
+            try:
+                date.fromisoformat(row["next_payment_date"])
+            except (ValueError, TypeError) as exc:
+                raise ValueError("invalid subscription payment date") from exc
+
     fields = {"transaction_id", "account_id", "occurred_at", "kind",
               "amount_minor", "category", "merchant"}
     seen = set()
@@ -90,3 +110,11 @@ def validate_demo_data(data: dict) -> None:
         _require(balances[account_id] >= 0, "historical overdraft")
     for account_id, account in accounts.items():
         _require(balances[account_id] == account["balance_minor"], "ledger balance mismatch")
+    links = data["subscription_payments"]
+    _require(isinstance(links, dict), "subscription payments must be a mapping")
+    by_id = {row["transaction_id"]: row for row in transactions}
+    for tx_id, sub_id in links.items():
+        _require(tx_id in by_id and sub_id in subscriptions, "unknown subscription payment reference")
+        _require(by_id[tx_id]["kind"] == "EXPENSE", "subscription payment must be an expense")
+        _require(by_id[tx_id]["account_id"] == subscriptions[sub_id]["account_id"],
+                 "subscription payment account mismatch")

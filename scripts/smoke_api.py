@@ -40,6 +40,29 @@ def main():
             def result(out):
                 return next(d['payload'] for n, d in out if n == 'card' and d['type'] == 'result')
             assert result(chat({'message': '本月账单'}))['data']['total_minor'] == 100000
+            subs = result(chat({'message': '查询订阅'}))['data']
+            assert subs['total_minor'] == 23000
+            assert subs['subscriptions'][0]['paid_minor'] == 5000
+            def pause_request():
+                out = chat({'message': '暂停演示订阅的代扣'})
+                card = next(d['payload'] for n, d in out if n == 'card' and d['type'] == 'confirm')
+                assert card['display_name'] == '演示订阅' and card['target_status'] == 'PAUSED'
+                assert 'subscription_id' not in card
+                intr = next(d for n, d in out if n == 'interrupt')
+                return {'thread_id': intr['thread_id'], 'resume': {
+                    'challenge_id': intr['challenge_id'], 'decision': 'approve'}}
+            cancelled = pause_request()
+            cancelled['resume']['decision'] = 'reject'
+            assert chat(cancelled)[-1][1]['status'] == 'REJECTED'
+            assert result(chat({'message': '查询订阅'}))['data'] == subs
+            paused = pause_request()
+            receipt = result(chat(paused))
+            assert receipt['data']['status'] == 'PAUSED'
+            assert result(chat(paused)) == receipt
+            after = result(chat({'message': '查询订阅'}))['data']
+            assert after['subscriptions'][0]['payments'] == subs['subscriptions'][0]['payments']
+            assert after['total_minor'] == subs['total_minor']
+            assert result(chat({'message': '本月账单'}))['data']['total_minor'] == 100000
             pending = chat({'message': '给张伟转钱'})
             assert pending[-1][1]['status'] == 'NEEDS_CLARIFICATION'
             out = chat({'thread_id': pending[0][1]['thread_id'], 'message': '300 元'})
@@ -54,7 +77,7 @@ def main():
             assert result(chat({'message': '余额'}))['data']['balance_minor'] == 470000
             assert client.post('/demo/reset', headers=auth).json()['status'] == 'COMPLETED'
             assert client.post('/agent/chat', headers=auth, json=payload).status_code == 401
-        print('HTTP smoke passed: bills, clarification, confirmation, transfer, replay, balance, reset')
+        print('HTTP smoke passed: bills, subscription evidence/cancel/pause/replay, clarification, transfer, balance, reset')
     finally:
         process.terminate()
         try:

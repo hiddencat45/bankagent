@@ -13,7 +13,7 @@ from starlette.concurrency import iterate_in_threadpool
 
 from agent_graph import BankAgentRuntime, SG_TZ, build_graph
 from agent_security import ChallengeError, ChallengeStore, compute_operation_hash
-from bank_backend import configure_backend, get_balance, reset_demo_data
+from bank_backend import configure_backend, find_subscriptions, get_balance, query_cards, reset_demo_data
 from bank_types import TrustedContext
 from data.generator import REFERENCE_DATE, build_demo_data
 from scenarios.bills import configure_clock
@@ -85,7 +85,7 @@ class Service:
                 # 不把 decision 或凭证交给图/Checkpoint。
                 graph_input = Command(resume=True) if snapshot.next else None
                 if (not snapshot.next and state.get('status') == 'FAILED'
-                        and state.get('operation') == 'TRANSFER'
+                        and state.get('operation') in {'TRANSFER', 'FREEZE_CARD', 'UNFREEZE_CARD', 'PAUSE_SUBSCRIPTION'}
                         and state.get('challenge_id') == cid and state.get('authorized') is True
                         and settled['decision'] == 'APPROVED'):
                     graph_input = _RETRY_EXECUTION
@@ -108,6 +108,31 @@ class Service:
         except Exception:
             self.running.release()
             raise
+
+    def confirmation_payload(self, state, record):
+        context = TrustedContext(state['user_id'], state['account_id'], state['request_id'])
+        operation = record['operation']
+        payload = {k: record[k] for k in ('operation', 'risk_level', 'challenge_id', 'operation_hash')}
+        payload['expires_at'] = record['expires_at'].isoformat()
+        if operation == 'TRANSFER':
+            from bank_backend import find_contacts
+            rows = find_contacts(context=context, name=state['candidate_params'].get('recipient_name', ''))
+            row = next(r for r in rows if r['contact_id'] == record['params']['contact_id'])
+            payload.update(recipient=row['display_name'], amount_minor=record['params']['amount_minor'],
+                           currency=record['params']['currency'])
+        elif operation in {'FREEZE_CARD', 'UNFREEZE_CARD', 'PAUSE_SUBSCRIPTION'}:
+            if operation == 'PAUSE_SUBSCRIPTION':
+                rows = find_subscriptions(context=context, name=state['candidate_params'].get('subscription_name', ''))
+                row = next(r for r in rows if r['subscription_id'] == record['params']['subscription_id'])
+                target = 'PAUSED'
+            else:
+                rows = query_cards(context=context)['data']['cards']
+                row = next(r for r in rows if r['card_id'] == record['params']['card_id'])
+                target = 'FROZEN' if operation == 'FREEZE_CARD' else 'ACTIVE'
+            payload.update(display_name=row['display_name'], current_status=row['status'], target_status=target)
+        else:
+            raise ValueError('unsupported confirmation operation')
+        return payload
 
     def stream(self, cfg, graph_input, previous, base):
         def frame(name, **kw):
@@ -137,14 +162,7 @@ class Service:
                     record = self.challenges.lookup(intr['challenge_id'])
                     status = 'AWAITING_AUTHENTICATION' if intr['kind'] == 'STRONG_AUTH' else 'AWAITING_CONFIRMATION'
                     yield frame('status', step='awaiting_authentication' if intr['kind'] == 'STRONG_AUTH' else 'awaiting_confirmation', status_value=status)
-                    from bank_backend import find_contacts
-                    context = TrustedContext(state['user_id'], state['account_id'], state['request_id'])
-                    # 姓名从已绑定联系人查询，不能把内部 contact_id 当作展示名。
-                    contacts = find_contacts(context=context, name=state['candidate_params'].get('recipient_name', ''))
-                    recipient = next(c['display_name'] for c in contacts if c['contact_id'] == record['params']['contact_id'])
-                    payload = {k: record[k] for k in ('operation', 'risk_level', 'challenge_id', 'operation_hash')}
-                    payload.update(recipient=recipient, amount_minor=record['params']['amount_minor'],
-                                   currency=record['params']['currency'], expires_at=record['expires_at'].isoformat())
+                    payload = self.confirmation_payload(state, record)
                     yield frame('card', card_type='confirm', payload=payload)
                     yield frame('interrupt', kind=intr['kind'], challenge_id=record['challenge_id'],
                                 operation_hash=record['operation_hash'], prompt='请确认本次操作；高风险操作需要独立认证。')

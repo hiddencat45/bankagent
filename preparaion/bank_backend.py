@@ -22,6 +22,11 @@ def _result(operation: str, data=None, error=None) -> BackendResult:
             "data": data, "error_code": error}
 
 
+def _subscription_record(sub_id, row) -> SubscriptionRecord:
+    return {"subscription_id": sub_id, **{key: row[key] for key in (
+        "display_name", "status", "amount_minor", "currency", "next_payment_date")}}
+
+
 class BankBackend:
     """单个模拟实例；工厂数据是后端私有副本，所有读写使用共享互斥锁。"""
 
@@ -220,6 +225,72 @@ class BankBackend:
             self._data, self._completed = updated, completed
             return result
 
+    def find_subscriptions(self, *, context: TrustedContext, name: str) -> list[SubscriptionRecord]:
+        with self.lock:
+            if not self._owned(context):
+                raise PermissionError("ACCOUNT_NOT_ACCESSIBLE")
+            if not isinstance(name, str) or not name.strip():
+                return []
+            return [_subscription_record(key, row) for key, row in sorted(self._data["subscriptions"].items())
+                    if row["account_id"] == context.account_id and row["display_name"] == name.strip()]
+
+    def query_subscriptions(self, *, context: TrustedContext, start: date, end: date) -> BackendResult:
+        with self.lock:
+            if not self._owned(context):
+                return _result("QUERY_SUBSCRIPTIONS", error="ACCOUNT_NOT_ACCESSIBLE")
+            if (type(start) is not date or type(end) is not date
+                    or not 0 < (end - start).days <= BILLS_MAX_RANGE_DAYS):
+                return _result("QUERY_SUBSCRIPTIONS", error="INVALID_DATE_RANGE")
+            rows = {key: _subscription_record(key, row) for key, row in sorted(self._data["subscriptions"].items())
+                    if row["account_id"] == context.account_id}
+            payments = {key: [] for key in rows}
+            selected = []
+            for tx in self._data["transactions"]:
+                sub_id = self._data["subscription_payments"].get(tx["transaction_id"])
+                if (sub_id in rows and tx["account_id"] == context.account_id and tx["kind"] == "EXPENSE"
+                        and start <= datetime.fromisoformat(tx["occurred_at"]).date() < end):
+                    selected.append((sub_id, tx))
+                    if len(selected) > MAX_BILL_TRANSACTIONS:
+                        return _result("QUERY_SUBSCRIPTIONS", error="TOO_MANY_TRANSACTIONS")
+            for sub_id, tx in sorted(selected, key=lambda item: (item[1]["occurred_at"], item[1]["transaction_id"])):
+                payments[sub_id].append({key: tx[key] for key in ("transaction_id", "occurred_at", "amount_minor")})
+            summaries = [{**row, "paid_minor": sum(t["amount_minor"] for t in payments[key]),
+                          "payments": payments[key]} for key, row in rows.items()]
+            return _result("QUERY_SUBSCRIPTIONS", {"start": start.isoformat(), "end": end.isoformat(),
+                "currency": SUPPORTED_CURRENCY, "total_minor": sum(row["paid_minor"] for row in summaries),
+                "subscriptions": summaries})
+
+    def pause_subscription(self, *, context: WriteContext, subscription_id: str) -> BackendResult:
+        operation = "PAUSE_SUBSCRIPTION"
+        with self.lock:
+            def reject(code):
+                return _result(operation, error=code)
+            if not self._owned(context):
+                return reject("ACCOUNT_NOT_ACCESSIBLE")
+            if not isinstance(context, WriteContext) or not context.authorization_ref:
+                return reject("AUTHORIZATION_REQUIRED")
+            if not isinstance(context.idempotency_key, str) or not context.idempotency_key:
+                return reject("AUTHORIZATION_INVALID")
+            if not isinstance(subscription_id, str):
+                return reject("SUBSCRIPTION_NOT_ACCESSIBLE")
+            key = (context.user_id, context.account_id, context.idempotency_key)
+            fingerprint = (context.request_id, operation, subscription_id)
+            previous = self._completed.get(key)
+            if previous:
+                return deepcopy(previous[1]) if previous[0] == fingerprint else reject("IDEMPOTENCY_CONFLICT")
+            row = self._data["subscriptions"].get(subscription_id)
+            if not row or row["account_id"] != context.account_id:
+                return reject("SUBSCRIPTION_NOT_ACCESSIBLE")
+            if self._validated_authorization(context, operation, {"subscription_id": subscription_id}, self._now()) is None:
+                return reject("AUTHORIZATION_INVALID")
+            updated = deepcopy(self._data)
+            updated["subscriptions"][subscription_id].update(status="PAUSED", next_payment_date=None)
+            result = _result(operation, {**_subscription_record(subscription_id, updated["subscriptions"][subscription_id]),
+                "previous_status": row["status"], "changed": row["status"] != "PAUSED"})
+            completed = {**self._completed, key: (fingerprint, deepcopy(result))}
+            self._data, self._completed = updated, completed
+            return result
+
     def _validated_authorization(self, context, operation, params, now):
         """共享服务端授权绑定校验；调用方已持锁并处理成功幂等重放。"""
         record = deepcopy(self._lookup(context.authorization_ref))
@@ -289,8 +360,8 @@ def reset_demo_data() -> None:
     _configured().reset_demo_data()
 
 
-# 卡片接口按 #26 提案在本功能分支实现，订阅接口仍为占位。
-# 尚未接入图/API/页面，不注册可用场景，不把后端完成当作页面已交付。
+# 卡片与订阅接口沿用已合入的 #26；卡片聊天场景尚待接入。
+# 订阅已接场景/API/页面，业务变更仍只发生在本模块的受控写入中。
 # 共用已建立的 TrustedContext/WriteContext、BackendResult 和整数分。
 
 def query_cards(*, context: TrustedContext) -> BackendResult:
@@ -341,7 +412,7 @@ def query_subscriptions(*, context: TrustedContext, start: date,
     MAX_BILL_TRANSACTIONS 笔，超限不截断。
     错误为 ACCOUNT_NOT_ACCESSIBLE、INVALID_DATE_RANGE、TOO_MANY_TRANSACTIONS。
     """
-    raise NotImplementedError("QUERY_SUBSCRIPTIONS is not implemented")
+    return _configured().query_subscriptions(context=context, start=start, end=end)
 
 
 def find_subscriptions(*, context: TrustedContext,
@@ -352,7 +423,7 @@ def find_subscriptions(*, context: TrustedContext,
     无匹配返回 []，多匹配由场景澄清；归属失败同 find_contacts，抛
     PermissionError("ACCOUNT_NOT_ACCESSIBLE")，由公共 resolve 边界转码。
     """
-    raise NotImplementedError("subscription lookup is not implemented")
+    return _configured().find_subscriptions(context=context, name=name)
 
 
 def pause_subscription(*, context: WriteContext,
@@ -365,4 +436,4 @@ def pause_subscription(*, context: WriteContext,
     名称由 find_subscriptions 受控解析，歧义须澄清；不存在或不属当前账户
     统一为 SUBSCRIPTION_NOT_ACCESSIBLE。其余失败和原子幂等语义同卡片写入。
     """
-    raise NotImplementedError("PAUSE_SUBSCRIPTION is not implemented")
+    return _configured().pause_subscription(context=context, subscription_id=subscription_id)
