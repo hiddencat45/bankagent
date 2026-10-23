@@ -23,7 +23,8 @@ def validate_demo_data(data: dict) -> None:
     失败抛 ValueError，错误消息不回显整笔业务数据。
     """
     _require(isinstance(data, dict), "dataset must be a mapping")
-    _require(set(data) == {"reference_date", "accounts", "contacts", "cards", "transactions"},
+    _require(set(data) == {"reference_date", "accounts", "contacts", "cards",
+                           "subscriptions", "transactions"},
              "unexpected dataset fields")
     reference = data["reference_date"]
     _require(type(reference) is date, "reference_date must be a date")
@@ -58,8 +59,33 @@ def validate_demo_data(data: dict) -> None:
         _require(_text(card["display_name"]), "card display name required")
         _require(card["status"] in {"ACTIVE", "FROZEN"}, "invalid card status")
 
+    subscriptions = data["subscriptions"]
+    _require(isinstance(subscriptions, dict), "subscriptions must be a mapping")
+    _sub_fields = {"account_id", "display_name", "status", "amount_minor",
+                   "currency", "next_payment_date"}
+    for sub_id, sub in subscriptions.items():
+        _require(_text(sub_id) and isinstance(sub, dict), "invalid subscription")
+        _require(set(sub) == _sub_fields, "unexpected subscription fields")
+        _require(sub["account_id"] in accounts, "unknown subscription account")
+        _require(_text(sub["display_name"]), "subscription display name required")
+        _require(sub["status"] in {"ACTIVE", "PAUSED"}, "invalid subscription status")
+        _require(_minor(sub["amount_minor"]), "invalid subscription amount_minor")
+        _require(sub["currency"] == "CNY", "unsupported currency")
+        next_payment = sub["next_payment_date"]
+        if next_payment is None:
+            # 只有暂停的协议可以没有下一期：其余状态必须给出承诺日期。
+            _require(sub["status"] == "PAUSED",
+                     "only paused subscriptions may omit next_payment_date")
+        else:
+            _require(_text(next_payment), "invalid next_payment_date")
+            try:
+                promised = date.fromisoformat(next_payment)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("invalid next_payment_date") from exc
+            _require(promised >= reference, "next_payment_date before reference date")
+
     fields = {"transaction_id", "account_id", "occurred_at", "kind",
-              "amount_minor", "category", "merchant"}
+              "amount_minor", "category", "merchant", "subscription_id"}
     seen = set()
     balances = dict.fromkeys(accounts, 0)
     ordered = []
@@ -77,6 +103,12 @@ def validate_demo_data(data: dict) -> None:
         _require(_text(transaction["category"]), "transaction category required")
         _require(transaction["merchant"] is None or _text(transaction["merchant"]),
                  "invalid merchant")
+        link = transaction["subscription_id"]
+        # 订阅归属只认显式外键，且必须与协议同账户；不靠同名商户推断。
+        if link is not None:
+            _require(_text(link) and link in subscriptions, "unknown subscription link")
+            _require(subscriptions[link]["account_id"] == account_id,
+                     "subscription link crosses accounts")
         try:
             occurred = datetime.fromisoformat(transaction["occurred_at"])
         except (TypeError, ValueError) as exc:

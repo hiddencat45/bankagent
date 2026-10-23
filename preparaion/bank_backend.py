@@ -245,6 +245,135 @@ class BankBackend:
             self._data, self._completed = updated, completed
             return result
 
+    def query_subscriptions(self, *, context: TrustedContext, start: date,
+                            end: date) -> BackendResult:
+        with self.lock:
+            if not self._owned(context):
+                return _result("QUERY_SUBSCRIPTIONS", error="ACCOUNT_NOT_ACCESSIBLE")
+            if (type(start) is not date or type(end) is not date
+                    or not 0 < (end - start).days <= BILLS_MAX_RANGE_DAYS):
+                return _result("QUERY_SUBSCRIPTIONS", error="INVALID_DATE_RANGE")
+            summaries, total = [], 0
+            for subscription_id in sorted(self._data["subscriptions"]):
+                row = self._data["subscriptions"][subscription_id]
+                if row["account_id"] != context.account_id:
+                    continue
+                payments = []
+                for transaction in self._data["transactions"]:
+                    # 只认显式外键：同名商户不足以判定归属
+                    if transaction["subscription_id"] != subscription_id:
+                        continue
+                    if (transaction["account_id"] != context.account_id
+                            or transaction["kind"] != "EXPENSE"):
+                        continue
+                    if not start <= datetime.fromisoformat(
+                            transaction["occurred_at"]).date() < end:
+                        continue
+                    payments.append({"transaction_id": transaction["transaction_id"],
+                                     "occurred_at": transaction["occurred_at"],
+                                     "amount_minor": transaction["amount_minor"]})
+                    if len(payments) > MAX_BILL_TRANSACTIONS:
+                        return _result("QUERY_SUBSCRIPTIONS",
+                                       error="TOO_MANY_TRANSACTIONS")
+                payments.sort(key=lambda p: (p["occurred_at"], p["transaction_id"]))
+                paid = sum(p["amount_minor"] for p in payments)
+                total += paid
+                # 暂停不改旧流水：仍按外键统计历史扣款。
+                summaries.append({
+                    "subscription_id": subscription_id,
+                    "display_name": row["display_name"],
+                    "status": row["status"],
+                    "amount_minor": row["amount_minor"],
+                    "currency": row["currency"],
+                    "next_payment_date": row["next_payment_date"],
+                    "paid_minor": paid,
+                    "payments": payments,
+                })
+            return _result("QUERY_SUBSCRIPTIONS", {
+                "start": start.isoformat(), "end": end.isoformat(),
+                "currency": SUPPORTED_CURRENCY, "total_minor": total,
+                "subscriptions": summaries,
+            })
+
+    def find_subscriptions(self, *, context: TrustedContext,
+                           name: str) -> list[SubscriptionRecord]:
+        with self.lock:
+            if not self._owned(context):
+                raise PermissionError("ACCOUNT_NOT_ACCESSIBLE")
+            if not isinstance(name, str) or not name.strip():
+                return []
+            return [{"subscription_id": subscription_id,
+                     "display_name": row["display_name"],
+                     "status": row["status"],
+                     "amount_minor": row["amount_minor"],
+                     "currency": row["currency"],
+                     "next_payment_date": row["next_payment_date"]}
+                    for subscription_id, row in sorted(self._data["subscriptions"].items())
+                    if row["account_id"] == context.account_id
+                    and row["display_name"] == name]
+
+    def pause_subscription(self, *, context: WriteContext,
+                           subscription_id: str) -> BackendResult:
+        operation = "PAUSE_SUBSCRIPTION"
+        with self.lock:
+            def reject(code):
+                return _result(operation, error=code)
+            if not self._owned(context):
+                return reject("ACCOUNT_NOT_ACCESSIBLE")
+            if not isinstance(context, WriteContext) or not context.authorization_ref:
+                return reject("AUTHORIZATION_REQUIRED")
+            if not isinstance(context.idempotency_key, str) or not context.idempotency_key:
+                return reject("AUTHORIZATION_INVALID")
+            if not isinstance(subscription_id, str):
+                return reject("SUBSCRIPTION_NOT_ACCESSIBLE")
+            params = {"subscription_id": subscription_id}
+            key = (context.user_id, context.account_id, context.idempotency_key)
+            fingerprint = (context.request_id, operation, subscription_id)
+            previous = self._completed.get(key)
+            if previous:
+                return deepcopy(previous[1]) if previous[0] == fingerprint else reject(
+                    "IDEMPOTENCY_CONFLICT")
+            row = self._data["subscriptions"].get(subscription_id)
+            if not row or row["account_id"] != context.account_id:
+                return reject("SUBSCRIPTION_NOT_ACCESSIBLE")
+            record = deepcopy(self._lookup(context.authorization_ref))
+            if not isinstance(record, dict) or self._hash is None:
+                return reject("AUTHORIZATION_INVALID")
+            identity = {"user_id": context.user_id, "account_id": context.account_id,
+                        "request_id": context.request_id,
+                        "idempotency_key": context.idempotency_key,
+                        "operation": operation, "params": params, "decision": "APPROVED"}
+            expiry = record.get("expires_at")
+            if (any(record.get(k) != v for k, v in identity.items())
+                    or not record.get("challenge_id")
+                    or record.get("risk_level") not in {"YELLOW", "RED"}
+                    or not isinstance(expiry, datetime) or expiry.utcoffset() is None
+                    or expiry <= self._now()):
+                return reject("AUTHORIZATION_INVALID")
+            base_context = TrustedContext(context.user_id, context.account_id,
+                                          context.request_id)
+            expected_hash = self._hash(base_context, operation, params)
+            if (not isinstance(expected_hash, str) or not expected_hash
+                    or record.get("operation_hash") != expected_hash):
+                return reject("AUTHORIZATION_INVALID")
+            # 先构造状态与回执，最后一次发布；暂停不改余额、不产生资金流水。
+            updated = deepcopy(self._data)
+            updated["subscriptions"][subscription_id]["status"] = "PAUSED"
+            updated["subscriptions"][subscription_id]["next_payment_date"] = None
+            result = _result(operation, {
+                "subscription_id": subscription_id,
+                "display_name": row["display_name"],
+                "status": "PAUSED",
+                "amount_minor": row["amount_minor"],
+                "currency": row["currency"],
+                "next_payment_date": None,
+                "previous_status": row["status"],
+                "changed": row["status"] != "PAUSED",
+            })
+            completed = {**self._completed, key: (fingerprint, deepcopy(result))}
+            self._data, self._completed = updated, completed
+            return result
+
     def reset_demo_data(self) -> None:
         """仅恢复内部数据；A 必须在同一锁内另行使会话/授权/Checkpoint 失效。"""
         with self.lock:
@@ -347,7 +476,7 @@ def query_subscriptions(*, context: TrustedContext, start: date,
     MAX_BILL_TRANSACTIONS 笔，超限不截断。
     错误为 ACCOUNT_NOT_ACCESSIBLE、INVALID_DATE_RANGE、TOO_MANY_TRANSACTIONS。
     """
-    raise NotImplementedError("QUERY_SUBSCRIPTIONS is not implemented")
+    return _configured().query_subscriptions(context=context, start=start, end=end)
 
 
 def find_subscriptions(*, context: TrustedContext,
@@ -358,7 +487,7 @@ def find_subscriptions(*, context: TrustedContext,
     无匹配返回 []，多匹配由场景澄清；归属失败同 find_contacts，抛
     PermissionError("ACCOUNT_NOT_ACCESSIBLE")，由公共 resolve 边界转码。
     """
-    raise NotImplementedError("subscription lookup is not implemented")
+    return _configured().find_subscriptions(context=context, name=name)
 
 
 def pause_subscription(*, context: WriteContext,
@@ -371,4 +500,5 @@ def pause_subscription(*, context: WriteContext,
     名称由 find_subscriptions 受控解析，歧义须澄清；不存在或不属当前账户
     统一为 SUBSCRIPTION_NOT_ACCESSIBLE。其余失败和原子幂等语义同卡片写入。
     """
-    raise NotImplementedError("PAUSE_SUBSCRIPTION is not implemented")
+    return _configured().pause_subscription(context=context,
+                                            subscription_id=subscription_id)
