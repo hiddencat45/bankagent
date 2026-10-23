@@ -103,6 +103,54 @@ def test_invented_number_falls_back():
     assert ResponsePhraser(model).phrase(_result(), REFERENCE) == REFERENCE
 
 
+# ---------------------------------------------------------------------------
+# 结论口径：系统没给成功信号，模型就不许说成功
+# ---------------------------------------------------------------------------
+
+FAILED_REFERENCE = "账户余额 5000.00 元，不足以支付这笔 6000.00 元，转账未执行。"
+FAILED_RESULT = {"operation": "TRANSFER", "status": "REJECTED", "error_code": "INSUFFICIENT_BALANCE",
+                 "data": {"balance_minor": 500000, "amount_minor": 600000}}
+
+
+def test_success_wording_is_blocked_when_reference_reports_failure():
+    """把「未执行」润色成「已完成」必须拦下——数字和长度都没变，只换了结论。"""
+    model = FakeModel("账户余额 5000.00 元，不足以支付这笔 6000.00 元，转账已完成。")
+    assert ResponsePhraser(model).phrase(FAILED_RESULT, FAILED_REFERENCE) == FAILED_REFERENCE
+
+
+def test_transferred_wording_is_blocked_too():
+    """宾语插进动词中间的写法（「已向张伟转账」）同样算宣称成功。"""
+    model = FakeModel("账户余额 5000.00 元，不足以支付这笔 6000.00 元，已向张伟转账 6000.00 元。")
+    assert ResponsePhraser(model).phrase(FAILED_RESULT, FAILED_REFERENCE) == FAILED_REFERENCE
+
+
+def test_failure_wording_still_passes_when_reference_failed():
+    """失败结论本身可以润色，只要不翻案。"""
+    rewritten = "您的账户只有 5000.00 元，付不了这笔 6000.00 元，转账没有执行。"
+    model = FakeModel(rewritten)
+    assert ResponsePhraser(model).phrase(FAILED_RESULT, FAILED_REFERENCE) == rewritten
+
+
+def test_negated_success_is_not_counted_as_success():
+    """「没有执行成功」是否定语境，不能算肯定结论。"""
+    from agent_phrasing import _claims_success
+
+    assert _claims_success("转账没有执行成功") is False
+    assert _claims_success("本次操作未能成功") is False
+    assert _claims_success("已向张伟转账 300.00 元") is True
+    assert _claims_success("这笔转账未执行") is False
+
+
+def test_success_wording_is_allowed_when_reference_succeeded():
+    """系统确实返回了 COMPLETED，模型说成功就没问题。"""
+    reference = "已向张伟转账 300.00 元，剩余余额 4700.00 元。"
+    result = {"operation": "TRANSFER", "status": "COMPLETED", "error_code": None,
+              "data": {"amount_minor": 30000, "remaining_balance_minor": 470000,
+                       "recipient": "张伟", "currency": "CNY"}}
+    model = FakeModel("给张伟转的 300.00 元已经成功到账，剩余 4700.00 元。")
+    assert ResponsePhraser(model).phrase(result, reference) == model.reply
+
+
 def test_model_exception_falls_back():
     model = FakeModel(RuntimeError("upstream down"))
     assert ResponsePhraser(model).phrase(_result(), REFERENCE) == REFERENCE
