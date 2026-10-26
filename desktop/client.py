@@ -19,6 +19,9 @@ class QueryClient:
     def connect(self):
         with self.post('/demo/session', {}) as response:
             session = json.load(response)
+        if (not isinstance(session, dict) or not isinstance(session.get('token'), str)
+                or not session['token'].strip() or session.get('mode') not in {'model', 'offline'}):
+            raise ValueError('invalid session')
         self.token = session['token']
         return session['mode']
 
@@ -33,13 +36,18 @@ class QueryClient:
 def parse_stream(raw, thread=None):
     if len(raw) > 2 * 1024 * 1024:
         raise ValueError('response too large')
+    text = raw.decode('utf-8').replace('\r\n', '\n')
+    if not text.endswith('\n\n'):
+        raise ValueError('incomplete stream')
     frames = []
-    for frame in raw.decode('utf-8').replace('\r\n', '\n').split('\n\n'):
+    for frame in text.split('\n\n'):
         if not frame.strip():
             continue
         fields = frame.splitlines()
         event = next((line[7:] for line in fields if line.startswith('event: ')), None)
         data = json.loads('\n'.join(line[6:] for line in fields if line.startswith('data: ')))
+        if not isinstance(data, dict):
+            raise ValueError('invalid envelope')
         if event not in {'status', 'message', 'card', 'interrupt', 'error', 'done'}:
             raise ValueError('unknown event')
         identity = tuple(data.get(k) for k in ('thread_id', 'request_id', 'mode'))
@@ -49,6 +57,13 @@ def parse_stream(raw, thread=None):
             raise ValueError('envelope mismatch')
         if frames and frames[-1][0] == 'done':
             raise ValueError('data after done')
+        if event in {'message', 'error'}:
+            value = data.get('text' if event == 'message' else 'message')
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError('invalid message')
+        if event == 'card' and (data.get('type') not in {'confirm', 'evidence', 'result'}
+                                or not isinstance(data.get('payload'), dict)):
+            raise ValueError('invalid card')
         frames.append((event, data, identity))
     if not frames or frames[0][0] != 'status' or frames[-1][0] != 'done':
         raise ValueError('incomplete stream')

@@ -17,6 +17,7 @@ class BankWindow(QMainWindow):
         self.thread = None
         self.busy = False
         self.blocked = False
+        self.mode = '尚未连接'
         self.closed = threading.Event()
         self.delivery = Delivery(self)
         self.delivery.completed.connect(self.receive)
@@ -44,6 +45,9 @@ class BankWindow(QMainWindow):
         self.new = QPushButton('新对话')
         self.new.clicked.connect(self.new_chat)
         quick.addWidget(self.new)
+        self.reconnect = QPushButton('重新连接')
+        self.reconnect.clicked.connect(lambda: self.run('connect', self.client.connect))
+        quick.addWidget(self.reconnect)
         layout.addLayout(quick)
         self.history = QPlainTextEdit()
         self.history.setReadOnly(True)
@@ -75,15 +79,22 @@ class BankWindow(QMainWindow):
         for item in self.buttons + [self.input, self.submit]:
             item.setEnabled(enabled)
         self.new.setEnabled(bool(self.client.token) and not self.busy)
+        self.reconnect.setEnabled(not self.busy)
 
     def run(self, kind, function):
+        if self.busy:
+            return
         self.busy = True
+        if kind == 'connect':
+            self.status.setText('正在建立本地会话…')
         self.controls()
         def work():
             try:
                 result = function()
             except Exception:
-                kind_result, result = 'error', '连接或响应异常，结果尚未确认。请新建对话后重试；不会自动重发。'
+                kind_result = 'error'
+                result = ('会话建立失败，请点击「重新连接」重试。' if kind == 'connect' else
+                          '连接或响应异常，结果尚未确认。请新建对话或重新连接后重试；不会自动重发。')
             else:
                 kind_result = kind
             if not self.closed.is_set():
@@ -106,7 +117,10 @@ class BankWindow(QMainWindow):
     def receive(self, kind, result):
         self.busy = False
         if kind == 'connect':
+            self.thread = None
+            self.blocked = False
             self.mode = '真实模型' if result == 'model' else '离线规则'
+            self.history.appendPlainText('有度：已建立新会话，可以开始查询。')
             self.status.setText('已连接 · ' + self.mode)
         elif kind == 'error':
             self.history.appendPlainText('有度：' + result)

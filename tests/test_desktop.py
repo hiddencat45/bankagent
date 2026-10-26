@@ -82,6 +82,26 @@ def test_stream_rejects_missing_done_and_mixed_identity():
         parse_stream((first + end).encode())
 
 
+@pytest.mark.parametrize('invalid', [[], {'token': '', 'mode': 'offline'},
+                                    {'token': 'test-token', 'mode': 'unknown'}])
+def test_invalid_session_does_not_replace_token(monkeypatch, invalid):
+    from io import BytesIO
+    client = QueryClient('http://127.0.0.1')
+    client.token = 'previous-token'
+    monkeypatch.setattr(client, 'post', lambda *args: BytesIO(json.dumps(invalid).encode()))
+    with pytest.raises(ValueError, match='invalid session'):
+        client.connect()
+    assert client.token == 'previous-token'
+
+
+def test_stream_rejects_unterminated_final_frame():
+    data = {'thread_id': 't', 'request_id': 'r', 'mode': 'offline', 'status': 'COMPLETED'}
+    raw = ('event: status\ndata: ' + json.dumps(data) + '\n\n'
+           + 'event: done\ndata: ' + json.dumps(data)).encode()
+    with pytest.raises(ValueError, match='incomplete'):
+        parse_stream(raw)
+
+
 def test_launch_failure_cleans_up(monkeypatch):
     def fail(*args, **kwargs):
         raise OSError('cannot spawn')
