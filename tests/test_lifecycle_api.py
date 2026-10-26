@@ -61,4 +61,3 @@ def test_invalid_payment_and_account_selection_cannot_write():
         for body in ({'account_ref': 'account-001', 'user_id': 'user-002'}, {'account_ref': None}, []):
             assert c.post('/bank/account-session', headers=auth, json=body).status_code == 400
         assert result(chat(c, auth, message='查询余额'))['data']['balance_minor'] == 500000
-
