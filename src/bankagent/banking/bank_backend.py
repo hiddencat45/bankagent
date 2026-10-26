@@ -107,9 +107,24 @@ class BankBackend(LifecycleMixin):
                 raise PermissionError("ACCOUNT_NOT_ACCESSIBLE")
             if not isinstance(name, str) or not name.strip():
                 return []
-            return [{"contact_id": key, "display_name": row["display_name"]}
+            contacts = [{"contact_id": key, "display_name": row["display_name"]}
                     for key, row in sorted(self._data["contacts"].items())
                     if row["user_id"] == context.user_id and row["display_name"] == name.strip()]
+            own = [{'contact_id': 'own:' + key, 'display_name': row.get('display_name', '默认演示账户')}
+                   for key, row in self._data['accounts'].items()
+                   if row['user_id'] == context.user_id and key != context.account_id
+                   and row.get('display_name', '默认演示账户') == name.strip()]
+            return contacts + own
+
+    def _transfer_contact(self, context, contact_id):
+        if contact_id.startswith('own:'):
+            target = contact_id[4:]
+            row = self._data['accounts'].get(target)
+            if row and row['user_id'] == context.user_id and target != context.account_id:
+                return {'display_name': row.get('display_name', '本人账户'),
+                        'user_id': context.user_id, 'recipient_account_id': target}
+            return None
+        return self._data['contacts'].get(contact_id)
 
     def query_bills(self, *, context: TrustedContext, start: date, end: date) -> BackendResult:
         with self._transaction():
@@ -213,7 +228,7 @@ class BankBackend(LifecycleMixin):
             previous = self._completed.get(key)
             if previous:
                 return deepcopy(previous[1]) if previous[0] == fingerprint else reject("IDEMPOTENCY_CONFLICT")
-            contact = self._data["contacts"].get(contact_id)
+            contact = self._transfer_contact(context, contact_id)
             if not contact or contact["user_id"] != context.user_id:
                 return reject("CONTACT_NOT_ACCESSIBLE")
             now = self._now()
@@ -244,16 +259,35 @@ class BankBackend(LifecycleMixin):
             if amount_minor > account["balance_minor"]:
                 return reject("INSUFFICIENT_BALANCE", balance_minor=account["balance_minor"],
                               amount_minor=amount_minor)
+            destination = contact.get('recipient_account_id')
+            recipient_account = self._data['accounts'].get(destination)
+            if not recipient_account or destination == context.account_id:
+                return reject('RECIPIENT_ACCOUNT_INVALID')
+            if recipient_account['currency'] != currency:
+                return reject('UNSUPPORTED_CURRENCY')
             # 在锁内先构造完整副本与幂等结果，全部成功后一起发布，不留半笔账。
             updated = deepcopy(self._data)
             balance = account["balance_minor"] - amount_minor
             updated["accounts"][context.account_id]["balance_minor"] = balance
+            updated['accounts'][destination]['balance_minor'] += amount_minor
             transaction_id = f"txn-{uuid4().hex}"
+            incoming_id = f"txn-{uuid4().hex}"
+            transfer_id = f"transfer-{uuid4().hex}"
             updated["transactions"].append({"transaction_id": transaction_id,
                 "account_id": context.account_id, "occurred_at": now.isoformat(),
                 "kind": "TRANSFER_OUT", "amount_minor": amount_minor,
-                "category": "转账", "merchant": None, "subscription_id": None})
+                "category": "转账", "merchant": None, "subscription_id": None,
+                'transfer_id': transfer_id, 'counterparty_account_id': destination,
+                'related_transaction_id': incoming_id, 'balance_after_minor': balance})
+            updated['transactions'].append({'transaction_id': incoming_id,
+                'account_id': destination, 'occurred_at': now.isoformat(),
+                'kind': 'TRANSFER_IN', 'amount_minor': amount_minor,
+                'category': '转账', 'merchant': None, 'subscription_id': None,
+                'transfer_id': transfer_id, 'counterparty_account_id': context.account_id,
+                'related_transaction_id': transaction_id,
+                'balance_after_minor': updated['accounts'][destination]['balance_minor']})
             result = _result("TRANSFER", {"transaction_id": transaction_id,
+                'transfer_id': transfer_id, 'incoming_transaction_id': incoming_id,
                 "recipient": contact["display_name"], "amount_minor": amount_minor,
                 "currency": currency, "remaining_balance_minor": balance})
             completed = {**self._completed, key: (fingerprint, deepcopy(result))}
@@ -597,6 +631,15 @@ def open_account(*, context: WriteContext, display_name: str) -> BackendResult:
 
 def query_accounts(*, context: TrustedContext) -> BackendResult:
     return _configured().query_accounts(context=context)
+
+
+def query_card_limits(*, context: TrustedContext, card_id: str) -> BackendResult:
+    return _configured().query_card_limits(context=context, card_id=card_id)
+
+
+def set_card_limits(*, context: WriteContext, card_id: str, single_limit_minor: int, daily_limit_minor: int) -> BackendResult:
+    return _configured().set_card_limits(context=context, card_id=card_id,
+        single_limit_minor=single_limit_minor, daily_limit_minor=daily_limit_minor)
 
 
 def issue_debit_card(*, context: WriteContext, display_name: str) -> BackendResult:

@@ -19,9 +19,9 @@ def sample_data():
             ("t1", "a1", "2026-10-12T10:00:00+08:00", "EXPENSE", 2500),
             ("t2", "a1", "2026-10-12T10:00:30+08:00", "EXPENSE", 2500),
             ("t3", "a2", "2026-10-01T09:00:00+08:00", "INCOME", 40000)]
-    return {"accounts": {"a1": {"user_id": "u1", "balance_minor": 500000},
-                         "a2": {"user_id": "u2", "balance_minor": 40000}},
-            "contacts": {"c1": {"user_id": "u1", "display_name": "演示收款人"},
+    return {"accounts": {"a1": {"user_id": "u1", "balance_minor": 500000, "currency": "CNY"},
+                         "a2": {"user_id": "u2", "balance_minor": 40000, "currency": "CNY"}},
+            "contacts": {"c1": {"user_id": "u1", "display_name": "演示收款人", "recipient_account_id": "a2"},
                          "c2": {"user_id": "u2", "display_name": "其他用户联系人"}},
             "transactions": [dict(transaction_id=i, account_id=a, occurred_at=t,
                 kind=k, amount_minor=m, category="订阅" if k == "EXPENSE" else "工资",

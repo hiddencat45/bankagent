@@ -139,7 +139,8 @@ def query_result(payload):
             raise ValueError('invalid currency')
         lines = [f"消费合计：¥ {money(data['total_minor'])}",
                  f"查询期间：{data['start']} 至 {data['end']}（不含结束日）"]
-        lines += [f"{row['occurred_at']}  {row.get('merchant') or row['category']}  ¥ {money(row['amount_minor'])}"
+        kinds = {'INCOME': '收入', 'EXPENSE': '消费', 'TRANSFER_OUT': '转出', 'TRANSFER_IN': '转入'}
+        lines += [f"{row['occurred_at']}  {kinds[row['kind']]}  {row.get('merchant') or row['category']}  ¥ {money(row['amount_minor'])}"
                   for row in data['transactions']]
         return '\n'.join(lines)
     return ''
@@ -184,7 +185,7 @@ def business_confirmation(frames):
     signal = next(d for e, d in frames if e == 'interrupt')
     labels = {'OPEN_ACCOUNT': '开立模拟账户', 'ISSUE_DEBIT_CARD': '办理借记卡',
               'ACTIVATE_DEBIT_CARD': '激活借记卡', 'PAY_BY_CARD': '模拟消费',
-              'FREEZE_CARD': '冻结卡片', 'UNFREEZE_CARD': '解冻卡片'}
+              'FREEZE_CARD': '冻结卡片', 'UNFREEZE_CARD': '解冻卡片', 'SET_CARD_LIMITS': '设置消费限额'}
     operation = card.get('operation')
     if operation not in labels:
         return None
@@ -207,6 +208,11 @@ def business_confirmation(frames):
                 or card['amount_minor'] <= 0 or card.get('category') not in ['餐饮', '交通', '购物', '居住', '其他']):
             raise ValueError('invalid payment')
         summary += f"\n商户：{card['merchant']}\n金额：¥ {money(card['amount_minor'])}\n分类：{card['category']}"
+    elif operation == 'SET_CARD_LIMITS':
+        single, daily = card.get('single_limit_minor'), card.get('daily_limit_minor')
+        if type(single) is not int or type(daily) is not int or not 0 <= single <= daily <= 100000000 or card.get('currency') != 'CNY':
+            raise ValueError('invalid card limits')
+        summary += f'\n单笔上限：¥ {money(single)}\n每日上限：¥ {money(daily)}\n零限额将拒绝新的卡支付；不影响账户转账。'
     elif operation in {'FREEZE_CARD', 'UNFREEZE_CARD'}:
         target = 'FROZEN' if operation == 'FREEZE_CARD' else 'ACTIVE'
         if card.get('current_status') not in {'ACTIVE', 'FROZEN'} or card.get('target_status') != target:

@@ -20,7 +20,7 @@ class SQLiteStore:
                            'version INTEGER NOT NULL, data TEXT NOT NULL, receipts TEXT NOT NULL, '
                            'created_at TEXT NOT NULL)')
                 data, receipts = self.encode(initial_data, {})
-                db.execute('INSERT INTO bank_state VALUES (1, 1, ?, ?, ?)',
+                db.execute('INSERT INTO bank_state VALUES (1, 2, ?, ?, ?)',
                            (data, receipts, datetime.now(timezone.utc).isoformat()))
             saved, _ = self.load(db)  # Unknown/corrupted stores fail closed, never silently reseed.
             self.created_at = datetime.fromisoformat(db.execute(
@@ -61,7 +61,7 @@ class SQLiteStore:
     @staticmethod
     def load(db):
         rows = db.execute('SELECT version, data, receipts FROM bank_state WHERE id=1').fetchall()
-        if len(rows) != 1 or rows[0][0] != 1:
+        if len(rows) != 1 or rows[0][0] not in {1, 2}:
             raise ValueError('Unsupported bank database version or missing state')
         data = json.loads(rows[0][1])
         if not isinstance(data, dict) or not isinstance(data.get('accounts'), dict) \
@@ -75,6 +75,20 @@ class SQLiteStore:
             if len(key) != 3 or key in completed or not isinstance(result, dict):
                 raise ValueError('Invalid stored receipt')
             completed[key] = (tuple(fingerprint), result)
+        if rows[0][0] == 1:
+            # Only map the two known seed contacts. Never infer destinations for
+            # custom contacts or retroactively credit historical outgoing transfers.
+            for cid, name, target, owner in (
+                    ('contact-001', '张伟', 'account-002', 'user-002'),
+                    ('contact-002', '李娜', 'account-003', 'user-003')):
+                contact = data.get('contacts', {}).get(cid)
+                if contact == {'user_id': 'user-001', 'display_name': name}:
+                    if target == 'account-003' and target not in data['accounts']:
+                        data['accounts'][target] = {'user_id': owner, 'balance_minor': 0, 'currency': 'CNY'}
+                    if data['accounts'].get(target, {}).get('user_id') == owner:
+                        contact['recipient_account_id'] = target
+            encoded, receipts = SQLiteStore.encode(data, completed)
+            db.execute('UPDATE bank_state SET version=2, data=?, receipts=? WHERE id=1', (encoded, receipts))
         return data, completed
 
     def save(self, db, data, completed):

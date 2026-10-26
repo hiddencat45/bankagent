@@ -90,6 +90,8 @@ def render(result):
     if result['status'] != 'COMPLETED':
         code = result.get('error_code')
         return {'CARD_NOT_ACTIVE': '卡片尚未激活或已冻结，本次未扣款。',
+                'CARD_SINGLE_LIMIT_EXCEEDED': '超过该卡单笔消费限额，本次未扣款。可以查询或调整消费限额。',
+                'CARD_DAILY_LIMIT_EXCEEDED': '超过该卡当日累计消费限额，本次未扣款。可以查询或调整消费限额。',
                 'INSUFFICIENT_BALANCE': '账户余额不足，本次未扣款。',
                 'CARD_NOT_PENDING_ACTIVATION': '此卡不是待激活状态，本次未变更。'}.get(code, '本次业务未完成，请检查名称、卡片状态和输入信息。')
     data, op = result['data'], result['operation']

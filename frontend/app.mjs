@@ -84,7 +84,7 @@ function evidence(data) {
   }
   const detail = node('details'); detail.append(node('summary', '', `查看 ${data.transactions.length} 笔交易明细`));
   for (const row of data.transactions) {
-    const kind = { INCOME: '收入', EXPENSE: '消费', TRANSFER_OUT: '转出' }[row.kind];
+    const kind = { INCOME: '收入', EXPENSE: '消费', TRANSFER_OUT: '转出', TRANSFER_IN: '转入' }[row.kind];
     const item = node('div', 'transaction', `${kind} · ${row.category} · ${row.merchant ?? '未提供商户'} · ¥ ${money(row.amount_minor)}`);
     item.append(node('small', '', `${row.occurred_at} · ${row.transaction_id}`)); detail.append(item);
   }

@@ -89,7 +89,7 @@ def test_concurrent_opening_is_idempotent(setup):
     with ThreadPoolExecutor(2) as pool:
         replies = list(pool.map(lambda item: item.open_account(context=ctx, display_name='新账户'), [a, b]))
     assert replies[0] == replies[1]
-    assert len(bank()._data['accounts']) == 3
+    assert len(bank()._data['accounts']) == len(build_demo_data()['accounts']) + 1
     assert b.open_account(context=ctx, display_name='变更名称')['error_code'] == 'IDEMPOTENCY_CONFLICT'
 
 
@@ -133,7 +133,7 @@ def test_failed_opening_commit_leaves_no_account_or_receipt(setup, monkeypatch):
     assert reopened._data == build_demo_data()
     assert reopened._completed == {}
     assert reopened.open_account(context=ctx, display_name='新账户')['status'] == 'COMPLETED'
-    assert len(bank()._data['accounts']) == 3
+    assert len(bank()._data['accounts']) == len(build_demo_data()['accounts']) + 1
 
 
 def test_pending_card_query_render():

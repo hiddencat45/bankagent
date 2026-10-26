@@ -53,7 +53,7 @@ class BankWindow(QMainWindow):
         layout.addLayout(accounts)
         business = QHBoxLayout()
         self.business_buttons = []
-        for label in ('开户', '办理借记卡', '激活', '刷卡消费', '冻结', '解冻'):
+        for label in ('开户', '办理借记卡', '激活', '刷卡消费', '冻结', '解冻', '查询限额', '设置限额'):
             button = QPushButton(label)
             button.clicked.connect(lambda checked=False, action=label: self.business_form(action))
             business.addWidget(button)
@@ -174,7 +174,19 @@ class BankWindow(QMainWindow):
         if not name or len(name) > 80 or any(c in name for c in '「」\n\r'):
             self.status.setText('请输入 1–80 字的名称，不含换行或「」符号。')
             return
-        if action == '刷卡消费':
+        if action == '设置限额':
+            import re
+            amounts = []
+            for label in ('单笔', '每日'):
+                value, ok = QInputDialog.getText(self, action, label + '消费限额（元；0 表示禁止消费）：')
+                if not ok:
+                    return
+                if not re.fullmatch(r'[0-9]+(?:\.[0-9]{1,2})?', value):
+                    self.status.setText('限额须为非负金额，最多两位小数。')
+                    return
+                amounts.append(value)
+            message = f'设置限额「{name}」单笔{amounts[0]}元，每日{amounts[1]}元'
+        elif action == '刷卡消费':
             merchant, ok = QInputDialog.getText(self, action, '演示商户名称：')
             if not ok:
                 return

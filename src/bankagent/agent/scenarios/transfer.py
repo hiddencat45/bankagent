@@ -295,6 +295,7 @@ def render(result: BackendResult) -> str:
             "INVALID_AMOUNT": "转账金额无效，请重新输入。",
             "UNSUPPORTED_CURRENCY": "暂不支持该币种。",
             "CONTACT_NOT_ACCESSIBLE": "无法使用该收款人，请重新选择。",
+            "RECIPIENT_ACCOUNT_INVALID": "收款账户未绑定、不可用或与付款账户相同，转账未执行。",
             "ACCOUNT_NOT_ACCESSIBLE": "无法访问当前账户。",
         }.get(result.get("error_code"), "转账未完成，请稍后重试。")
 

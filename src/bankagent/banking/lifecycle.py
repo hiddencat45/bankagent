@@ -7,7 +7,9 @@ from uuid import uuid4
 from bankagent.banking.bank_types import TrustedContext, WriteContext
 
 DEMO_OPENING_BALANCE_MINOR = 100000
-OPERATIONS = frozenset({'OPEN_ACCOUNT', 'ISSUE_DEBIT_CARD', 'ACTIVATE_DEBIT_CARD', 'PAY_BY_CARD'})
+OPERATIONS = frozenset({'OPEN_ACCOUNT', 'ISSUE_DEBIT_CARD', 'ACTIVATE_DEBIT_CARD', 'PAY_BY_CARD', 'SET_CARD_LIMITS'})
+DEFAULT_SINGLE_LIMIT_MINOR = 500000
+DEFAULT_DAILY_LIMIT_MINOR = 1000000
 
 
 def result(operation, data=None, error=None):
@@ -20,6 +22,41 @@ def text(value):
 
 
 class LifecycleMixin:
+    def _card_limits(self, card_id, card):
+        today = self._now().date()
+        used = sum(row['amount_minor'] for row in self._data['transactions']
+            if row.get('card_id') == card_id and row['kind'] == 'EXPENSE'
+            and datetime.fromisoformat(row['occurred_at']).date() == today)
+        return {'single_limit_minor': card.get('single_limit_minor', DEFAULT_SINGLE_LIMIT_MINOR),
+                'daily_limit_minor': card.get('daily_limit_minor', DEFAULT_DAILY_LIMIT_MINOR),
+                'used_today_minor': used, 'business_date': today.isoformat()}
+
+    def query_card_limits(self, *, context: TrustedContext, card_id: str):
+        with self._transaction():
+            if not self._owned(context):
+                return result('QUERY_CARD_LIMITS', error='ACCOUNT_NOT_ACCESSIBLE')
+            card = self._data['cards'].get(card_id) if isinstance(card_id, str) else None
+            if not card or card['account_id'] != context.account_id:
+                return result('QUERY_CARD_LIMITS', error='CARD_NOT_ACCESSIBLE')
+            return result('QUERY_CARD_LIMITS', {'display_name': card['display_name'],
+                'currency': 'CNY', **self._card_limits(card_id, card)})
+
+    def set_card_limits(self, *, context: WriteContext, card_id: str,
+                        single_limit_minor: int, daily_limit_minor: int):
+        operation = 'SET_CARD_LIMITS'
+        if (not text(card_id) or type(single_limit_minor) is not int or type(daily_limit_minor) is not int
+                or not 0 <= single_limit_minor <= daily_limit_minor <= 100000000):
+            return result(operation, error='INVALID_CARD_LIMITS')
+        params = dict(card_id=card_id, single_limit_minor=single_limit_minor, daily_limit_minor=daily_limit_minor)
+        def apply(data):
+            card = data['cards'].get(card_id)
+            if not card or card['account_id'] != context.account_id:
+                return result(operation, error='CARD_NOT_ACCESSIBLE')
+            card.update(single_limit_minor=single_limit_minor, daily_limit_minor=daily_limit_minor)
+            return result(operation, {'display_name': card['display_name'], 'currency': 'CNY',
+                'single_limit_minor': single_limit_minor, 'daily_limit_minor': daily_limit_minor})
+        return self._lifecycle_write(context, operation, params, apply)
+
     def _lifecycle_write(self, context, operation, params, apply):
         with self._transaction():
             if operation not in OPERATIONS:
@@ -124,6 +161,11 @@ class LifecycleMixin:
             account = data['accounts'][context.account_id]
             if amount_minor > account['balance_minor']:
                 return result(operation, error='INSUFFICIENT_BALANCE')
+            limits = self._card_limits(card_id, card)
+            if amount_minor > limits['single_limit_minor']:
+                return result(operation, error='CARD_SINGLE_LIMIT_EXCEEDED')
+            if amount_minor + limits['used_today_minor'] > limits['daily_limit_minor']:
+                return result(operation, error='CARD_DAILY_LIMIT_EXCEEDED')
             transaction_id = 'txn-' + uuid4().hex
             account['balance_minor'] -= amount_minor
             data['transactions'].append({'transaction_id': transaction_id, 'account_id': context.account_id,

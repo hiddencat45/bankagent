@@ -44,8 +44,9 @@ def validate_demo_data(data: dict) -> None:
         owners.add(account["user_id"])
     for contact_id, contact in contacts.items():
         _require(_text(contact_id) and isinstance(contact, dict), "invalid contact")
-        _require(set(contact) == {"user_id", "display_name"},
+        _require(set(contact) == {"user_id", "display_name", "recipient_account_id"},
                  "unexpected contact fields")
+        _require(contact['recipient_account_id'] in accounts, 'unknown recipient account')
         _require(contact["user_id"] in owners, "unknown contact owner")
         _require(_text(contact["display_name"]), "contact display name required")
 
