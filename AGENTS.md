@@ -27,7 +27,7 @@
 
 使用 `bankagent.*` 包导入，不再依赖顶层 agent_graph、bank_backend、scenarios 或 api 模块。入口把 src 加入路径，内部不增加 sys.path 补丁或旧名称别名。公共类型仍只依赖标准库。
 
-旧教学源码位于 `src/bankagent/agent/bank_agent_graph.py`，不是新功能入口。PPT 与图示属于设计/教学材料，不是实现证据。最小桌面壳采用 PySide6 原生控件，当前只开放对话查询，frontend 保留作开发工作台；可选依赖见 requirements-desktop.txt。
+旧教学源码位于 `src/bankagent/agent/bank_agent_graph.py`，不是新功能入口。PPT 与图示属于设计/教学材料，不是实现证据。最小桌面壳采用 PySide6 原生控件，当前开放对话查询和模拟转账确认，frontend 保留作开发工作台；可选依赖见 requirements-desktop.txt。
 
 ## 3. 安全边界
 
