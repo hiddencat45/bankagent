@@ -28,10 +28,13 @@ _RETRY_EXECUTION = object()
 
 class Service:
     def __init__(self, *, clock=None, authenticate=None, candidate_model=None,
-                 registry=None, phraser=None, query_model=None):
+                 registry=None, phraser=None, query_model=None, database_path=None):
         # 固定业务参考日，挑战仍随真实经过时间过期。
         started = datetime.now(SG_TZ)
         reference = datetime.combine(REFERENCE_DATE, datetime.min.time(), SG_TZ).replace(hour=12)
+        if database_path is not None and clock is None:
+            from bankagent.banking.storage import SQLiteStore
+            clock = SQLiteStore(database_path, build_demo_data()).business_now
         self.clock = clock or (lambda: reference + (datetime.now(SG_TZ) - started))
         self.candidate_model = candidate_model
         self.registry = registry
@@ -51,7 +54,8 @@ class Service:
         configure_clock(clock=self.clock)
         subscription_clock(clock=self.clock)
         configure_backend(data_factory=build_demo_data, lookup_authorization=self.challenges.lookup,
-                          operation_hash=compute_operation_hash, lock=self.lock, clock=self.clock)
+                          operation_hash=compute_operation_hash, lock=self.lock, clock=self.clock,
+                          database_path=database_path)
 
     def reserve(self):
         if not self.running.acquire(blocking=False):
@@ -188,9 +192,10 @@ class Service:
 
 
 def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=None,
-               registry=None, allow_lan=False, phraser=None, query_model=None):
+               registry=None, allow_lan=False, phraser=None, query_model=None, database_path=None):
     service = Service(clock=clock, authenticate=authenticate,
-                      candidate_model=candidate_model, registry=registry, phraser=phraser, query_model=query_model)
+                      candidate_model=candidate_model, registry=registry, phraser=phraser, query_model=query_model,
+                      database_path=database_path)
     app = FastAPI(title='有度 · 本地银行 Demo')
     app.state.service = service
 
@@ -247,6 +252,8 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
     @app.post('/demo/reset')
     async def reset(request: Request):
         require_demo(request)
+        if database_path is not None:
+            raise ApiError('RESET_DISABLED', '持久化账本不支持演示重置，请保留现有数据。', 409)
         if await request.body() not in (b'', b'{}'):
             raise ApiError('INVALID_REQUEST', '重置入口不接受业务参数。', 400)
         service.sessions.resolve(request.headers.get('authorization'))
@@ -314,4 +321,4 @@ def create_demo_app():
     model = build_model_from_env()
     return create_app(demo=True, candidate_model=model, query_model=model,
                       phraser=ResponsePhraser(phraser_model) if phraser_model is not None else None,
-                      allow_lan=allow_lan)
+                      allow_lan=allow_lan, database_path=os.environ.get('BANKAGENT_DB_PATH') or None)

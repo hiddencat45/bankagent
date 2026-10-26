@@ -15,6 +15,7 @@ from desktop.client import QueryClient, parse_stream, query_result
 
 def offline_env():
     env = {k: v for k, v in os.environ.items() if not k.startswith('BANKAGENT_MODEL_')}
+    env.pop('BANKAGENT_DB_PATH', None)
     env['BANKAGENT_DEMO_ALLOW_LAN'] = '1'  # desktop must override even this
     return env
 
@@ -121,3 +122,32 @@ def test_bad_model_configuration_cleans_up():
         service.start()
     assert service.process is None
     assert service.temp is None
+
+
+def test_persistent_service_restart_keeps_confirmed_transfer(tmp_path):
+    env = offline_env()
+    env['BANKAGENT_DB_PATH'] = str(tmp_path / 'bank.sqlite3')
+    first = LocalService(env=env)
+    try:
+        client = QueryClient(first.start())
+        client.connect()
+        pending = client.query('给张伟转40元')
+        interrupt = next(data for event, data in pending if event == 'interrupt')
+        with client.post('/agent/chat', {'thread_id': interrupt['thread_id'],
+                'resume': {'challenge_id': interrupt['challenge_id'], 'decision': 'approve'}}) as response:
+            frames = parse_stream(response.read())
+        assert frames[-1][1]['status'] == 'COMPLETED'
+        with pytest.raises(HTTPError) as denied:
+            client.post('/demo/reset', {})
+        assert denied.value.code == 409
+    finally:
+        first.close()
+    reopened = LocalService(env=env)
+    try:
+        client = QueryClient(reopened.start())
+        client.connect()
+        frames = client.query('查询余额')
+        receipt = next(data['payload'] for event, data in frames if event == 'card' and data['type'] == 'result')
+        assert receipt['data']['balance_minor'] == 496000
+    finally:
+        reopened.close()
