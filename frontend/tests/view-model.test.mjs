@@ -86,3 +86,13 @@ test('成功转账必须包含真实结果所需字段和有效整数金额', ()
     assert.throws(() => readResult({ ...result, data: { ...result.data, ...fields } }));
   }
 });
+
+
+test('连续筛选条件保留整数分与明确清空值，非法条件不展示', () => {
+  const filters = { category: '餐饮', merchant: null, amount_gt_minor: 10000 };
+  assert.deepEqual(readBills({ ...bills(), filters }).filters, filters);
+  for (const bad of [null, [], { ...filters, amount_gt_minor: true },
+    { ...filters, amount_gt_minor: 1.1 }, { ...filters, category: {} }]) {
+    assert.throws(() => readBills({ ...bills(), filters: bad }));
+  }
+});

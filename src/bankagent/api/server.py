@@ -28,7 +28,7 @@ _RETRY_EXECUTION = object()
 
 class Service:
     def __init__(self, *, clock=None, authenticate=None, candidate_model=None,
-                 registry=None, phraser=None):
+                 registry=None, phraser=None, query_model=None):
         # 固定业务参考日，挑战仍随真实经过时间过期。
         started = datetime.now(SG_TZ)
         reference = datetime.combine(REFERENCE_DATE, datetime.min.time(), SG_TZ).replace(hour=12)
@@ -36,6 +36,7 @@ class Service:
         self.candidate_model = candidate_model
         self.registry = registry
         self.phraser = phraser
+        self.query_model = query_model
         self.authenticate = authenticate or (lambda context, otp: False)
         self.lock = threading.RLock()
         self.running = threading.Lock()
@@ -45,7 +46,7 @@ class Service:
         self.saver = InMemorySaver()
         self.runtime = BankAgentRuntime(challenges=self.challenges, clock=self.clock,
                                         candidate_model=self.candidate_model, registry=registry,
-                                        phraser=phraser)
+                                        phraser=phraser, query_model=query_model)
         self.graph = build_graph(self.runtime, checkpointer=self.saver)
         configure_clock(clock=self.clock)
         subscription_clock(clock=self.clock)
@@ -168,12 +169,12 @@ class Service:
             result = state.get('result')
             if status == 'FAILED':
                 code = result.get('error_code') if result else None
-                code = code if code in {'MODEL_UNAVAILABLE', 'MODEL_OUTPUT_INVALID'} else 'BACKEND_UNAVAILABLE'
+                code = code if code in {'MODEL_UNAVAILABLE', 'MODEL_OUTPUT_INVALID', 'QUERY_LIMIT_REACHED'} else 'BACKEND_UNAVAILABLE'
                 yield frame('error', code=code, message_text=state.get('response') or '业务服务暂时不可用，请稍后重试。')
             else:
                 if state.get('response'):
                     yield frame('message', text=state['response'])
-                if result:
+                for result in state.get("query_results") or ([result] if result else []):
                     if result['operation'] == 'GET_BALANCE' and result['data']:
                         result = {**result, 'data': {k: result['data'][k] for k in ('balance_minor', 'currency')}}
                     if result['operation'] == 'QUERY_BILLS' and status == 'COMPLETED':
@@ -187,9 +188,9 @@ class Service:
 
 
 def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=None,
-               registry=None, allow_lan=False, phraser=None):
+               registry=None, allow_lan=False, phraser=None, query_model=None):
     service = Service(clock=clock, authenticate=authenticate,
-                      candidate_model=candidate_model, registry=registry, phraser=phraser)
+                      candidate_model=candidate_model, registry=registry, phraser=phraser, query_model=query_model)
     app = FastAPI(title='有度 · 本地银行 Demo')
     app.state.service = service
 
@@ -219,7 +220,7 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
             ok = result['status'] == 'COMPLETED'
         except Exception:
             ok = False
-        interpreter = service.runtime.interpreter
+        interpreter = service.runtime.interpreter or service.query_model
         model = 'not_configured' if interpreter is None else ('ok' if interpreter.health() else 'unavailable')
         return {'status': 'ok' if ok and model != 'unavailable' else 'degraded', 'mode': service.runtime.mode,
                 'backend': 'ok' if ok else 'unavailable', 'model': model}
@@ -260,7 +261,7 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
                 service.runtime = BankAgentRuntime(challenges=service.challenges, clock=service.clock,
                                            candidate_model=service.candidate_model,
                                            registry=service.registry,
-                                           phraser=service.phraser)
+                                           phraser=service.phraser, query_model=service.query_model)
                 service.graph = build_graph(service.runtime, checkpointer=service.saver)
             return {'status': 'COMPLETED'}
         finally:
@@ -310,6 +311,7 @@ def create_demo_app():
     # 识别与措辞各用一个实例：两者共用时，改写层一次空响应就会把 /health
     # 标记成模型不可用，而识别其实是好的——这会把人带偏。
     phraser_model = build_model_from_env()
-    return create_app(demo=True, candidate_model=build_model_from_env(),
+    model = build_model_from_env()
+    return create_app(demo=True, candidate_model=model, query_model=model,
                       phraser=ResponsePhraser(phraser_model) if phraser_model is not None else None,
                       allow_lan=allow_lan)

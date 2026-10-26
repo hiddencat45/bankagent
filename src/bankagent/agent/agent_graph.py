@@ -34,6 +34,8 @@ from langgraph.errors import GraphBubbleUp
 from langgraph.types import interrupt
 
 from bankagent.agent.agent_phrasing import ResponsePhraser
+from bankagent.agent.query_loop import QueryAgent, QueryLoopError
+from bankagent.agent.agent_understanding import _history_for_model
 from bankagent.agent.agent_security import ChallengeStore, compute_operation_hash
 from bankagent.agent.agent_understanding import CandidateInterpreter, CandidateModel, UnderstandingError
 from bankagent.banking.bank_types import (
@@ -106,10 +108,11 @@ class BankAgentRuntime:
         clock: Callable[[], datetime] | None = None,
         candidate_model: CandidateModel | None = None,
         phraser: ResponsePhraser | None = None,
+        query_model=None,
     ) -> None:
         self.registry = registry if registry is not None else REGISTRY
         self.interpreter = CandidateInterpreter(candidate_model, self.registry) if candidate_model is not None else None
-        self.mode = "model" if self.interpreter is not None else "offline"
+        self.mode = "model" if self.interpreter is not None or query_model is not None else "offline"
         # 措辞改写与意图识别分开注入：只接了识别模型时，回复仍是模板。
         self.phraser = phraser if phraser is not None else ResponsePhraser(None)
         self.clock = clock if clock is not None else (lambda: datetime.now(SG_TZ))
@@ -117,6 +120,7 @@ class BankAgentRuntime:
         # 澄清续轮的期限元数据，按 (user_id, thread_id) 记，**不进 State**
         # （契约 §1.5：澄清期限保存在服务端待补任务元数据中）。
         self._clarify_tasks: dict[tuple[str, str], dict[str, Any]] = {}
+        self.query_agent = QueryAgent(query_model, self.clock) if query_model is not None else None
 
     # -- 澄清期限 ---------------------------------------------------------
 
@@ -171,6 +175,7 @@ def _cleared() -> dict[str, Any]:
         "challenge_id": "",
         "authorized": False,
         "result": {},
+        "query_results": [],
         "response": "",
     }
 
@@ -299,6 +304,21 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
         message = state["message"]
         thread = _thread_id(config)
         pending = rt.pending_task(state["user_id"], state["account_id"], thread)
+        if rt.query_agent is not None:
+            context = TrustedContext(state["user_id"], state["account_id"], state["request_id"])
+            try:
+                outcome = rt.query_agent.run(context=context, thread=thread, message=message,
+                    history=_history_for_model(state.get("history")), pending=pending)
+            except QueryLoopError as exc:
+                return {**_failed("", exc.code), "response": {
+                    "QUERY_LIMIT_REACHED": "查询达到时间或步骤上限，请缩小范围后重试。",
+                    "MODEL_OUTPUT_INVALID": "模型返回了无法使用的查询，本次没有执行资金操作，请重新描述。",
+                    "MODEL_UNAVAILABLE": "模型暂时不可用，请稍后重试。",
+                }[exc.code]}
+            except Exception:
+                return {**_failed(""), "response": "查询服务暂时不可用，请稍后重试。"}
+            if outcome is not None:
+                return outcome
         hits = registry.match_intents(message)
         if pending and re.search(_WRITE_HESITATION, message):
             rt.forget_clarification(state["user_id"], thread)
@@ -377,7 +397,7 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
 
     def route_intent(state: BankAgentState) -> Literal["clarify", "end", "resolve"]:
         status = state.get("status")
-        if status in {"REJECTED", "FAILED", "NEEDS_CLARIFICATION"}:
+        if status in {"REJECTED", "FAILED", "NEEDS_CLARIFICATION", "COMPLETED"}:
             return "clarify" if status == "NEEDS_CLARIFICATION" else "end"
         return "resolve"
 

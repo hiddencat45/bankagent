@@ -197,3 +197,23 @@ test('重置响应丢失后收到401可清理旧确认，手动重连并查询�
   assert.equal(doc.elements.balance.textContent, '5,000.00');
   assert.equal(doc.elements.send.disabled, false);
 });
+
+test('账单证据卡按后端条件展示类别与严格金额阈值', async () => {
+  const data = { start: '2026-09-19', end: '2026-10-19', currency: 'CNY', total_minor: 12000,
+    by_category: { '餐饮': 12000 }, anomalies: [],
+    filters: { category: '餐饮', merchant: null, amount_gt_minor: 10000 },
+    transactions: [{ transaction_id: 't-food', occurred_at: '2026-10-10T12:00:00+08:00',
+      kind: 'EXPENSE', amount_minor: 12000, category: '餐饮', merchant: '演示餐厅' }] };
+  const { app, doc } = await loadWorkbench(async url => url === '/health' ? health() : stream(
+    frame('status', { step: 'started', status: 'PROCESSING' })
+    + frame('card', { type: 'evidence', payload: { operation: 'QUERY_BILLS', data } })
+    + frame('done', { status: 'COMPLETED' })));
+  app.state.token = randomUUID(); app.state.healthy = true;
+  await app.send({ message: '超过一百的餐饮' });
+  const content = doc.elements.messages.all().map(n => n.textContent).join('\n');
+  assert.match(content, /类别：餐饮/);
+  assert.match(content, /金额严格大于 ¥ 100\.00/);
+  assert.match(content, /¥ 120\.00/);
+  assert.match(content, /查看 1 笔交易明细/);
+  assert.equal(app.state.phase, 'COMPLETED');
+});

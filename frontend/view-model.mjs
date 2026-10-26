@@ -43,6 +43,11 @@ export function readBills(data) {
       || !text(data.start) || !text(data.end) || !object(data.by_category)
       || !Array.isArray(data.transactions) || data.transactions.length > 100
       || !Array.isArray(data.anomalies)) invalid();
+  if (data.filters !== undefined) {
+    if (!object(data.filters)
+        || !['category', 'merchant'].every(key => data.filters[key] === null || text(data.filters[key]))
+        || !(data.filters.amount_gt_minor === null || minor(data.filters.amount_gt_minor))) invalid();
+  }
   const ids = new Set();
   let total = 0n;
   for (const value of Object.values(data.by_category)) {

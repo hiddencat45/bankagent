@@ -160,17 +160,32 @@ class OpenAICompatibleModel:
         self._last_error = "empty"
         return None
 
+    def complete_tools(self, messages: list[dict], tools: list[dict], *,
+                       require_tool: bool = False, timeout: float = 30) -> dict:
+        """Native function calls; results must be returned in tool-role messages."""
+        payload = {
+            "model": self._config.model, "messages": messages, "tools": tools,
+            "tool_choice": "required" if require_tool else "auto",
+            "temperature": 0, "max_tokens": self._config.max_tokens,
+        }
+        if self._config.thinking is not None:
+            payload["thinking"] = {"type": self._config.thinking}
+        return self._attempt(payload, tool_mode=True,
+                             timeout=min(timeout, self._config.timeout))
+
     def close(self) -> None:
         self._client.close()
 
     # -- 内部 -------------------------------------------------------------
 
-    def _attempt(self, payload: dict[str, Any], *, text_mode: bool = False) -> Any:
+    def _attempt(self, payload: dict[str, Any], *, text_mode: bool = False,
+                 tool_mode: bool = False, timeout: float | None = None) -> Any:
         """一次调用。返回候选 / ``None`` / ``_RETRY``；协议级问题抛异常。"""
         try:
             response = self._client.post(
                 self._config.endpoint,
                 json=payload,
+                timeout=timeout if timeout is not None else self._client.timeout,
                 headers={
                     "Authorization": f"Bearer {self._config.api_key}",
                     "Content-Type": "application/json",
@@ -196,8 +211,9 @@ class OpenAICompatibleModel:
         try:
             body = response.json()
             choice = body["choices"][0]
-            content = choice["message"]["content"]
-        except (ValueError, KeyError, IndexError, TypeError):
+            message = choice["message"]
+            content = message.get("content")
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
             self._last_error = "shape"
             raise RuntimeError("MODEL_RESPONSE_INVALID") from None
 
@@ -206,6 +222,14 @@ class OpenAICompatibleModel:
         if choice.get("finish_reason") == "length":
             self._last_error = "truncated"
             raise RuntimeError("MODEL_RESPONSE_TRUNCATED")
+
+        if tool_mode:
+            if not isinstance(message, dict):
+                self._last_error = "shape"
+                raise RuntimeError("MODEL_RESPONSE_INVALID")
+            self._last_error = None
+            return {key: message[key] for key in
+                    ("role", "content", "tool_calls", "reasoning_content") if key in message}
 
         if not isinstance(content, str):
             self._last_error = "content"

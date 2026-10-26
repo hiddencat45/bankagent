@@ -64,6 +64,13 @@ function evidence(data) {
   const box = card('本期账单 · 以交易为依据');
   box.append(node('p', '', `${data.start} 至 ${data.end}（结束日不含）`),
     node('div', 'amount', `¥ ${money(data.total_minor)}`), node('p', '', '消费合计 · 收入与转账不计入消费'));
+  if (data.filters) {
+    const filters = [];
+    if (data.filters.category !== null) filters.push(`类别：${data.filters.category}`);
+    if (data.filters.merchant !== null) filters.push(`商户包含：${data.filters.merchant}`);
+    if (data.filters.amount_gt_minor !== null) filters.push(`金额严格大于 ¥ ${money(data.filters.amount_gt_minor)}`);
+    box.append(node('p', '', filters.length ? filters.join(' · ') : '全部消费类别 · 不限金额'));
+  }
   for (const [name, amount] of Object.entries(data.by_category)) {
     const row = node('div', 'category'); row.append(node('span', '', name), node('strong', '', `¥ ${money(amount)}`)); box.append(row);
   }
