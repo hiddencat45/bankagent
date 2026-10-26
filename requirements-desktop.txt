@@ -1,0 +1,3 @@
+# Native widgets only: no browser engine or .NET runtime.
+PySide6-Essentials==6.8.3
+shiboken6==6.8.3
