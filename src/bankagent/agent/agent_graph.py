@@ -79,7 +79,7 @@ _HISTORY_LIMIT = 10
 _PUBLIC_ERROR_TEXT: dict[str, str] = {
     "MISSING_TRUSTED_CONTEXT": "缺少可信登录身份或请求编号，请重新登录后再试。",
     "INVALID_REQUEST": "请求内容不完整，请重新描述您要办理的业务。",
-    "UNSUPPORTED_INTENT": "抱歉，我暂时只能办理余额查询、转账和账单查询。",
+    "UNSUPPORTED_INTENT": "暂未识别此需求。可办理模拟开户、借记卡、刷卡消费、转账及余额和账单查询。",
     "OPERATION_NOT_ALLOWED": "该操作不在允许范围内，已停止办理。",
     "POLICY_DENIED": "这笔操作不符合当前安全策略，已停止办理。",
     "RISK_EVALUATION_FAILED": "暂时无法完成风险评估，为安全起见未执行，请稍后重试。",
@@ -368,7 +368,7 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
                 return {
                     "status": "REJECTED",
                     "result": _rejected("", "UNSUPPORTED_INTENT"),
-                    "response": "抱歉，我暂时只能办理余额查询、转账和账单查询。",
+                    "response": _PUBLIC_ERROR_TEXT["UNSUPPORTED_INTENT"],
                 }
             scenario_name, intent_name, _ = hits[0]
             candidates = _extract_slots(message, registry.get(scenario_name).intents[intent_name]["slots"])

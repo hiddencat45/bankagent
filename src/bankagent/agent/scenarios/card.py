@@ -110,6 +110,13 @@ def validate(operation: str, params: dict) -> bool:
     return operation in _TARGET_STATUS and isinstance(card_id, str) and bool(card_id)
 
 
+def risk(operation: str, params: dict, context: TrustedContext) -> str:
+    if operation == 'QUERY_CARDS':
+        return 'GREEN'
+    card = next((row for row in _cards(context) if row['card_id'] == params.get('card_id')), None)
+    return 'YELLOW' if card and card['status'] in {'ACTIVE', 'FROZEN'} else 'DENY'
+
+
 def confirmation(*, operation: str, params: dict, candidate_params: dict,
                  context: TrustedContext) -> dict:
     """确认卡展示字段：卡名、当前状态、目标状态。**不含 card_id。**

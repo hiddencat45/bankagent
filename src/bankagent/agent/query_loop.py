@@ -25,7 +25,7 @@ TOOLS = [
         "amount_gt_minor": {"type": ["integer", "null"], "minimum": 0, "maximum": 10**12},
     }, ("inherit",)),
     _tool("get_balance", "查询当前登录账户余额；不能选择他人账户。", {}),
-    _tool("handoff_banking", "转账、卡片、订阅操作或其补充信息，转交原有受控流程。"
+    _tool("handoff_banking", "开户、办理借记卡、激活、刷卡消费、转账、卡片、订阅操作或其补充信息，转交受控确认流程。"
           "这不是执行或授权。复合读写请求请先让用户明确办理顺序。", {}),
     _tool("ask_user", "信息不明确时提问，或说明当前支持范围；不能声称查询或操作成功。", {
         "question": {"type": "string", "maxLength": 500},

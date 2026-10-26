@@ -70,6 +70,15 @@ class BankBackend(LifecycleMixin):
         account = self._data["accounts"].get(context.account_id)
         return bool(account and account["user_id"] == context.user_id)
 
+    def query_accounts(self, *, context: TrustedContext) -> BackendResult:
+        with self._transaction():
+            if not self._owned(context):
+                return _result('QUERY_ACCOUNTS', error='ACCOUNT_NOT_ACCESSIBLE')
+            return _result('QUERY_ACCOUNTS', {'accounts': [
+                {'account_ref': key, 'display_name': row.get('display_name', '默认演示账户'),
+                 'balance_minor': row['balance_minor'], 'currency': row['currency']}
+                for key, row in self._data['accounts'].items() if row['user_id'] == context.user_id]})
+
     def _now(self):
         value = self._clock()
         if not isinstance(value, datetime) or value.utcoffset() is None:
@@ -584,6 +593,10 @@ def query_expenses(*, context: TrustedContext, start: date, end: date,
 
 def open_account(*, context: WriteContext, display_name: str) -> BackendResult:
     return _configured().open_account(context=context, display_name=display_name)
+
+
+def query_accounts(*, context: TrustedContext) -> BackendResult:
+    return _configured().query_accounts(context=context)
 
 
 def issue_debit_card(*, context: WriteContext, display_name: str) -> BackendResult:
