@@ -105,5 +105,5 @@ export function readResult(result) {
 
 function readCard(value) {
   if (!object(value) || !text(value.card_id) || !text(value.display_name)
-      || !['ACTIVE', 'FROZEN'].includes(value.status)) invalid();
+      || !['PENDING_ACTIVATION', 'ACTIVE', 'FROZEN'].includes(value.status)) invalid();
 }

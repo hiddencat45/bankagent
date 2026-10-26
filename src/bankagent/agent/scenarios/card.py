@@ -69,7 +69,7 @@ _VERB: dict[str, tuple[str, str]] = {
     "UNFREEZE_CARD": ("解冻", "已解冻"),
 }
 
-_STATUS_TEXT: dict[str, str] = {"ACTIVE": "正常", "FROZEN": "冻结"}
+_STATUS_TEXT: dict[str, str] = {"PENDING_ACTIVATION": "待激活", "ACTIVE": "正常", "FROZEN": "冻结"}
 
 
 def _cards(context: TrustedContext) -> list[dict[str, Any]]:

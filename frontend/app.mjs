@@ -18,7 +18,7 @@ const phases = { IDLE: '等待请求', PROCESSING: '正在办理', COMPLETED: '�
 const steps = { started: '服务端已接收请求', understood: '已识别业务意图',
   validated: '已校验业务信息', awaiting_confirmation: '已生成确认操作',
   awaiting_authentication: '需要独立认证', executing: '正在执行操作', finished: '本轮处理结束' };
-const cardStatus = { ACTIVE: '可用', FROZEN: '已冻结' };
+const cardStatus = { PENDING_ACTIVATION: '待激活', ACTIVE: '可用', FROZEN: '已冻结' };
 let pendingNode;
 
 function notice(text, warning = false) {
