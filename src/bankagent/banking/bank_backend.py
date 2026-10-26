@@ -117,6 +117,42 @@ class BankBackend:
                     "anomalies": anomalies}
             return _result("QUERY_BILLS", deepcopy(data))
 
+    def query_expenses(self, *, context: TrustedContext, start: date, end: date,
+                       category: str | None = None, merchant: str | None = None,
+                       amount_gt_minor: int | None = None) -> BackendResult:
+        """Filtered expense evidence; integer sums, ownership and limits stay here."""
+        with self.lock:
+            if not self._owned(context):
+                return _result("QUERY_BILLS", error="ACCOUNT_NOT_ACCESSIBLE")
+            if (type(start) is not date or type(end) is not date
+                    or not 0 < (end - start).days <= BILLS_MAX_RANGE_DAYS):
+                return _result("QUERY_BILLS", error="INVALID_DATE_RANGE")
+            if (any(v is not None and (not isinstance(v, str) or not v.strip() or len(v) > 80)
+                    for v in (category, merchant))
+                    or (amount_gt_minor is not None and
+                        (type(amount_gt_minor) is not int or not 0 <= amount_gt_minor <= 10**12))):
+                return _result("QUERY_BILLS", error="INVALID_FILTER")
+            rows = [t for t in self._data["transactions"]
+                    if t["account_id"] == context.account_id and t["kind"] == "EXPENSE"
+                    and start <= datetime.fromisoformat(t["occurred_at"]).date() < end
+                    and (category is None or t["category"] == category)
+                    and (merchant is None or merchant in (t["merchant"] or ""))
+                    and (amount_gt_minor is None or t["amount_minor"] > amount_gt_minor)]
+            if len(rows) > MAX_BILL_TRANSACTIONS:
+                return _result("QUERY_BILLS", error="TOO_MANY_TRANSACTIONS")
+            rows.sort(key=lambda t: (t["occurred_at"], t["transaction_id"]))
+            categories = {}
+            for row in rows:
+                categories[row["category"]] = categories.get(row["category"], 0) + row["amount_minor"]
+            fields = ("transaction_id", "occurred_at", "kind", "amount_minor", "category", "merchant")
+            return _result("QUERY_BILLS", {
+                "start": start.isoformat(), "end": end.isoformat(), "currency": SUPPORTED_CURRENCY,
+                "total_minor": sum(categories.values()), "by_category": categories,
+                "top_category": min(categories, key=lambda c: (-categories[c], c)) if categories else None,
+                "transactions": [{k: row[k] for k in fields} for row in rows], "anomalies": [],
+                "filters": {"category": category, "merchant": merchant, "amount_gt_minor": amount_gt_minor},
+            })
+
     def execute_transfer(self, *, context: WriteContext, contact_id: str,
                          amount_minor: int, currency: str = SUPPORTED_CURRENCY) -> BackendResult:
         with self.lock:
@@ -508,3 +544,11 @@ def pause_subscription(*, context: WriteContext,
     """
     return _configured().pause_subscription(context=context,
                                             subscription_id=subscription_id)
+
+
+def query_expenses(*, context: TrustedContext, start: date, end: date,
+                   category: str | None = None, merchant: str | None = None,
+                   amount_gt_minor: int | None = None) -> BackendResult:
+    """QUERY_BILLS result, expenses only; no anomaly detection or writes."""
+    return _configured().query_expenses(context=context, start=start, end=end,
+        category=category, merchant=merchant, amount_gt_minor=amount_gt_minor)

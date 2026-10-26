@@ -134,6 +134,7 @@ class BankAgentState(TypedDict, total=False):
 
     # ── 输出 ──
     response: str
+    query_results: list[BackendResult]  # 本轮已核实只读结果，供确定性回执使用
 
     # ── 跨轮记忆 ──
     # 唯一不随轮次清空的会话字段：只用来帮模型理解「它」「那张卡」这类指代，
