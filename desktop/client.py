@@ -155,7 +155,7 @@ def transfer_confirmation(frames):
         raise ValueError('missing confirmation binding')
     card, signal = cards[0], signals[0]
     if card.get('operation') != 'TRANSFER':
-        return None  # Other write interfaces are not available in this desktop release.
+        return None  # Other operations are validated by business_confirmation.
     required = ('recipient', 'challenge_id', 'operation_hash', 'expires_at')
     if any(not isinstance(card.get(key), str) or not card[key].strip() for key in required):
         raise ValueError('invalid confirmation')

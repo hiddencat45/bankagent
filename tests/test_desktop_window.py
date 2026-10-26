@@ -18,9 +18,13 @@ def test_reconnect_available_after_initial_failure(monkeypatch):
     assert not window.new.isEnabled()
     window.client.token = 'test-token'
     window.thread = 'old-thread'
+    window.accounts.addItem('旧账户', 'old-account')
+    window.current_account.setText('当前账户：旧账户')
     window.receive('connect', 'offline')
     assert not window.blocked
     assert window.thread is None
+    assert window.accounts.count() == 0
+    assert '旧账户' not in window.current_account.text()
     assert window.submit.isEnabled()
     assert window.mode == '离线规则'
     window.close()

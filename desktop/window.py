@@ -229,6 +229,8 @@ class BankWindow(QMainWindow):
             self.clear_confirmation()
             self.thread = None
             self.blocked = False
+            self.accounts.clear()
+            self.current_account.setText('当前账户：正在读取新会话账户…')
             self.mode = '真实模型' if result == 'model' else '离线规则'
             self.history.appendPlainText('有度：已建立新会话，可以开始查询。')
             self.status.setText('已连接 · ' + self.mode)
