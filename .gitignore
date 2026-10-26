@@ -40,5 +40,10 @@ presentation/*前端工作台预览*.pptx
 .env.*
 !.env.example
 
+# Desktop diagnostics generated locally, never credentials or deliverables.
+.desktop-tmp/
+.desktop-check.log
+debug.log
+
 # ---- 外部工具目录（不随项目走）----
 _mermaid-tools/
