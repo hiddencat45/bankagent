@@ -10,6 +10,7 @@ from copy import deepcopy
 from datetime import date, datetime, timedelta, timezone
 from threading import RLock
 from uuid import uuid4
+from bankagent.banking.lifecycle import LifecycleMixin
 
 from bankagent.banking.bank_types import (
     BILLS_MAX_RANGE_DAYS, MAX_BILL_TRANSACTIONS, SUPPORTED_CURRENCY,
@@ -23,7 +24,7 @@ def _result(operation: str, data=None, error=None) -> BackendResult:
             "data": data, "error_code": error}
 
 
-class BankBackend:
+class BankBackend(LifecycleMixin):
     """单个模拟实例；工厂数据是后端私有副本，所有读写使用共享互斥锁。"""
 
     def __init__(self, *, data_factory, lookup_authorization=None,
@@ -302,6 +303,8 @@ class BankBackend:
             expected_hash = self._hash(base_context, operation, params)
             if not isinstance(expected_hash, str) or not expected_hash or record.get("operation_hash") != expected_hash:
                 return reject("AUTHORIZATION_INVALID")
+            if card["status"] not in {"ACTIVE", "FROZEN"}:
+                return reject("CARD_NOT_ACTIVE")
             target = {"FREEZE_CARD": "FROZEN", "UNFREEZE_CARD": "ACTIVE"}[operation]
             # 先构造状态与回执，最后一次发布；不产生资金流水或修改余额。
             updated = deepcopy(self._data)
@@ -577,3 +580,21 @@ def query_expenses(*, context: TrustedContext, start: date, end: date,
     """QUERY_BILLS result, expenses only; no anomaly detection or writes."""
     return _configured().query_expenses(context=context, start=start, end=end,
         category=category, merchant=merchant, amount_gt_minor=amount_gt_minor)
+
+
+def open_account(*, context: WriteContext, display_name: str) -> BackendResult:
+    return _configured().open_account(context=context, display_name=display_name)
+
+
+def issue_debit_card(*, context: WriteContext, display_name: str) -> BackendResult:
+    return _configured().issue_debit_card(context=context, display_name=display_name)
+
+
+def activate_debit_card(*, context: WriteContext, card_id: str) -> BackendResult:
+    return _configured().activate_debit_card(context=context, card_id=card_id)
+
+
+def pay_by_card(*, context: WriteContext, card_id: str, amount_minor: int,
+                merchant: str, category: str = '其他') -> BackendResult:
+    return _configured().pay_by_card(context=context, card_id=card_id,
+        amount_minor=amount_minor, merchant=merchant, category=category)

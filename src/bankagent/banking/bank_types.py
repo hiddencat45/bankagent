@@ -209,7 +209,7 @@ class WriteContext(TrustedContext):
 # 卡片与订阅的最小数据契约；不代表对应运行能力已经启用
 # ---------------------------------------------------------------------------
 
-CardStatus = Literal["ACTIVE", "FROZEN"]
+CardStatus = Literal["PENDING_ACTIVATION", "ACTIVE", "FROZEN"]
 SubscriptionStatus = Literal["ACTIVE", "PAUSED"]
 
 

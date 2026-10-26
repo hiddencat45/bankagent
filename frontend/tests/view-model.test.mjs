@@ -2,6 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { money, readConfirmation, confirmationReady, readBills, readResult } from '../view-model.mjs';
 
+test('卡片查询接受待激活状态，但不能把解冻当作激活', () => {
+  const card = { card_id: 'new', display_name: '新卡', status: 'PENDING_ACTIVATION' };
+  assert.equal(readResult({ operation: 'QUERY_CARDS', status: 'COMPLETED', error_code: null,
+    data: { cards: [card] } }).data.cards[0].status, 'PENDING_ACTIVATION');
+  assert.throws(() => readResult({ operation: 'UNFREEZE_CARD', status: 'COMPLETED', error_code: null,
+    data: { ...card, status: 'ACTIVE', previous_status: 'PENDING_ACTIVATION', changed: true } }));
+});
+
 const confirmation = () => ({ operation: 'TRANSFER', recipient: '演示收款人', amount_minor: 30000,
   currency: 'CNY', risk_level: 'YELLOW', challenge_id: 'ch-test', operation_hash: 'hash-test',
   expires_at: '2026-10-18T12:05:00+08:00' });
