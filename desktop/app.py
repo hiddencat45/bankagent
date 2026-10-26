@@ -21,8 +21,7 @@ def desktop_environment():
         import winreg
         # Explorer may still carry the environment from before configuration.
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Environment') as key:
-            for suffix in MODEL_SETTINGS:
-                name = 'BANKAGENT_MODEL_' + suffix
+            for name in ['BANKAGENT_MODEL_' + suffix for suffix in MODEL_SETTINGS] + ['BANKAGENT_DB_PATH']:
                 if not env.get(name):
                     try:
                         value, _ = winreg.QueryValueEx(key, name)
@@ -30,6 +29,9 @@ def desktop_environment():
                     except FileNotFoundError:
                         pass
     env['BANKAGENT_DEMO_ALLOW_LAN'] = '0'
+    if not env.get('BANKAGENT_DB_PATH'):
+        base = Path(env.get('LOCALAPPDATA') or (Path.home() / '.local' / 'share'))
+        env['BANKAGENT_DB_PATH'] = str(base / 'BankAgent' / 'bankagent.sqlite3')
     return env
 
 

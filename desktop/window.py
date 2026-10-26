@@ -65,7 +65,7 @@ class BankWindow(QMainWindow):
         self.submit.clicked.connect(lambda: self.send())
         row.addWidget(self.submit)
         layout.addLayout(row)
-        layout.addWidget(QLabel('本地模拟银行 · 未连接真实银行 · 关闭应用后演示数据恢复初始状态'))
+        layout.addWidget(QLabel('本地模拟银行 · 账目保存在本机 · 聊天与待确认操作不跨重启保留'))
         self.setStyleSheet('''QWidget {font-family: "Microsoft YaHei"; font-size: 14px;
             color: #203348; background: #f2f5f8;} QLabel#heading {font-size: 25px; font-weight: bold;}
             QPlainTextEdit,QLineEdit {background:white; border:1px solid #d3dee8; border-radius:8px; padding:12px;}

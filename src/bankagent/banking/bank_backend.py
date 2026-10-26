@@ -1,10 +1,11 @@
-"""内存模拟后端。只接收服务端上下文，不连接真实银行或决定用户授权。
+"""模拟后端，可选 SQLite 持久化。只接收服务端上下文，不连接真实银行或决定用户授权。
 
 启动时由 A 注入已校验数据工厂、授权快照查询、操作哈希函数和共享 RLock。
 API 的授权终态修改/整体验示重置必须持有同一锁；本模块不依赖图或场景。
-未配置时失败关闭。进程重启丢失业务变更与幂等结果。
+未配置服务时失败关闭；未指定 database_path 时仍为隔离的内存实例。
 """
 
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import date, datetime, timedelta, timezone
 from threading import RLock
@@ -26,7 +27,7 @@ class BankBackend:
     """单个模拟实例；工厂数据是后端私有副本，所有读写使用共享互斥锁。"""
 
     def __init__(self, *, data_factory, lookup_authorization=None,
-                 operation_hash=None, lock=None, clock=None):
+                 operation_hash=None, lock=None, clock=None, database_path=None):
         self.lock = lock if lock is not None else RLock()
         self._factory = data_factory
         self._lookup = lookup_authorization or (lambda _: None)
@@ -34,6 +35,30 @@ class BankBackend:
         self._clock = clock or (lambda: datetime.now(timezone(timedelta(hours=8))))
         self._data = deepcopy(data_factory())
         self._completed = {}
+        self._store = None
+        if database_path is not None:
+            from bankagent.banking.storage import SQLiteStore
+            self._store = SQLiteStore(database_path, self._data)
+            with self._store.connection() as db:
+                self._data, self._completed = self._store.load(db)
+
+    @contextmanager
+    def _transaction(self):
+        with self.lock:
+            if self._store is None:
+                yield
+                return
+            before = self._data, self._completed
+            try:
+                with self._store.connection() as db:
+                    self._data, self._completed = self._store.load(db)
+                    loaded = self._data
+                    yield
+                    if self._data is not loaded:
+                        self._store.save(db, self._data, self._completed)
+            except BaseException:
+                self._data, self._completed = before
+                raise
 
     def _owned(self, context):
         if not isinstance(context, TrustedContext):
@@ -56,7 +81,7 @@ class BankBackend:
                    and datetime.fromisoformat(t["occurred_at"]).date() == today)
 
     def get_balance(self, *, context: TrustedContext) -> BackendResult:
-        with self.lock:
+        with self._transaction():
             if not self._owned(context):
                 return _result("GET_BALANCE", error="ACCOUNT_NOT_ACCESSIBLE")
             return _result("GET_BALANCE", {
@@ -67,7 +92,7 @@ class BankBackend:
             })
 
     def find_contacts(self, *, context: TrustedContext, name: str) -> list[dict[str, str]]:
-        with self.lock:
+        with self._transaction():
             if not self._owned(context):
                 raise PermissionError("ACCOUNT_NOT_ACCESSIBLE")
             if not isinstance(name, str) or not name.strip():
@@ -77,7 +102,7 @@ class BankBackend:
                     if row["user_id"] == context.user_id and row["display_name"] == name.strip()]
 
     def query_bills(self, *, context: TrustedContext, start: date, end: date) -> BackendResult:
-        with self.lock:
+        with self._transaction():
             if not self._owned(context):
                 return _result("QUERY_BILLS", error="ACCOUNT_NOT_ACCESSIBLE")
             if (type(start) is not date or type(end) is not date
@@ -121,7 +146,7 @@ class BankBackend:
                        category: str | None = None, merchant: str | None = None,
                        amount_gt_minor: int | None = None) -> BackendResult:
         """Filtered expense evidence; integer sums, ownership and limits stay here."""
-        with self.lock:
+        with self._transaction():
             if not self._owned(context):
                 return _result("QUERY_BILLS", error="ACCOUNT_NOT_ACCESSIBLE")
             if (type(start) is not date or type(end) is not date
@@ -155,7 +180,7 @@ class BankBackend:
 
     def execute_transfer(self, *, context: WriteContext, contact_id: str,
                          amount_minor: int, currency: str = SUPPORTED_CURRENCY) -> BackendResult:
-        with self.lock:
+        with self._transaction():
             def reject(code, **detail):
                 # 带上判断依据，让场景层能说清「为什么不行」而不只是「不行」。
                 # 空 detail 仍给 None，保持既有结果形状。
@@ -217,7 +242,7 @@ class BankBackend:
             updated["transactions"].append({"transaction_id": transaction_id,
                 "account_id": context.account_id, "occurred_at": now.isoformat(),
                 "kind": "TRANSFER_OUT", "amount_minor": amount_minor,
-                "category": "转账", "merchant": None})
+                "category": "转账", "merchant": None, "subscription_id": None})
             result = _result("TRANSFER", {"transaction_id": transaction_id,
                 "recipient": contact["display_name"], "amount_minor": amount_minor,
                 "currency": currency, "remaining_balance_minor": balance})
@@ -226,7 +251,7 @@ class BankBackend:
             return result
 
     def query_cards(self, *, context: TrustedContext) -> BackendResult:
-        with self.lock:
+        with self._transaction():
             if not self._owned(context):
                 return _result("QUERY_CARDS", error="ACCOUNT_NOT_ACCESSIBLE")
             return _result("QUERY_CARDS", {"cards": [
@@ -242,7 +267,7 @@ class BankBackend:
         return self._change_card_status(context, card_id, "UNFREEZE_CARD")
 
     def _change_card_status(self, context, card_id, operation):
-        with self.lock:
+        with self._transaction():
             def reject(code):
                 return _result(operation, error=code)
             if not self._owned(context):
@@ -289,7 +314,7 @@ class BankBackend:
 
     def query_subscriptions(self, *, context: TrustedContext, start: date,
                             end: date) -> BackendResult:
-        with self.lock:
+        with self._transaction():
             if not self._owned(context):
                 return _result("QUERY_SUBSCRIPTIONS", error="ACCOUNT_NOT_ACCESSIBLE")
             if (type(start) is not date or type(end) is not date
@@ -339,7 +364,7 @@ class BankBackend:
 
     def find_subscriptions(self, *, context: TrustedContext,
                            name: str) -> list[SubscriptionRecord]:
-        with self.lock:
+        with self._transaction():
             if not self._owned(context):
                 raise PermissionError("ACCOUNT_NOT_ACCESSIBLE")
             if not isinstance(name, str) or not name.strip():
@@ -357,7 +382,7 @@ class BankBackend:
     def pause_subscription(self, *, context: WriteContext,
                            subscription_id: str) -> BackendResult:
         operation = "PAUSE_SUBSCRIPTION"
-        with self.lock:
+        with self._transaction():
             def reject(code):
                 return _result(operation, error=code)
             if not self._owned(context):
@@ -418,7 +443,7 @@ class BankBackend:
 
     def reset_demo_data(self) -> None:
         """仅恢复内部数据；A 必须在同一锁内另行使会话/授权/Checkpoint 失效。"""
-        with self.lock:
+        with self._transaction():
             replacement = deepcopy(self._factory())
             self._data, self._completed = replacement, {}
 
