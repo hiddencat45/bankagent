@@ -17,7 +17,7 @@ if (-not (Test-Path $py)) {
 
 # ---- 1. 测试 ----
 Write-Host "=== 1/4 测试 ===" -ForegroundColor Cyan
-Push-Location (Join-Path $root 'preparaion')
+Push-Location $root
 & $py -m pytest -q
 if ($LASTEXITCODE -ne 0) { Write-Host "测试未通过" -ForegroundColor Red; $fail++ }
 Pop-Location
@@ -50,7 +50,7 @@ if ($feTests.Count -eq 0) {
 # 教学代码里合法地存在 demo-otp-ok 这类占位符，所以这里只报告、交给人判断，
 # 不自动判失败——一个永远失败的门禁等于没有门禁。
 Write-Host "=== 3/4 敏感字段扫描（人工确认）===" -ForegroundColor Cyan
-$scanPaths = @((Join-Path $root 'preparaion'), (Join-Path $root 'api'), (Join-Path $root 'frontend')) | Where-Object { Test-Path $_ }
+$scanPaths = @((Join-Path $root 'src'), (Join-Path $root 'tests'), (Join-Path $root 'frontend')) | Where-Object { Test-Path $_ }
 $pyFiles = Get-ChildItem -Path $scanPaths -Recurse -Filter *.py -ErrorAction SilentlyContinue
 $hits = $pyFiles | Select-String -Pattern 'demo-otp-ok|password\s*=\s*["'']|secret\s*=\s*["'']|api[_-]?key\s*=\s*["'']' -ErrorAction SilentlyContinue
 if ($hits) {

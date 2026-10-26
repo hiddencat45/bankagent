@@ -30,17 +30,17 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "preparaion"))
+sys.path.insert(0, str(ROOT / "src"))
 
-from agent_understanding import CandidateInterpreter, UnderstandingError  # noqa: E402
-from model_providers import (  # noqa: E402
+from bankagent.agent.agent_understanding import CandidateInterpreter, UnderstandingError  # noqa: E402
+from bankagent.agent.model_providers import (  # noqa: E402
     ENV_API_KEY,
     ENV_BASE_URL,
     ENV_MODEL_NAME,
     ProviderConfigError,
     build_model_from_env,
 )
-from scenarios import REGISTRY  # noqa: E402
+from bankagent.agent.scenarios import REGISTRY  # noqa: E402
 
 CASES = [
     ("明确指令", "给张伟转 300 元"),

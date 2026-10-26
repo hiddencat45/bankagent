@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from fastapi.staticfiles import StaticFiles
-from api.server import create_demo_app
+from bankagent.api.server import create_demo_app
 
 
 def create_app():

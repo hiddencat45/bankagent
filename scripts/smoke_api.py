@@ -15,8 +15,8 @@ def main():
         sock.bind(('127.0.0.1', 0))
         port = sock.getsockname()[1]
     process = subprocess.Popen([
-        sys.executable, '-m', 'uvicorn', 'api.server:create_demo_app', '--factory',
-        '--app-dir', 'preparaion', '--host', '127.0.0.1', '--port', str(port),
+        sys.executable, '-m', 'uvicorn', 'bankagent.api.server:create_demo_app', '--factory',
+        '--app-dir', 'src', '--host', '127.0.0.1', '--port', str(port),
         '--no-access-log', '--log-level', 'error',
     ], cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:

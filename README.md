@@ -8,7 +8,9 @@
 
 ## 一、当前进度：先读这一段
 
-当前是使用固定数据和内存账本的本地比赛 Demo，未连接真实银行。新业务入口为 `preparaion/agent_graph.py` 和根目录 `api/server.py`；`bank_agent_graph.py` 保留作教学参考。
+2026-10-26 已迁移目录，未新增桌面封装、数据库或理财推荐能力。下面旧功能说明及历史验收日期不因迁移自动更新；当前开发入口仍为本地 HTTP 工作台，桌面应用是后续交付目标。
+
+当前是使用固定数据和内存账本的本地比赛 Demo，未连接真实银行。新业务入口为 `src/bankagent/agent/agent_graph.py` 和 `src/bankagent/api/server.py`；`bank_agent_graph.py` 保留作教学参考。
 
 以下按 2026-10-22 核对的 main 与待合并 PR 区分；PR 合并时同步此表，避免把分支能力当成主线能力。
 
@@ -23,12 +25,12 @@
 | 卡片管理 | 已实现并合入 `main`：后端 PR #29、场景 PR #31；支持查询、冻结、解冻 |
 | 订阅与代扣 | 已实现并合入 `main`：后端 PR #39、场景 PR #40；支持查询协议（含暂停项与本期扣款）、暂停代扣 |
 | 理财操作、跨场景联动 | **设计目标，尚未实现** |
-| `api/` | 已实现本地 HTTP/SSE：会话、查询、确认恢复、重置 |
+| `src/bankagent/api/` | 已实现本地 HTTP/SSE：会话、查询、确认恢复、重置 |
 | 工作台页面 | 已实现并合入 `main`（PR #16）；启动与浏览器验收见 [前端说明](frontend/README.md) |
 | 多轮槽位补全 | 已实现并合入 `main`（PR #18）：补金额、改收款人、同意图话题切换；服务端待补任务 30 分钟后失效 |
 | 模型候选边界 | 已实现并合入 `main`（PR #28，接续 #19）：可替换候选接口、严格校验、模式贯穿；**未配置真实供应商**，默认仍为 offline |
 | 失败写操作原确认恢复 | 已修复并合入 `main`（PR #20）；确认后失败可用同一挑战安全重试，不重复落账 |
-| 真实模型接入 | 已接入 DeepSeek（`preparaion/model_providers.py`）：默认 `deepseek-flash`、关闭思考模式；**已用真实调用验收**（含提示词注入），默认仍 offline |
+| 真实模型接入 | 已接入 DeepSeek（`src/bankagent/agent/model_providers.py`）：默认 `deepseek-flash`、关闭思考模式；**已用真实调用验收**（含提示词注入），默认仍 offline |
 
 ### 新主图做到了什么
 
@@ -39,7 +41,7 @@
 
 main 已接 FastAPI 与 SSE，支持通过 HTTP 办理余额查询、账单查询、卡片管理、订阅代扣和转账确认/拒绝，并支持多轮补充金额与修改收款人。模型候选边界已接 DeepSeek 真实供应商；六场景已完成四个（转账、账单、卡片、订阅），理财与跨场景联动尚未实现。
 
-`preparaion/有度-银行AI智能体全流程规划.pptx`（34 页）描述的是**设计目标**，具体能力按上表、代码和实际运行结果判断。
+`presentation/有度-银行AI智能体全流程规划.pptx`（34 页）描述的是**设计目标**，具体能力按上表、代码和实际运行结果判断。
 **PPT 里写了 ≠ 代码里有。** 讨论、评审、写文档都不要把两者混为一谈。
 
 ---
@@ -53,9 +55,9 @@ main 已接 FastAPI 与 SSE，支持通过 HTTP 办理余额查询、账单查�
 3. **人工把关** —— 写操作先出确认卡，高风险触发强认证，参数改动需重新确认
 4. **全程可回溯** —— 图状态可暂停可恢复，结果只采信后端事实
 
-覆盖六个目标场景：智能转账、账单分析、理财操作、卡片管理、订阅与代扣、跨场景联动。
+下一阶段目标为本地桌面应用，包含开户及借记卡完整链路、账单、转账、卡片与消费、复杂任务和理财产品推荐；推荐不含购买或赎回。已有订阅功能保留，但本轮不继续扩展。目录迁移本身不代表这些目标已实现。
 
-用户确认比赛对标 [Revolut AIR](https://www.revolut.com/air-ai-by-revolut/)。近期优先补真实模型，再并行推进订阅与卡片的可操作体验；六场景目标保留，具体分工、依赖及见面验收节点集中在 [协作计划 #22](https://github.com/hiddencat45/bankagent/issues/22)。
+产品讨论曾参考 Revolut AIR；旧协作计划 #22 保留为历史记录。最新实施方案见 [PR #48](https://github.com/hiddencat45/bankagent/pull/48)，具体当前能力仍以代码和验证为准。
 
 ---
 
@@ -85,7 +87,7 @@ Windows + **Python 3.10**（本机验证 3.10.9）+ PowerShell。
 .\scripts\check.ps1     # 门禁：pytest + 敏感字段扫描 + pip check
 ```
 
-门禁运行当前分支的全量测试，实际数量随功能变化；各 PR 记录对应版本的检查结果。pytest 缓存目录可能报告权限警告，不影响测试结果。页面变更还需运行 `node --test frontend/tests/*.test.mjs`；门禁脚本不包含 Node 测试。
+门禁运行当前分支的全量测试，实际数量随功能变化；各 PR 记录对应版本的检查结果。pytest 缓存目录可能报告权限警告，不影响测试结果。页面变更还需运行 `node --test frontend/tests/*.test.mjs`；门禁脚本已包含 Node 测试。
 
 敏感字段扫描会列出教学占位符 `demo-otp-ok`（旧教学图、测试及说明文字），属于已知教学内容，不判失败；新链路不使用固定口令。
 
@@ -98,9 +100,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check.ps1
 ### 单独跑测试与教学 Demo
 
 ```powershell
-cd preparaion
-..\.venv\Scripts\python.exe -m pytest -q test_bank_agent_graph.py # 原教学 11 条
-..\.venv\Scripts\python.exe -X utf8 bank_agent_graph.py
+# 在仓库根目录执行
+.\.venv\Scripts\python.exe -m pytest -q tests/test_bank_agent_graph.py # 原教学 11 条
+.\.venv\Scripts\python.exe -X utf8 src/bankagent/agent/bank_agent_graph.py
 ```
 
 Demo 实际输出：
@@ -112,9 +114,11 @@ Demo 实际输出：
 ### 新主图（PR #11–#13 已合并）
 
 ```powershell
-cd preparaion
-..\.venv\Scripts\python.exe -m pytest -q tests/test_agent_graph.py
+# 在仓库根目录执行
+.\.venv\Scripts\python.exe -m pytest -q tests/test_agent_graph.py
 ```
+
+下面的 Python 装配示例在仓库根目录设置 `$env:PYTHONPATH = "src"` 后运行；API 启动脚本与 pytest 已配置源码路径。
 
 服务端内部装配示例：客户端只提供消息；user_id/account_id 来自服务端登录会话，request_id 由服务端生成。以下虚构身份仅用于本地 Python 演示：
 
@@ -123,11 +127,11 @@ import threading
 from datetime import datetime
 from langgraph.types import Command
 
-from agent_graph import BankAgentRuntime, build_graph
-from agent_security import SG_TZ, ChallengeStore, compute_operation_hash
-from bank_backend import configure_backend
-from data.generator import build_demo_data
-from scenarios.bills import configure_clock
+from bankagent.agent.agent_graph import BankAgentRuntime, build_graph
+from bankagent.agent.agent_security import SG_TZ, ChallengeStore, compute_operation_hash
+from bankagent.banking.bank_backend import configure_backend
+from bankagent.banking.data.generator import build_demo_data
+from bankagent.agent.scenarios.bills import configure_clock
 
 lock = threading.RLock()
 clock = lambda: datetime(2026, 10, 18, 10, 0, tzinfo=SG_TZ)   # 与演示数据参考日对齐
@@ -169,7 +173,7 @@ print(final["status"], final["response"])
 .\.venv\Scripts\python.exe scripts/smoke_api.py  # 独立端口自动验证并关闭服务
 ```
 
-也可直接执行 `.\.venv\Scripts\python.exe -m uvicorn api.server:create_demo_app --factory --app-dir preparaion --host 127.0.0.1 --port 8000 --workers 1 --no-access-log`。依赖已锁定在 requirements.txt；首次运行先按前文搭环境。流式响应使用 [FastAPI StreamingResponse](https://fastapi.tiangolo.com/advanced/custom-response/#streamingresponse)。
+也可直接执行 `.\.venv\Scripts\python.exe -m uvicorn bankagent.api.server:create_demo_app --factory --app-dir src --host 127.0.0.1 --port 8000 --workers 1 --no-access-log`。依赖已锁定在 requirements.txt；首次运行先按前文搭环境。流式响应使用 [FastAPI StreamingResponse](https://fastapi.tiangolo.com/advanced/custom-response/#streamingresponse)。
 
 前端接入顺序（同源部署，不硬编码用户或令牌）：
 
@@ -311,7 +315,7 @@ $env:BANKAGENT_MODEL_API_KEY = "<你的 key>"
 
 ### 独立模拟后端（已接新主图与本地 API）
 
-在 `preparaion/` 下运行 `..\.venv\Scripts\python.exe -m pytest -q tests/test_bank_backend.py` 可验证隔离后端。测试使用独立小样例和服务端授权替身，不要求先运行 API，也不代表真实认证已接入。
+在仓库根目录运行 `.\.venv\Scripts\python.exe -m pytest -q tests/test_bank_backend.py` 可验证隔离后端。测试使用独立小样例和服务端授权替身，不要求先运行 API，也不代表真实认证已接入。
 
 服务端启动时调用 `bank_backend.configure_backend(...)` 一次，注入已校验的 `data_factory`、`lookup_authorization(ref)`、`operation_hash(context, operation, params)`、共享 `threading.RLock` 以及可选 `clock()`。固定日期演示应让 clock 与数据参考日一致；不注入时使用真实当前时间。返回的 `BankBackend` 实例和模块级 get_balance/find_contacts/query_bills/execute_transfer/reset_demo_data 入口操作同一份内存数据。图与 API 不得从客户端构造这些依赖；未配置时入口报错，无授权查询或哈希函数时转账拒绝。
 
@@ -323,27 +327,27 @@ $env:BANKAGENT_MODEL_API_KEY = "<你的 key>"
 
 ### 固定数据（供模拟后端加载）
 
-在 `preparaion/` 下可执行：
+在仓库根目录可执行：
 
 ```powershell
-..\.venv\Scripts\python.exe -m pytest -q tests/test_demo_data.py
+.\.venv\Scripts\python.exe -m pytest -q tests/test_demo_data.py
 ```
 
-Python 内部调用 `from data.generator import build_demo_data`，再调用 `build_demo_data()` 得到新的独立数据集，生成时先运行一致性校验。也可从 `data.validate` 导入 `validate_demo_data` 校验修改后的数据；非法金额、外键、时间或账本余额会抛 `ValueError`。
+Python 内部调用 `from bankagent.banking.data.generator import build_demo_data`，再调用 `build_demo_data()` 得到新的独立数据集，生成时先运行一致性校验。也可从 `bankagent.banking.data.validate` 导入 `validate_demo_data` 校验修改后的数据；非法金额、外键、时间或账本余额会抛 `ValueError`。
 
 固定参考日是 2026-10-18，金额为整数分；account-001 余额 500000 分、消费合计 100000 分，account-002 是独立用户的数据。重复扣款真值不写入业务行。此模块不写文件、不扣款、不访问真实银行，也不提供 API 重置；后续后端可重新构建数据集，运行时全量重置仍须按接口契约同步使旧会话和授权失效。内部数据含账户归属，不能直接返回给模型或页面。
 
 ### 账单适配层（已由注册器发现并接入新主图）
 
-`scenarios/bills.py` 提供已约定的 SCENARIO、INTENTS、resolve、validate、execute、render。支持本月、上月、近 N 天（1–366），缺省本月；非法期间不退回默认值。服务端可用 `configure_clock(clock=...)` 注入与后端一致的带时区时钟，固定演示时必须对齐参考日期；不改变 TrustedContext 或 State。
+`src/bankagent/agent/scenarios/bills.py` 提供已约定的 SCENARIO、INTENTS、resolve、validate、execute、render。支持本月、上月、近 N 天（1–366），缺省本月；非法期间不退回默认值。服务端可用 `configure_clock(clock=...)` 注入与后端一致的带时区时钟，固定演示时必须对齐参考日期；不改变 TrustedContext 或 State。
 
-`scenarios/__init__.py` 通过 `pkgutil` 自动发现 `scenarios/` 下的场景模块并校验其声明，**B 新增场景不需要改注册器**。B 的文件没有做任何修改。
+`src/bankagent/agent/scenarios/__init__.py` 通过 `pkgutil` 自动发现 `src/bankagent/agent/scenarios/` 下的场景模块并校验其声明，**B 新增场景不需要改注册器**。B 的文件没有做任何修改。
 
-在 `preparaion/` 执行 `..\.venv\Scripts\python.exe -m pytest -q tests/test_bills_scenario.py` 可验证日期边界、实际后端调用、跨用户拒绝和证据回复。端到端路径（识别 → 解析 → GREEN 策略 → 执行 → 渲染）由 `tests/test_agent_graph.py` 覆盖；页面交付状态见首节。
+在仓库根目录执行 `.\.venv\Scripts\python.exe -m pytest -q tests/test_bills_scenario.py` 可验证日期边界、实际后端调用、跨用户拒绝和证据回复。端到端路径（识别 → 解析 → GREEN 策略 → 执行 → 渲染）由 `tests/test_agent_graph.py` 覆盖；页面交付状态见首节。
 
 ### 订阅代扣场景（已由注册器发现并接入新主图）
 
-`scenarios/subscription.py` 支持两个意图：查询协议（`QUERY_SUBSCRIPTIONS`，GREEN，期间规则与账单一致，缺省本月）和暂停代扣（`PAUSE_SUBSCRIPTION`，YELLOW，需确认）。协议含生效中与已暂停两种状态，暂停项仍会列出并显示本期扣款。
+`src/bankagent/agent/scenarios/subscription.py` 支持两个意图：查询协议（`QUERY_SUBSCRIPTIONS`，GREEN，期间规则与账单一致，缺省本月）和暂停代扣（`PAUSE_SUBSCRIPTION`，YELLOW，需确认）。协议含生效中与已暂停两种状态，暂停项仍会列出并显示本期扣款。
 
 **流水归属靠显式外键** `subscription_id`，不按同名商户推断——这条是契约要求，也是账单里那组「疑似重复扣款」能直接对应到某条协议的原因：`txn-005`/`txn-006` 都挂在 `sub-001` 上。
 
@@ -362,41 +366,28 @@ Python 内部调用 `from data.generator import build_demo_data`，再调用 `bu
 
 ## 五、目录结构
 
-当前真实存在（`preparaion` 是 `preparation` 的拼写错误，本轮保留，不要擅自改名）：
+当前目录如下。迁移映射、导入和素材说明见 [目录迁移说明](docs/目录迁移说明.md)。
 
 ```text
 bankagent/
-├─ AGENTS.md                      # 全局安全边界、Git 约定、目录所有权、完成标准
-├─ README.md                      # 本文件
-├─ requirements.txt               # 依赖，完全锁定
-├─ api/                           # 已实现：本地 HTTP/SSE、会话与恢复
-├─ scripts/
-│   ├─ setup.ps1                  # 一键搭环境
-│   └─ check.ps1                  # 一键门禁
+├─ src/bankagent/
+│  ├─ agent/                    # 主图、模型适配、上下文、安全与场景工具
+│  │  ├─ scenarios/             # 余额、转账、账单、卡片、已有订阅场景
+│  │  └─ bank_agent_graph.py    # 保留的旧教学示例，不作为新功能入口
+│  ├─ banking/                  # 模拟后端与公共类型
+│  │  └─ data/                  # 演示数据生成与校验
+│  └─ api/                      # HTTP/SSE、会话与确认恢复
+├─ frontend/                    # 现有工作台界面与开发入口
+│  └─ tests/                    # Node 前端测试，仍与前端放在一起
+├─ tests/                       # Python 回归测试，含教学示例
+├─ presentation/                # PPT 生成源、成品与素材
+│  └─ assets/                   # 流程图源与导出物
 ├─ docs/
-│   ├─ 协作方案.md                 # 阶段 0–4、接口确认流程、任务卡模板、合并与检查
-│   ├─ 场景扩展与分工.md           # 场景模块契约、操作声明、统一结果结构
-│   └─ 阶段0-接口草案.md           # 历史接口设计（已有接口以代码为准）
-└─ preparaion/
-    ├─ bank_agent_graph.py        # 旧教学源码：State + 全部节点 + 图组装（契约 §3.2 暂不改）
-    ├─ agent_graph.py             # A：新主图，串联注册器、安全层与后端（PR #13）
-    ├─ agent_security.py          # A：操作哈希、挑战与授权表（PR #12）
-    ├─ bank_types.py              # 已确认的公共类型和常量
-    ├─ bank_backend.py            # B：内存查询与受控转账，不依赖图
-    ├─ scenarios/
-    │   ├─ __init__.py            # A：场景注册器，自动发现并校验场景声明（PR #11）
-    │   ├─ transfer.py            # A：转账场景（PR #11）
-    │   └─ bills.py               # B：账单场景适配
-    ├─ test_bank_agent_graph.py   # 旧教学图的 11 条流程与安全测试
-    ├─ data/                      # B：固定样例生成与账本一致性校验
-    ├─ tests/                     # 类型、固定数据、后端、注册器、安全层、主图测试
-    ├─ build_bank_agent_deck.js   # PPT 生成脚本（PPT 的真正源头）
-    ├─ build_frontend_mockup.js   # 前端效果图生成脚本
-    ├─ assets/                    # 全流程图的 Mermaid 源与 SVG/PNG 导出
-    └─ 有度-银行AI智能体全流程规划.pptx  # 交付物成品（由脚本生成）
+├─ scripts/
+├─ pytest.ini                   # 从根目录发现 tests，导入路径为 . 和 src
+├─ requirements.txt
+└─ README.md
 ```
-
-根目录 `api/server.py` 与启动/真实 HTTP 冒烟脚本已合并；`frontend/` 工作台交付状态见首节。尚未实现：理财、订阅与代扣、跨场景联动三个场景。
 
 ---
 
@@ -418,24 +409,6 @@ bankagent/
 
 ## 七、协作方式
 
-双人开发，规则以仓库内文档为准，**不要凭记忆推断**：
+由用户统一推进，不再按 A/B 领地划分开发。当前执行规则见 [AGENTS.md](AGENTS.md)，流程见 [协作方案](docs/协作方案.md)，场景约束见 [场景扩展与分工](docs/场景扩展与分工.md)。旧规划仅供理解历史，不恢复已经延后的功能。
 
-| 文件 | 管什么 |
-|---|---|
-| `AGENTS.md` | 全局安全边界、Git 约定、目录所有权、完成标准 |
-| `docs/协作方案.md` | 阶段 0–4、接口确认流程、任务卡模板、合并与检查 |
-| `docs/场景扩展与分工.md` | 场景模块契约（4 必需 + 4 可选钩子）、操作声明、统一结果结构 |
-| `docs/阶段0-接口草案.md` | 历史设计记录；实际接口以代码和测试为准 |
-
-| | 人 | 工具 | 领地 |
-|---|---|---|---|
-| A | （本仓库主） | DSH | 公共图与调度、安全、转账与卡片场景、`api/`、模型适配与多轮补全、README、PPT 与答辩 |
-| B | Zason42 | Codex | 模拟后端与数据、账单/订阅/理财场景、`frontend/` |
-
-- 分支命名：`feat/`、`fix/`、`docs/`、`refactor/`、`contract/`；**一个任务 = 一个分支 = 一个 PR**，diff 尽量 < 400 行。
-- commit 格式：`<类型>(<范围>): <中文简述>`。
-- **不许直接推 `main`**；合并前 `pytest` 全绿 + 对方确认，**并核对 PR 头 SHA 与已审查的那个一致**。
-- 修改公共 State、后端公开签名、操作声明或结果结构属**契约变更**，必须走 `contract/<简述>` 分支并由双方确认。
-- 改别人领地的文件前先说一句；任务已明确授权跨目录修改则无需重复询问。
-
-做完一个任务的标准见 `AGENTS.md` 第八节：`.\scripts\check.ps1` 全绿、新增行为有**会真正失败**的测试、没越界、没声称实现了不存在的能力。
+一个任务一个分支一个 PR；不直接提交或推送 main。目录迁移不与新功能混合；公共接口、数据语义或业务行为的变化另行说明并审查。合并前检查通过并取得用户确认，核对审查与合并的提交一致。

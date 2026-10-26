@@ -1,6 +1,6 @@
 # 有度 · 本地工作台
 
-复用根目录 API 的真实模拟账本、服务端会话和授权。默认离线规则模式，
+复用 src/bankagent/api 中 API 的真实模拟账本、服务端会话和授权。默认离线规则模式，
 未连接真实银行或大模型；理财、卡片、订阅、跨场景联动尚未开放。
 页面接受服务端声明的 offline/model 模式；实际模型由后端配置。多轮补全需配合后端 PR #18，
 模型适配边界需配合 PR #19；只运行本前端分支不会自动获得这些后端能力。
@@ -10,7 +10,7 @@
 在仓库根目录，先按根 README 用现有 `.venv` 安装锁定依赖，然后执行：
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn frontend.dev_app:create_app --factory --app-dir preparaion --host 127.0.0.1 --port 8021 --workers 1 --no-access-log
+.\.venv\Scripts\python.exe -m uvicorn frontend.dev_app:create_app --factory --app-dir src --host 127.0.0.1 --port 8021 --workers 1 --no-access-log
 ```
 
 打开 <http://127.0.0.1:8021/>，点击「开始演示」。页面与 API 同源，不需要另开前端服务器。
