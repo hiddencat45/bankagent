@@ -2,8 +2,8 @@
 import threading
 from PySide6.QtCore import QObject, Signal, QTimer, Qt
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QPlainTextEdit, QLineEdit, QGroupBox)
-from desktop.client import QueryClient, query_result, transfer_confirmation, money
+    QLabel, QPushButton, QPlainTextEdit, QLineEdit, QGroupBox, QComboBox, QInputDialog)
+from desktop.client import QueryClient, query_result, business_confirmation, money
 
 
 class Delivery(QObject):
@@ -36,7 +36,29 @@ class BankWindow(QMainWindow):
         layout.addWidget(heading)
         self.status = QLabel('正在连接本地模拟银行…')
         layout.addWidget(self.status)
-        layout.addWidget(QLabel('支持余额、消费查询和模拟转账；高风险转账仅可取消，理财推荐尚未开放。'))
+        layout.addWidget(QLabel('模拟开户、借记卡、消费与转账 · 所有写操作先确认 · 理财推荐尚未开放'))
+        accounts = QHBoxLayout()
+        self.current_account = QLabel('当前账户：正在读取…')
+        self.current_account.setTextFormat(Qt.TextFormat.PlainText)
+        layout.addWidget(self.current_account)
+        self.accounts = QComboBox()
+        self.accounts.setAccessibleName('选择待切换账户')
+        self.refresh_accounts = QPushButton('刷新账户')
+        self.switch_account = QPushButton('切换账户')
+        self.refresh_accounts.clicked.connect(self.load_accounts)
+        self.switch_account.clicked.connect(self.select_account)
+        accounts.addWidget(self.accounts, 1)
+        accounts.addWidget(self.refresh_accounts)
+        accounts.addWidget(self.switch_account)
+        layout.addLayout(accounts)
+        business = QHBoxLayout()
+        self.business_buttons = []
+        for label in ('开户', '办理借记卡', '激活', '刷卡消费', '冻结', '解冻'):
+            button = QPushButton(label)
+            button.clicked.connect(lambda checked=False, action=label: self.business_form(action))
+            business.addWidget(button)
+            self.business_buttons.append(button)
+        layout.addLayout(business)
         quick = QHBoxLayout()
         self.buttons = []
         for label, message in [('查询余额', '查询余额'), ('消费去向', '最近钱花在哪里了'),
@@ -57,15 +79,15 @@ class BankWindow(QMainWindow):
         self.history.setAccessibleName('业务对话')
         self.history.setPlaceholderText('从一笔有依据的查询开始。')
         layout.addWidget(self.history, 1)
-        self.confirmation = QGroupBox('请核对本次模拟转账')
+        self.confirmation = QGroupBox('请核对本次模拟业务')
         confirm_layout = QVBoxLayout(self.confirmation)
         self.confirm_text = QLabel()
         self.confirm_text.setTextFormat(Qt.TextFormat.PlainText)
         self.confirm_text.setWordWrap(True)
         confirm_layout.addWidget(self.confirm_text)
         actions = QHBoxLayout()
-        self.approve = QPushButton('确认转账')
-        self.reject = QPushButton('取消转账')
+        self.approve = QPushButton('确认办理')
+        self.reject = QPushButton('取消办理')
         self.retry = QPushButton('重试原决定 / 核对结果')
         self.approve.clicked.connect(lambda: self.decide('approve'))
         self.reject.clicked.connect(lambda: self.decide('reject'))
@@ -98,6 +120,8 @@ class BankWindow(QMainWindow):
         enabled = bool(self.client.token) and not self.busy and not self.blocked
         for item in self.buttons + [self.input, self.submit]:
             item.setEnabled(enabled)
+        for item in self.business_buttons + [self.accounts, self.refresh_accounts, self.switch_account]:
+            item.setEnabled(enabled and self.pending is None and not self.uncertain)
         self.new.setEnabled(bool(self.client.token) and not self.busy and not self.uncertain)
         self.reconnect.setEnabled(not self.busy and not self.uncertain)
         self.confirmation.setVisible(self.pending is not None)
@@ -120,7 +144,7 @@ class BankWindow(QMainWindow):
             except Exception:
                 kind_result = 'decision_error' if kind == 'decision' else 'error'
                 result = ('会话建立失败，请点击「重新连接」重试。' if kind == 'connect' else
-                          '提交后的结果尚未确认。请重试原决定核对结果，勿另建同一笔转账。' if kind == 'decision' else
+                          '提交后的结果尚未确认。请重试原决定核对结果，勿另建同一笔业务。' if kind == 'decision' else
                           '连接或响应异常，结果尚未确认。请新建对话或重新连接后重试；不会自动重发。')
             else:
                 kind_result = kind
@@ -130,6 +154,47 @@ class BankWindow(QMainWindow):
                 except RuntimeError:
                     pass  # Window was destroyed during delivery.
         threading.Thread(target=work, daemon=True).start()
+
+    def load_accounts(self):
+        if self.client.token and not self.busy and self.pending is None and not self.uncertain:
+            self.run('accounts', self.client.accounts)
+
+    def select_account(self):
+        reference = self.accounts.currentData()
+        if reference and not self.busy and self.pending is None and not self.uncertain:
+            self.run('connect', lambda: self.client.switch_account(reference))
+
+    def business_form(self, action):
+        if self.busy or self.blocked or self.pending is not None:
+            return
+        name, ok = QInputDialog.getText(self, action, '账户名称：' if action == '开户' else '卡片名称：')
+        if not ok:
+            return
+        name = name.strip()
+        if not name or len(name) > 80 or any(c in name for c in '「」\n\r'):
+            self.status.setText('请输入 1–80 字的名称，不含换行或「」符号。')
+            return
+        if action == '刷卡消费':
+            merchant, ok = QInputDialog.getText(self, action, '演示商户名称：')
+            if not ok:
+                return
+            if not merchant.strip() or len(merchant) > 80 or any(c in merchant for c in '「」\n\r'):
+                self.status.setText('商户名称不合法。')
+                return
+            amount, ok = QInputDialog.getText(self, action, '金额（元，最多两位小数）：')
+            if not ok:
+                return
+            import re
+            if not re.fullmatch(r'[0-9]+(?:\.[0-9]{1,2})?', amount) or not any(c in '123456789' for c in amount):
+                self.status.setText('请输入大于零、最多两位小数的金额。')
+                return
+            category, ok = QInputDialog.getItem(self, action, '分类：', ['餐饮', '交通', '购物', '居住', '其他'], 4, False)
+            if not ok:
+                return
+            message = f'使用「{name}」在商户「{merchant.strip()}」刷卡支付{amount}元，分类「{category}」'
+        else:
+            message = f'{action}「{name}」' if action not in {'冻结', '解冻'} else action + name
+        self.send(message)
 
     def send(self, text=None):
         text = (text if text is not None else self.input.text()).strip()
@@ -164,9 +229,20 @@ class BankWindow(QMainWindow):
             self.clear_confirmation()
             self.thread = None
             self.blocked = False
+            self.accounts.clear()
+            self.current_account.setText('当前账户：正在读取新会话账户…')
             self.mode = '真实模型' if result == 'model' else '离线规则'
             self.history.appendPlainText('有度：已建立新会话，可以开始查询。')
             self.status.setText('已连接 · ' + self.mode)
+            QTimer.singleShot(0, self.load_accounts)
+        elif kind == 'accounts':
+            self.accounts.clear()
+            for row in result['accounts']:
+                label = f"{row['display_name']} · {row['account_ref'][-6:]} · ¥ {money(row['balance_minor'])}"
+                self.accounts.addItem(label, row['account_ref'])
+                if row['account_ref'] == result['current_account_ref']:
+                    self.current_account.setText('当前账户：' + label)
+            self.accounts.setCurrentIndex(self.accounts.findData(result['current_account_ref']))
         elif kind in {'error', 'decision_error'}:
             self.history.appendPlainText('有度：' + result)
             self.status.setText('请求失败')
@@ -177,7 +253,7 @@ class BankWindow(QMainWindow):
                 # Validate/format the whole result before displaying any success text.
                 details = [query_result(data['payload']) for event, data in result
                            if event == 'card' and data.get('type') == 'result']
-                pending = transfer_confirmation(result)
+                pending = business_confirmation(result)
                 self.thread = result[0][1]['thread_id']
                 for event, data in result:
                     if event == 'message':
@@ -192,8 +268,8 @@ class BankWindow(QMainWindow):
                 if pending is not None:
                     self.pending, self.decision = pending, None
                     extra = ('\n该操作需要独立认证，当前仅支持取消。' if pending['risk_level'] == 'RED' else
-                             '\n确认后才会执行；如需改金额或收款人，请先取消，再重新提出请求。')
-                    self.confirm_text.setText(f"收款人：{pending['recipient']}\n金额：¥ {money(pending['amount_minor'])}" + extra)
+                             '\n确认后才会执行；如需修改，请先取消，再重新提出请求。')
+                    self.confirm_text.setText(pending['summary'] + extra)
                 elif kind != 'decision' or final not in {'FAILED', 'PENDING'}:
                     self.clear_confirmation()
                 self.blocked = final in {'AWAITING_CONFIRMATION', 'AWAITING_AUTHENTICATION'}
@@ -205,6 +281,8 @@ class BankWindow(QMainWindow):
                           'FAILED': '办理失败', 'REJECTED': '已拒绝或取消', 'PENDING': '结果待确认'}
                 self.status.setText(('等待本人确认' if pending is not None else labels.get(final, final))
                                     + ' · ' + self.mode)
+                if final == 'COMPLETED' and self.pending is None:
+                    QTimer.singleShot(0, self.load_accounts)
             except (KeyError, TypeError, ValueError):
                 self.history.appendPlainText('有度：服务返回的数据不完整，已停止展示。请新建对话重试。')
                 self.blocked = True

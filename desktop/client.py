@@ -29,6 +29,33 @@ class QueryClient:
     def query(self, message, thread=None):
         return self._chat({'message': message, 'thread_id': thread}, thread)
 
+    def accounts(self):
+        with self.opener.open(Request(self.url + '/bank/accounts',
+                headers={'Authorization': 'Bearer ' + self.token}), timeout=20) as response:
+            data = json.load(response)
+        rows = data['accounts']
+        if not isinstance(rows, list) or not rows:
+            raise ValueError('invalid accounts')
+        refs = set()
+        for row in rows:
+            if (not isinstance(row.get('account_ref'), str) or not row['account_ref']
+                    or not isinstance(row.get('display_name'), str) or not row['display_name']
+                    or row.get('currency') != 'CNY' or row['account_ref'] in refs):
+                raise ValueError('invalid account')
+            money(row['balance_minor'])
+            refs.add(row['account_ref'])
+        if data['current_account_ref'] not in refs:
+            raise ValueError('invalid selected account')
+        return data
+
+    def switch_account(self, reference):
+        with self.post('/bank/account-session', {'account_ref': reference}) as response:
+            data = json.load(response)
+        if not isinstance(data.get('token'), str) or not data['token'] or data.get('mode') not in {'offline', 'model'}:
+            raise ValueError('invalid session')
+        self.token = data['token']
+        return data['mode']
+
     def resume(self, pending, decision):
         if decision not in {'approve', 'reject'}:
             raise ValueError('invalid decision')
@@ -128,7 +155,7 @@ def transfer_confirmation(frames):
         raise ValueError('missing confirmation binding')
     card, signal = cards[0], signals[0]
     if card.get('operation') != 'TRANSFER':
-        return None  # Other write interfaces are not available in this desktop release.
+        return None  # Other operations are validated by business_confirmation.
     required = ('recipient', 'challenge_id', 'operation_hash', 'expires_at')
     if any(not isinstance(card.get(key), str) or not card[key].strip() for key in required):
         raise ValueError('invalid confirmation')
@@ -145,3 +172,44 @@ def transfer_confirmation(frames):
         raise ValueError('confirmation mismatch')
     return {**{key: card[key] for key in (*required, 'amount_minor', 'currency', 'risk_level')},
             'thread_id': frames[0][1]['thread_id'], 'request_id': frames[0][1]['request_id']}
+
+
+def business_confirmation(frames):
+    transfer = transfer_confirmation(frames)
+    if transfer is not None:
+        return {**transfer, 'summary': f"收款人：{transfer['recipient']}\n金额：¥ {money(transfer['amount_minor'])}"}
+    if frames[-1][1]['status'] not in {'AWAITING_CONFIRMATION', 'AWAITING_AUTHENTICATION'}:
+        return None
+    card = next(d['payload'] for e, d in frames if e == 'card' and d['type'] == 'confirm')
+    signal = next(d for e, d in frames if e == 'interrupt')
+    labels = {'OPEN_ACCOUNT': '开立模拟账户', 'ISSUE_DEBIT_CARD': '办理借记卡',
+              'ACTIVATE_DEBIT_CARD': '激活借记卡', 'PAY_BY_CARD': '模拟消费',
+              'FREEZE_CARD': '冻结卡片', 'UNFREEZE_CARD': '解冻卡片'}
+    operation = card.get('operation')
+    if operation not in labels:
+        return None
+    for key in ('display_name', 'challenge_id', 'operation_hash', 'expires_at'):
+        if not isinstance(card.get(key), str) or not card[key].strip():
+            raise ValueError('invalid business confirmation')
+    if (card.get('risk_level') != 'YELLOW' or signal.get('kind') != 'CONFIRMATION'
+            or frames[-1][1]['status'] != 'AWAITING_CONFIRMATION'
+            or any(card[k] != signal.get(k) for k in ('challenge_id', 'operation_hash'))
+            or datetime.fromisoformat(card['expires_at']).utcoffset() is None):
+        raise ValueError('invalid confirmation binding')
+    summary = f"业务：{labels[operation]}\n名称：{card['display_name']}"
+    if operation == 'OPEN_ACCOUNT':
+        if card.get('opening_credit_minor') != 100000 or card.get('currency') != 'CNY':
+            raise ValueError('invalid opening credit')
+        summary += '\n将记入 ¥ 1,000.00 演示资金（非真实存款）。'
+    elif operation == 'PAY_BY_CARD':
+        if (not isinstance(card.get('merchant'), str) or not card['merchant'].strip()
+                or card.get('currency') != 'CNY' or type(card.get('amount_minor')) is not int
+                or card['amount_minor'] <= 0 or card.get('category') not in ['餐饮', '交通', '购物', '居住', '其他']):
+            raise ValueError('invalid payment')
+        summary += f"\n商户：{card['merchant']}\n金额：¥ {money(card['amount_minor'])}\n分类：{card['category']}"
+    elif operation in {'FREEZE_CARD', 'UNFREEZE_CARD'}:
+        target = 'FROZEN' if operation == 'FREEZE_CARD' else 'ACTIVE'
+        if card.get('current_status') not in {'ACTIVE', 'FROZEN'} or card.get('target_status') != target:
+            raise ValueError('invalid card transition')
+    return {**{k: card[k] for k in ('challenge_id', 'operation_hash', 'expires_at', 'risk_level')},
+            'summary': summary, 'thread_id': frames[0][1]['thread_id'], 'request_id': frames[0][1]['request_id']}

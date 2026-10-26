@@ -249,6 +249,43 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
         finally:
             service.running.release()
 
+    @app.get('/bank/accounts')
+    def accounts(request: Request):
+        from bankagent.banking.bank_backend import query_accounts
+        current = service.sessions.resolve(request.headers.get('authorization'))
+        context = TrustedContext(current.user_id, current.account_id, 'account-list')
+        data = query_accounts(context=context)
+        if data['status'] != 'COMPLETED':
+            raise ApiError('ACCOUNT_NOT_ACCESSIBLE', '账户不可访问。', 403)
+        return {**data['data'], 'current_account_ref': current.account_id}
+
+    @app.post('/bank/account-session')
+    async def account_session(request: Request):
+        from bankagent.banking.bank_backend import query_accounts
+        current = service.sessions.resolve(request.headers.get('authorization'))
+        try:
+            payload = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError('INVALID_REQUEST', '请求体必须是 JSON。', 400) from None
+        if (not isinstance(payload, dict) or set(payload) != {'account_ref'}
+                or not isinstance(payload['account_ref'], str)):
+            raise ApiError('INVALID_REQUEST', '请选择账户。', 400)
+        service.reserve()
+        try:
+            with service.lock:
+                for thread in current.threads:
+                    record = service.challenges.lookup(service.challenge_by_thread.get(thread))
+                    if record and record['decision'] == 'PENDING' and record['expires_at'] > service.clock():
+                        raise ApiError('RUN_BUSY', '请先确认或取消当前业务。', 409)
+                owned = query_accounts(context=TrustedContext(current.user_id, current.account_id, 'switch'))
+                if owned['status'] != 'COMPLETED' or payload['account_ref'] not in {
+                        row['account_ref'] for row in owned['data']['accounts']}:
+                    raise ApiError('ACCOUNT_NOT_ACCESSIBLE', '账户不可访问。', 403)
+                issued = service.sessions.issue(user_id=current.user_id, account_id=payload['account_ref'])
+                return {'token': issued.token, 'mode': service.runtime.mode}
+        finally:
+            service.running.release()
+
     @app.post('/demo/reset')
     async def reset(request: Request):
         require_demo(request)
