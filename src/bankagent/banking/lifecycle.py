@@ -149,6 +149,8 @@ class LifecycleMixin:
             return result(operation, error='INVALID_CARD_NAME')
         def apply(data):
             card_id = 'card-' + uuid4().hex
+            if any(c['account_id'] == context.account_id for c in data['cards'].values()):
+                return result(operation, error='ACCOUNT_ALREADY_HAS_CARD')
             data['cards'][card_id] = {'account_id': context.account_id,
                 'display_name': display_name, 'status': 'PENDING_ACTIVATION'}
             return result(operation, {'card_id': card_id, 'account_id': context.account_id,

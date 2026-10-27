@@ -1,0 +1,135 @@
+{
+  "mode": "live model / ASGI / isolated SQLite",
+  "steps": [
+    {
+      "input": "看看这个账户关联的银行卡和余额",
+      "events": [
+        [
+          "status",
+          {
+            "thread_id": "conv-2565a51eee614011bbbefe40571ba697",
+            "request_id": "req-84f72568e16346acbf67938901c67358",
+            "mode": "model",
+            "step": "started",
+            "status": "PROCESSING"
+          }
+        ],
+        [
+          "message",
+          {
+            "thread_id": "conv-2565a51eee614011bbbefe40571ba697",
+            "request_id": "req-84f72568e16346acbf67938901c67358",
+            "mode": "model",
+            "text": "当前账户关联 1 张卡：\n\n- 日常消费卡（状态：正常）\n\n账户余额：5,000.00 元（CNY）。\n\n需要看这张卡的限额或近期消费吗？"
+          }
+        ],
+        [
+          "card",
+          {
+            "thread_id": "conv-2565a51eee614011bbbefe40571ba697",
+            "request_id": "req-84f72568e16346acbf67938901c67358",
+            "mode": "model",
+            "type": "result",
+            "payload": {
+              "operation": "QUERY_CARDS",
+              "status": "COMPLETED",
+              "data": {
+                "cards": [
+                  {
+                    "card_id": "card-001",
+                    "display_name": "日常消费卡",
+                    "status": "ACTIVE"
+                  }
+                ]
+              },
+              "error_code": null
+            }
+          }
+        ],
+        [
+          "card",
+          {
+            "thread_id": "conv-2565a51eee614011bbbefe40571ba697",
+            "request_id": "req-84f72568e16346acbf67938901c67358",
+            "mode": "model",
+            "type": "result",
+            "payload": {
+              "operation": "GET_BALANCE",
+              "status": "COMPLETED",
+              "data": {
+                "balance_minor": 500000,
+                "currency": "CNY"
+              },
+              "error_code": null
+            }
+          }
+        ],
+        [
+          "status",
+          {
+            "thread_id": "conv-2565a51eee614011bbbefe40571ba697",
+            "request_id": "req-84f72568e16346acbf67938901c67358",
+            "mode": "model",
+            "step": "finished",
+            "status": "COMPLETED"
+          }
+        ],
+        [
+          "done",
+          {
+            "thread_id": "conv-2565a51eee614011bbbefe40571ba697",
+            "request_id": "req-84f72568e16346acbf67938901c67358",
+            "mode": "model",
+            "status": "COMPLETED"
+          }
+        ]
+      ]
+    },
+    {
+      "input": "先核对余额，再给张伟汇一千二百元，成功后帮我查一下流水",
+      "events": [
+        [
+          "status",
+          {
+            "thread_id": "conv-54bf7142adf64f429034f332d1dcbf69",
+            "request_id": "req-15d667e90f604c679bbbb2adcd8a6f4c",
+            "mode": "model",
+            "step": "started",
+            "status": "PROCESSING"
+          }
+        ],
+        [
+          "error",
+          {
+            "thread_id": "conv-54bf7142adf64f429034f332d1dcbf69",
+            "request_id": "req-15d667e90f604c679bbbb2adcd8a6f4c",
+            "mode": "model",
+            "code": "MODEL_OUTPUT_INVALID",
+            "message": "模型返回了无法使用的查询，本次没有执行资金操作，请重新描述。"
+          }
+        ],
+        [
+          "status",
+          {
+            "thread_id": "conv-54bf7142adf64f429034f332d1dcbf69",
+            "request_id": "req-15d667e90f604c679bbbb2adcd8a6f4c",
+            "mode": "model",
+            "step": "finished",
+            "status": "FAILED"
+          }
+        ],
+        [
+          "done",
+          {
+            "thread_id": "conv-54bf7142adf64f429034f332d1dcbf69",
+            "request_id": "req-15d667e90f604c679bbbb2adcd8a6f4c",
+            "mode": "model",
+            "status": "FAILED"
+          }
+        ]
+      ]
+    }
+  ],
+  "result": "FAIL",
+  "error_type": "StopIteration"
+}

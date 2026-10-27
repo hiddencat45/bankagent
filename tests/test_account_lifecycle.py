@@ -108,6 +108,15 @@ def test_payment_ownership_amount_and_funds(setup):
     assert bank()._data == build_demo_data()
 
 
+def test_second_card_requires_another_account_without_creating_money(setup):
+    bank, grant, _ = setup
+    before = deepcopy(bank()._data)
+    params = {'display_name':'第二张普通卡'}
+    result = bank().issue_debit_card(context=grant('ISSUE_DEBIT_CARD', params), **params)
+    assert result['error_code'] == 'ACCOUNT_ALREADY_HAS_CARD'
+    assert bank()._data == before
+
+
 def test_concurrent_payments_cannot_overdraw(setup):
     bank, grant, _ = setup
     params = dict(card_id='card-001', amount_minor=300000, merchant='演示商店', category='购物')

@@ -62,8 +62,8 @@ def test_real_desktop_lifecycle(tmp_path, monkeypatch):
         window = BankWindow(service.start())
         wait(ready)
         form('开户', ['生活账户'])
-        wait(lambda: ready() and window.accounts.count() == 2)
-        window.accounts.setCurrentIndex(1)
+        wait(lambda: ready() and window.accounts.count() == 3)
+        window.accounts.setCurrentIndex(2)
         window.switch_account.click()
         wait(lambda: ready() and '生活账户' in window.current_account.text())
         assert window.thread is None

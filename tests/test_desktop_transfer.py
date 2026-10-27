@@ -32,8 +32,8 @@ def test_transfer_cancel_modify_confirm_replay_restart(tmp_path):
         assert receipt(client.query('查询余额'))['data']['balance_minor'] == 495000
         broken = deepcopy(pending)
         broken['risk_level'] = 'RED'
-        with pytest.raises(ValueError, match='authentication'):
-            client.resume(broken, 'approve')
+        # Client risk labels cannot change the server's settled decision.
+        assert receipt(client.resume(broken, 'approve')) == receipt(result)
     finally:
         service.close()
     restarted = LocalService(env=env)

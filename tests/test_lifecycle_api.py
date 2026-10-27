@@ -13,9 +13,9 @@ def submit(client, auth, message, approve=True):
 def test_account_session_lifecycle(tmp_path):
     with TestClient(create_app(demo=True, database_path=tmp_path / 'bank.sqlite3'), base_url='http://localhost') as c:
         auth = login(c)
-        assert len(c.get('/bank/accounts', headers=auth).json()['accounts']) == 1
+        assert len(c.get('/bank/accounts', headers=auth).json()['accounts']) == 2
         assert submit(c, auth, '开户「测试账户」', False)[-1][1]['status'] == 'REJECTED'
-        assert len(c.get('/bank/accounts', headers=auth).json()['accounts']) == 1
+        assert len(c.get('/bank/accounts', headers=auth).json()['accounts']) == 2
         opened = result(submit(c, auth, '开户「消费账户」'))
         assert opened['status'] == 'COMPLETED'
         ref = opened['data']['account_id']

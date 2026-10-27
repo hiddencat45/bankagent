@@ -50,7 +50,6 @@ def test_card_queries_are_account_scoped_sorted_and_detached(service):
     rows = cards()
     assert rows == [
         {"card_id": "card-001", "display_name": "日常消费卡", "status": "ACTIVE"},
-        {"card_id": "card-002", "display_name": "备用卡", "status": "FROZEN"},
     ]
     rows[0]["status"] = "FROZEN"
     assert cards()[0]["status"] == "ACTIVE"
@@ -61,6 +60,8 @@ def test_card_queries_are_account_scoped_sorted_and_detached(service):
 
 def test_card_query_empty_account_and_duplicate_names_are_preserved():
     data = build_demo_data()
+    # Legacy in-memory duplicate-name fixture: resolver must still handle it.
+    data["cards"]["card-002"]["account_id"] = "account-001"
     data["cards"]["card-002"]["display_name"] = "日常消费卡"
     backend = module.BankBackend(data_factory=lambda: data)
     assert len(backend.query_cards(context=CTX)["data"]["cards"]) == 2
@@ -139,9 +140,10 @@ def test_expired_authorization_fails_before_first_execution(service):
 
 
 def test_already_target_state_still_requires_authorization_and_records_noop(service):
-    _, _, _, issue = service
-    assert module.freeze_card(context=CTX, card_id="card-002")["error_code"] == "AUTHORIZATION_REQUIRED"
-    result = module.freeze_card(context=issue(card_id="card-002"), card_id="card-002")
+    backend, _, _, issue = service
+    backend._data["cards"]["card-001"]["status"] = "FROZEN"
+    assert module.freeze_card(context=CTX, card_id="card-001")["error_code"] == "AUTHORIZATION_REQUIRED"
+    result = module.freeze_card(context=issue(card_id="card-001"), card_id="card-001")
     assert result["status"] == "COMPLETED"
     assert result["data"]["changed"] is False
     assert result["data"]["previous_status"] == result["data"]["status"] == "FROZEN"

@@ -25,14 +25,14 @@ def app(monkeypatch):
         yield client
 
 
-def _cards_state(client) -> dict[str, dict]:
+def _cards_state(client, account="account-001") -> dict[str, dict]:
     """直接读后端数据集里当前账户的卡片，用于核对真实状态。"""
     from bankagent.banking import bank_backend
     from bankagent.banking.bank_types import TrustedContext
 
     session = client.app.state.service
     result_ = bank_backend.query_cards(
-        context=TrustedContext("user-001", "account-001", "inspect")
+        context=TrustedContext("user-001", account, "inspect")
     )
     assert result_["status"] == "COMPLETED"
     return {row["card_id"]: row for row in result_["data"]["cards"]}
@@ -62,7 +62,7 @@ def test_query_returns_only_own_account_cards(app):
     assert data["operation"] == "QUERY_CARDS"
     names = [row["display_name"] for row in data["data"]["cards"]]
     # account-002 也有一张「日常消费卡」（card-003），不得出现在这里。
-    assert names == ["日常消费卡", "备用卡"]
+    assert names == ["日常消费卡"]
     assert "card-003" not in repr(out)
     assert "当前卡片：" in _message(out)
 
@@ -72,7 +72,9 @@ def test_query_message_shows_status(app):
     out = chat(app, auth, message="我的卡片")
     text = _message(out)
     assert "日常消费卡（正常）" in text
-    assert "备用卡（冻结）" in text
+    switched = app.post("/bank/account-session", headers=auth, json={"account_ref":"account-card-card-002"})
+    auth = {"Authorization":"Bearer " + switched.json()["token"]}
+    assert "备用卡（冻结）" in _message(chat(app, auth, message="我的卡片"))
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +126,8 @@ def test_cancel_keeps_real_status(app):
 
 def test_unfreeze_restores_frozen_card(app):
     auth = login(app)
+    switched = app.post("/bank/account-session", headers=auth, json={"account_ref":"account-card-card-002"})
+    auth = {"Authorization":"Bearer " + switched.json()["token"]}
     out = chat(app, auth, message="解冻 备用卡")
     payload = _confirm_payload(out)
     assert payload["operation"] == "UNFREEZE_CARD"
@@ -133,7 +137,7 @@ def test_unfreeze_restores_frozen_card(app):
     thread, intr = out[0][1]["thread_id"], _interrupt(out)
     done = decision(app, auth, thread, intr)
     assert done[-1][1]["status"] == "COMPLETED"
-    assert _cards_state(app)["card-002"]["status"] == "ACTIVE"
+    assert _cards_state(app, "account-card-card-002")["card-002"]["status"] == "ACTIVE"
     assert "已解冻" in _message(done)
 
 

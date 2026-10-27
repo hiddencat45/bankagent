@@ -2,8 +2,9 @@
 import threading
 from PySide6.QtCore import QObject, Signal, QTimer, Qt
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QPlainTextEdit, QLineEdit, QGroupBox, QComboBox, QInputDialog)
-from desktop.client import QueryClient, query_result, business_confirmation, money, CustomerSwitchBusy
+    QLabel, QPushButton, QPlainTextEdit, QLineEdit, QGroupBox, QComboBox, QInputDialog,
+    QDialog, QDialogButtonBox, QMessageBox)
+from desktop.client import QueryClient, query_result, business_confirmation, money, CustomerSwitchBusy, VerificationRejected
 
 
 class Delivery(QObject):
@@ -58,6 +59,11 @@ class BankWindow(QMainWindow):
         self.current_account = QLabel('当前账户：正在读取…')
         self.current_account.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self.current_account)
+        self.migration_notice = QLabel()
+        self.migration_notice.setTextFormat(Qt.TextFormat.PlainText)
+        self.migration_notice.setWordWrap(True)
+        self.migration_notice.hide()
+        layout.addWidget(self.migration_notice)
         self.accounts = QComboBox()
         self.accounts.setAccessibleName('选择待切换账户')
         self.refresh_accounts = QPushButton('刷新账户')
@@ -113,11 +119,13 @@ class BankWindow(QMainWindow):
         self.reject = QPushButton('取消办理')
         self.retry = QPushButton('重试原决定 / 核对结果')
         self.edit = QPushButton('修改表单')
+        self.verify = QPushButton('前往模拟认证')
+        self.verify.clicked.connect(lambda: self.run('verification', lambda: self.client.verification(dict(self.pending))))
         self.edit.clicked.connect(self.edit_form)
         self.approve.clicked.connect(lambda: self.decide('approve'))
         self.reject.clicked.connect(lambda: self.decide('reject'))
         self.retry.clicked.connect(lambda: self.decide(self.decision))
-        for button in (self.approve, self.reject, self.edit, self.retry):
+        for button in (self.approve, self.verify, self.reject, self.edit, self.retry):
             actions.addWidget(button)
         confirm_layout.addLayout(actions)
         layout.addWidget(self.confirmation)
@@ -160,6 +168,8 @@ class BankWindow(QMainWindow):
         self.confirmation.setVisible(self.pending is not None)
         ready = self.pending is not None and not self.busy
         self.approve.setEnabled(ready and self.decision is None and self.pending['risk_level'] == 'YELLOW')
+        self.verify.setVisible(self.pending is not None and self.pending['risk_level'] == 'RED')
+        self.verify.setEnabled(ready and self.decision is None)
         self.reject.setEnabled(ready and self.decision is None)
         self.edit.setEnabled(ready and self.decision is None and self.form_active and self.last_form is not None)
         self.retry.setVisible(self.decision is not None)
@@ -177,6 +187,8 @@ class BankWindow(QMainWindow):
                 result = function()
             except CustomerSwitchBusy:
                 kind_result, result = 'customer_busy', None
+            except VerificationRejected as exc:
+                kind_result, result = 'verification_rejected', str(exc)
             except Exception:
                 kind_result = ('customer_error' if kind == 'customer' else
                                'decision_error' if kind == 'decision' else 'error')
@@ -212,8 +224,11 @@ class BankWindow(QMainWindow):
         self.edit_requested = True
         self.decide('reject')
 
-    def business_form(self, action, defaults=None):
+    def business_form(self, action, defaults=None, _card_checked=False):
         if self.busy or self.blocked or self.pending is not None:
+            return
+        if action == '办理借记卡' and not _card_checked:
+            self.run('card_application', self.client.workspace_overview)
             return
         defaults = defaults or {}
         operations = {'创建演示客户': 'CREATE_DEMO_CUSTOMER', '开户': 'OPEN_ACCOUNT', '办理借记卡': 'ISSUE_DEBIT_CARD',
@@ -296,17 +311,43 @@ class BankWindow(QMainWindow):
         thread = self.thread
         self.run('query', lambda: self.client.query(text, thread))
 
-    def decide(self, decision):
+    def decide(self, decision, otp=None):
         if self.busy or self.pending is None or decision not in {'approve', 'reject'}:
             return
         if self.decision is not None and decision != self.decision:
             return
-        if decision == 'approve' and self.pending['risk_level'] != 'YELLOW':
+        if decision == 'approve' and self.pending['risk_level'] != 'YELLOW' and otp is None and self.decision is None:
             return
         self.decision = decision
         self.status.setText('正在提交原确认操作，请稍候…')
         pending = dict(self.pending)
-        self.run('decision', lambda: self.client.resume(pending, decision))
+        self.run('decision', lambda: self.client.resume(pending, decision, otp) if otp is not None else self.client.resume(pending, decision))
+
+    def show_verification(self, info):
+        dialog = QDialog(self)
+        dialog.setWindowTitle('独立模拟认证 · 非真实银行认证')
+        layout = QVBoxLayout(dialog)
+        label = QLabel(self.pending['summary'] + '\n\n当日已转出：¥ ' + money(info['daily_transfer_total_minor'])
+            + '\n含本笔累计超过 ¥ ' + money(info['threshold_minor']) + '，需要追加认证。\n'
+            + info['notice'] + '\n本机模拟验证码：' + info['demo_code']
+            + '\n有效期至：' + info['expires_at'] + '\n请输入上方模拟码，勿在聊天中提交。')
+        label.setTextFormat(Qt.TextFormat.PlainText)
+        label.setWordWrap(True)
+        layout.addWidget(label)
+        entry = QLineEdit()
+        entry.setMaxLength(6)
+        entry.setAccessibleName('模拟验证码')
+        layout.addWidget(entry)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText('认证并确认原转账')
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            code = entry.text()
+            entry.clear()
+            self.decide('approve', code)
+        dialog.deleteLater()
 
     def clear_confirmation(self):
         self.pending = None
@@ -315,6 +356,24 @@ class BankWindow(QMainWindow):
 
     def receive(self, kind, result):
         self.busy = False
+        if kind == 'card_application':
+            self.controls()
+            if result['objects']['cards']:
+                QMessageBox.information(self, '新卡需要独立账户', '当前账户已有普通借记卡。\n请先点击“开户”，核对演示入账后切换到新账户，再办理借记卡。\n不会共享或复制现有账户余额。')
+            else:
+                self.business_form('办理借记卡', _card_checked=True)
+            return
+        if kind == 'verification':
+            self.status.setText('请在独立模拟认证窗口核对转账；尚未执行。')
+            self.controls()
+            self.show_verification(result)
+            return
+        if kind == 'verification_rejected':
+            self.decision = None
+            self.uncertain = False
+            self.status.setText(result)
+            self.controls()
+            return
         if kind in {'connect', 'customer'}:
             self.form_active = False
             self.last_form = None
@@ -333,6 +392,12 @@ class BankWindow(QMainWindow):
             self.status.setText('已连接 · ' + self.mode)
             QTimer.singleShot(0, self.load_accounts)
         elif kind == 'accounts':
+            moves = result.get('card_account_migration', [])
+            self.migration_notice.setText('旧卡已分户：原余额及历史流水留在主卡账户；' + '、'.join(r['card_name'] for r in moves) + '迁入独立账户，迁移时余额为零。请切换账户查看当前余额。' if moves else '')
+            self.migration_notice.setVisible(bool(moves))
+            if moves and not getattr(self, '_migration_shown', False):
+                self._migration_shown = True
+                self.history.appendPlainText('账本升级：原余额及历史流水留在原账户；' + '、'.join(r['card_name'] for r in moves) + '已转到各自零余额账户。请在账户列表切换查看。')
             self.customers.clear()
             for row in result.get('customers', []):
                 self.customers.addItem(row['display_name'], row['customer_ref'])
@@ -388,7 +453,7 @@ class BankWindow(QMainWindow):
                 self.uncertain = False
                 if pending is not None:
                     self.pending, self.decision = pending, None
-                    extra = ('\n该操作需要独立认证，当前仅支持取消。' if pending['risk_level'] == 'RED' else
+                    extra = ('\n当日累计转出（含本笔）超过1,000元。请点“前往模拟认证”，核对后继续原转账；也可取消。' if pending['risk_level'] == 'RED' else
                              '\n确认后才会执行；对话业务可直接提出修改、取消或先查询，旧确认将失效。')
                     self.confirm_text.setText(pending['summary'] + extra)
                 elif kind != 'decision' or final not in {'FAILED', 'PENDING'}:

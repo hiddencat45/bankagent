@@ -1,0 +1,17 @@
+{
+  "verification": "actual visible Qt window + real HTTP, offline model",
+  "logical_size": [
+    1280,
+    844
+  ],
+  "device_pixel_ratio": 1.25,
+  "steps": [
+    "prepare transfer 1200",
+    "wrong simulated code rejected, balance 5000",
+    "correct simulated verification; lose response after commit",
+    "retry original confirmation without additional debit"
+  ],
+  "balance_before_minor": 500000,
+  "balance_after_minor": 380000,
+  "transfer_out_count": 1
+}

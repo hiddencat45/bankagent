@@ -22,6 +22,8 @@ CLARIFY_LABELS = {'display_name': '名称（例如：开户「日常账户」）
     'card_name': '卡片名称（使用「卡名」）', 'merchant': '商户名称', 'amount': '支付金额'}
 LABELS = {'OPEN_ACCOUNT': '开立模拟账户', 'ISSUE_DEBIT_CARD': '办理借记卡',
           'ACTIVATE_DEBIT_CARD': '激活借记卡', 'PAY_BY_CARD': '模拟消费'}
+TOOL_DESCRIPTIONS = {'ISSUE_DEBIT_CARD': '为当前无卡账户申请唯一普通借记卡。先查询卡片；已有卡时告知用户先开户并在页面切换账户，不能再发共享余额卡。',
+                    'OPEN_ACCOUNT': '新开独立账户，确认后有1000元演示入账；需用户在页面切换后才可为此账户发卡。'}
 
 
 def resolve(candidate_params, context):
@@ -74,6 +76,8 @@ def confirmation(*, operation, params, candidate_params, context):
         details['display_name'] = card['display_name']
     if operation == 'OPEN_ACCOUNT':
         details.update(opening_credit_minor=100000, currency='CNY')
+    if operation == 'ISSUE_DEBIT_CARD':
+        details['account_policy'] = '当前账户仅允许一张普通卡；已有卡请先开户并切换。余额属于该独立账户，不复制其他账户资金。'
     if operation == 'PAY_BY_CARD':
         details.update({k: params[k] for k in ('amount_minor', 'merchant', 'category')})
         details['currency'] = 'CNY'
@@ -89,7 +93,8 @@ def execute(operation, params, context):
 def render(result):
     if result['status'] != 'COMPLETED':
         code = result.get('error_code')
-        return {'CARD_NOT_ACTIVE': '卡片尚未激活或已冻结，本次未扣款。',
+        return {'ACCOUNT_ALREADY_HAS_CARD': '当前账户已有普通借记卡。请先开立独立账户、切换到该账户，再申请新卡；不会共享或复制原余额。',
+                'CARD_NOT_ACTIVE': '卡片尚未激活或已冻结，本次未扣款。',
                 'CARD_SINGLE_LIMIT_EXCEEDED': '超过该卡单笔消费限额，本次未扣款。可以查询或调整消费限额。',
                 'CARD_DAILY_LIMIT_EXCEEDED': '超过该卡当日累计消费限额，本次未扣款。可以查询或调整消费限额。',
                 'INSUFFICIENT_BALANCE': '账户余额不足，本次未扣款。',

@@ -95,7 +95,7 @@ def test_card_limits_boundary_new_day_and_transfer_independence(setup):
     assert pay(4000)['status'] == 'COMPLETED'
     q = TrustedContext('user-001', 'account-001', 'q')
     assert bank().query_card_limits(context=q, card_id='card-001')['data']['used_today_minor'] == 10000
-    assert b.query_card_limits(context=q, card_id='card-002')['data']['used_today_minor'] == 0
+    assert b.query_card_limits(context=TrustedContext('user-001', 'account-card-card-002', 'q'), card_id='card-002')['data']['used_today_minor'] == 0
     b._clock = lambda: NOW + timedelta(days=1)
     assert b.query_card_limits(context=q, card_id='card-001')['data']['used_today_minor'] == 0
     b._clock = lambda: NOW
@@ -158,4 +158,4 @@ def test_v1_upgrade_preserves_old_outgoing_and_receipt(tmp_path, setup):
         assert len(b._data['transactions']) == len(seed['transactions'])
         assert b.execute_transfer(context=ctx, **params) == receipt
     with store.connection() as db:
-        assert db.execute('SELECT version FROM bank_state').fetchone()[0] == 2
+        assert db.execute('SELECT version FROM bank_state').fetchone()[0] == 3

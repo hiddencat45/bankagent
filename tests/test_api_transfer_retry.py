@@ -135,6 +135,7 @@ def test_red_retry_reuses_prior_strong_auth_without_reauthentication(recovery, m
     def verified(context, transient):
         auth_calls.append(context.request_id)
         return True  # 测试内独立认证替身，不作为运行时认证能力。
+    c.app.state.service.demo_verification_enabled = False
     c.app.state.service.authenticate = verified
     thread, intr = confirmation(c, auth, amount=1500)
     attempts, _ = interrupt_once(monkeypatch)

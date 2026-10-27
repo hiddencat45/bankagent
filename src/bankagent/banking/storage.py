@@ -61,7 +61,7 @@ class SQLiteStore:
     @staticmethod
     def load(db):
         rows = db.execute('SELECT version, data, receipts FROM bank_state WHERE id=1').fetchall()
-        if len(rows) != 1 or rows[0][0] not in {1, 2}:
+        if len(rows) != 1 or rows[0][0] not in {1, 2, 3}:
             raise ValueError('Unsupported bank database version or missing state')
         data = json.loads(rows[0][1])
         if not isinstance(data, dict) or not isinstance(data.get('accounts'), dict) \
@@ -89,6 +89,26 @@ class SQLiteStore:
                         contact['recipient_account_id'] = target
             encoded, receipts = SQLiteStore.encode(data, completed)
             db.execute('UPDATE bank_state SET version=2, data=?, receipts=? WHERE id=1', (encoded, receipts))
+        if rows[0][0] < 3:
+            # Keep the first card and original money; never rewrite past ledger entries.
+            seen, moves = set(), []
+            for cid, card in data.get('cards', {}).items():
+                old = card['account_id']
+                if old not in seen:
+                    seen.add(old)
+                    continue
+                new = 'account-card-' + cid
+                if new in data['accounts']:
+                    raise ValueError('Card account migration collision')
+                data['accounts'][new] = {'user_id': data['accounts'][old]['user_id'],
+                    'display_name': card['display_name'] + '独立账户', 'balance_minor': 0, 'currency': 'CNY'}
+                card['account_id'] = new
+                moves.append({'card_id': cid, 'card_name': card['display_name'],
+                              'previous_account_id': old, 'account_id': new, 'opening_balance_minor': 0})
+            if moves:
+                data['card_account_migration'] = moves
+            encoded, receipts = SQLiteStore.encode(data, completed)
+            db.execute('UPDATE bank_state SET version=3, data=?, receipts=? WHERE id=1', (encoded, receipts))
         return data, completed
 
     def save(self, db, data, completed):
