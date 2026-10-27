@@ -350,5 +350,7 @@ def business_confirmation(frames):
         target = 'FROZEN' if operation == 'FREEZE_CARD' else 'ACTIVE'
         if card.get('current_status') not in {'ACTIVE', 'FROZEN'} or card.get('target_status') != target:
             raise ValueError('invalid card transition')
+        if operation == 'FREEZE_CARD':
+            summary += '\n冻结后该卡不能消费，其关联账户不能转出资金；模拟认证不能解除冻结。'
     return {**{k: card[k] for k in ('challenge_id', 'operation_hash', 'expires_at', 'risk_level')},
             'summary': summary, 'thread_id': frames[0][1]['thread_id'], 'request_id': frames[0][1]['request_id']}
