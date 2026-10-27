@@ -1,6 +1,6 @@
 """本地单进程 Demo 的 FastAPI 接线；认证结果只来自服务端。"""
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -24,6 +24,11 @@ from bankagent.api.session import DemoSessionStore
 
 # 仅由服务端在归属、操作哈希与原授权校验后产生，不接收客户端执行入口。
 _RETRY_EXECUTION = object()
+# Public choice references are NOT user/account IDs. Only this server mapping grants identity.
+DEMO_CUSTOMERS = {
+    'primary': ('默认演示客户', 'user-001', 'account-001'),
+    'zhang-wei': ('张伟（演示客户）', 'user-002', 'account-002'),
+}
 
 
 class Service:
@@ -259,6 +264,59 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
             raise ApiError('ACCOUNT_NOT_ACCESSIBLE', '账户不可访问。', 403)
         return {**data['data'], 'current_account_ref': current.account_id}
 
+    def require_local_customer_demo(request):
+        require_demo(request)
+        if request.client.host not in {'127.0.0.1', '::1', 'testclient'}:
+            raise ApiError('NOT_FOUND', '客户切换仅限本机演示。', 404)
+
+    @app.get('/bank/bills')
+    def account_bills(request: Request):
+        from bankagent.banking.bank_backend import query_bills
+        with service.lock:
+            current = service.sessions.resolve(request.headers.get('authorization'))
+            start = service.clock().date().replace(day=1)
+            end = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+            return query_bills(context=TrustedContext(current.user_id, current.account_id, 'bill-list'),
+                               start=start, end=end)
+
+    @app.get('/demo/customers')
+    def demo_customers(request: Request):
+        require_local_customer_demo(request)
+        current = service.sessions.resolve(request.headers.get('authorization'))
+        return {'customers': [{'customer_ref': ref, 'display_name': row[0]}
+                              for ref, row in DEMO_CUSTOMERS.items()],
+                'current_customer_ref': next((ref for ref, row in DEMO_CUSTOMERS.items()
+                                               if row[1] == current.user_id), None)}
+
+    @app.post('/demo/customer-session')
+    async def customer_session(request: Request):
+        require_local_customer_demo(request)
+        try:
+            payload = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError('INVALID_REQUEST', '请选择演示客户。', 400) from None
+        if (not isinstance(payload, dict) or set(payload) != {'customer_ref'}
+                or not isinstance(payload['customer_ref'], str)
+                or payload['customer_ref'] not in DEMO_CUSTOMERS):
+            raise ApiError('INVALID_REQUEST', '只能选择服务端提供的演示客户。', 400)
+        service.reserve()
+        try:
+            with service.lock:
+                current = service.sessions.resolve(request.headers.get('authorization'))
+                for old in service.sessions.family_sessions(current):
+                    for thread in old.threads:
+                        record = service.challenges.lookup(service.challenge_by_thread.get(thread))
+                        if record and record['decision'] == 'PENDING' and record['expires_at'] > service.clock():
+                            raise ApiError('RUN_BUSY', '请先确认或取消当前业务，再切换演示客户。', 409)
+                _, user, account = DEMO_CUSTOMERS[payload['customer_ref']]
+                if get_balance(context=TrustedContext(user, account, 'demo-customer'))['status'] != 'COMPLETED':
+                    raise ApiError('ACCOUNT_NOT_ACCESSIBLE', '演示客户账户不存在或归属不符。', 403)
+                issued = service.sessions.issue(user_id=user, account_id=account)
+                service.sessions.invalidate_family(current)
+                return {'token': issued.token, 'mode': service.runtime.mode}
+        finally:
+            service.running.release()
+
     @app.post('/bank/account-session')
     async def account_session(request: Request):
         from bankagent.banking.bank_backend import query_accounts
@@ -273,6 +331,7 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
         service.reserve()
         try:
             with service.lock:
+                current = service.sessions.resolve(request.headers.get('authorization'))
                 for thread in current.threads:
                     record = service.challenges.lookup(service.challenge_by_thread.get(thread))
                     if record and record['decision'] == 'PENDING' and record['expires_at'] > service.clock():
@@ -281,7 +340,8 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
                 if owned['status'] != 'COMPLETED' or payload['account_ref'] not in {
                         row['account_ref'] for row in owned['data']['accounts']}:
                     raise ApiError('ACCOUNT_NOT_ACCESSIBLE', '账户不可访问。', 403)
-                issued = service.sessions.issue(user_id=current.user_id, account_id=payload['account_ref'])
+                issued = service.sessions.issue(user_id=current.user_id, account_id=payload['account_ref'],
+                                                family_id=current.family_id)
                 return {'token': issued.token, 'mode': service.runtime.mode}
         finally:
             service.running.release()
