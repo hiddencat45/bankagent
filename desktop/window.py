@@ -21,6 +21,7 @@ class BankWindow(QMainWindow):
         self.pending = None
         self.decision = None
         self.uncertain = False
+        self.form_active = False
         self.closed = threading.Event()
         self.delivery = Delivery(self)
         self.delivery.completed.connect(self.receive)
@@ -67,7 +68,7 @@ class BankWindow(QMainWindow):
         layout.addLayout(accounts)
         business = QHBoxLayout()
         self.business_buttons = []
-        for label in ('开户', '办理借记卡', '激活', '刷卡消费', '冻结', '解冻', '查询限额', '设置限额'):
+        for label in ('开户', '办理借记卡', '激活', '刷卡消费', '转账', '冻结', '解冻', '查询限额', '设置限额'):
             button = QPushButton(label)
             button.clicked.connect(lambda checked=False, action=label: self.business_form(action))
             business.addWidget(button)
@@ -190,13 +191,20 @@ class BankWindow(QMainWindow):
     def business_form(self, action):
         if self.busy or self.blocked or self.pending is not None:
             return
-        name, ok = QInputDialog.getText(self, action, '账户名称：' if action == '开户' else '卡片名称：')
+        operations = {'开户': 'OPEN_ACCOUNT', '办理借记卡': 'ISSUE_DEBIT_CARD',
+            '激活': 'ACTIVATE_DEBIT_CARD', '刷卡消费': 'PAY_BY_CARD', '转账': 'TRANSFER',
+            '冻结': 'FREEZE_CARD', '解冻': 'UNFREEZE_CARD',
+            '查询限额': 'QUERY_CARD_LIMITS', '设置限额': 'SET_CARD_LIMITS'}
+        name, ok = QInputDialog.getText(self, action, '账户名称：' if action == '开户' else
+                                       '收款联系人或本人账户名称：' if action == '转账' else '卡片名称：')
         if not ok:
             return
         name = name.strip()
-        if not name or len(name) > 80 or any(c in name for c in '「」\n\r'):
-            self.status.setText('请输入 1–80 字的名称，不含换行或「」符号。')
+        if not name or len(name) > 80 or any(c in name for c in '\n\r'):
+            self.status.setText('请输入 1–80 字的名称，不含换行。')
             return
+        key = 'display_name' if action in {'开户', '办理借记卡'} else 'recipient_name' if action == '转账' else 'card_name'
+        fields = {key: name}
         if action == '设置限额':
             import re
             amounts = []
@@ -208,14 +216,16 @@ class BankWindow(QMainWindow):
                     self.status.setText('限额须为非负金额，最多两位小数。')
                     return
                 amounts.append(value)
-            message = f'设置限额「{name}」单笔{amounts[0]}元，每日{amounts[1]}元'
-        elif action == '刷卡消费':
-            merchant, ok = QInputDialog.getText(self, action, '演示商户名称：')
-            if not ok:
-                return
-            if not merchant.strip() or len(merchant) > 80 or any(c in merchant for c in '「」\n\r'):
-                self.status.setText('商户名称不合法。')
-                return
+            fields.update(single_limit=amounts[0], daily_limit=amounts[1])
+        elif action in {'刷卡消费', '转账'}:
+            if action == '刷卡消费':
+                merchant, ok = QInputDialog.getText(self, action, '演示商户名称：')
+                if not ok:
+                    return
+                if not merchant.strip() or len(merchant) > 80 or any(c in merchant for c in '\n\r'):
+                    self.status.setText('商户名称不合法。')
+                    return
+                fields['merchant'] = merchant.strip()
             amount, ok = QInputDialog.getText(self, action, '金额（元，最多两位小数）：')
             if not ok:
                 return
@@ -223,19 +233,23 @@ class BankWindow(QMainWindow):
             if not re.fullmatch(r'[0-9]+(?:\.[0-9]{1,2})?', amount) or not any(c in '123456789' for c in amount):
                 self.status.setText('请输入大于零、最多两位小数的金额。')
                 return
-            category, ok = QInputDialog.getItem(self, action, '分类：', ['餐饮', '交通', '购物', '居住', '其他'], 4, False)
-            if not ok:
-                return
-            message = f'使用「{name}」在商户「{merchant.strip()}」刷卡支付{amount}元，分类「{category}」'
-        else:
-            message = f'{action}「{name}」' if action not in {'冻结', '解冻'} else action + name
-        self.send(message)
+            fields['amount'] = amount
+            if action == '刷卡消费':
+                category, ok = QInputDialog.getItem(self, action, '分类：', ['餐饮', '交通', '购物', '居住', '其他'], 4, False)
+                if not ok:
+                    return
+                fields['category'] = category
+        self.history.appendPlainText('表单：' + action + ' · ' + name)
+        self.form_active = True
+        self.status.setText('正在校验表单，请稍候…')
+        self.run('query', lambda: self.client.form(operations[action], fields))
 
     def send(self, text=None):
         text = (text if text is not None else self.input.text()).strip()
         if not text or self.busy or self.blocked or not self.client.token:
             return
         self.history.appendPlainText('你：' + text)
+        self.form_active = False
         self.input.clear()
         self.status.setText('正在查询，请稍候…')
         thread = self.thread
@@ -261,6 +275,7 @@ class BankWindow(QMainWindow):
     def receive(self, kind, result):
         self.busy = False
         if kind in {'connect', 'customer'}:
+            self.form_active = False
             self.clear_confirmation()
             self.thread = None
             self.blocked = False
@@ -343,7 +358,7 @@ class BankWindow(QMainWindow):
                 labels = {'COMPLETED': '办理完成', 'NEEDS_CLARIFICATION': '等待补充信息',
                           'FAILED': '办理失败', 'REJECTED': '已拒绝或取消', 'PENDING': '结果待确认'}
                 self.status.setText(('等待本人确认' if pending is not None else labels.get(final, final))
-                                    + ' · ' + self.mode)
+                                    + ' · ' + ('表单直达' if self.form_active else self.mode))
                 if final == 'COMPLETED' and self.pending is None:
                     QTimer.singleShot(0, self.load_accounts)
             except (KeyError, TypeError, ValueError):

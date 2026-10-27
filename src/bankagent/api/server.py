@@ -24,6 +24,7 @@ from bankagent.api.session import DemoSessionStore
 
 # 仅由服务端在归属、操作哈希与原授权校验后产生，不接收客户端执行入口。
 _RETRY_EXECUTION = object()
+_FORM_SUBMISSION = object()
 # Public choice references are NOT user/account IDs. Only this server mapping grants identity.
 DEMO_CUSTOMERS = {
     'primary': ('默认演示客户', 'user-001', 'account-001'),
@@ -128,12 +129,39 @@ class Service:
             self.running.release()
             raise
 
+    def prepare_form(self, authorization, payload):
+        from bankagent.api.forms import parse_form
+        candidate = parse_form(payload, self.runtime.registry)
+        self.reserve()
+        try:
+            with self.lock:
+                session = self.sessions.resolve(authorization)
+                for old in self.sessions.family_sessions(session):
+                    for thread in old.threads:
+                        record = self.challenges.lookup(self.challenge_by_thread.get(thread))
+                        if record and record['decision'] == 'PENDING' and record['expires_at'] > self.clock():
+                            raise ApiError('RUN_BUSY', '请先确认或取消当前业务，再提交表单。', 409)
+                thread, request_id = f'conv-{uuid4().hex}', f'req-{uuid4().hex}'
+                self.sessions.register_thread(session, thread)
+                state = {**candidate, 'user_id': session.user_id, 'account_id': session.account_id,
+                         'request_id': request_id, 'input_source': 'form', 'message': '',
+                         'status': 'PROCESSING', 'authorized': False}
+                return ({'configurable': {'thread_id': thread}}, _FORM_SUBMISSION, state,
+                        dict(thread_id=thread, request_id=request_id, mode=self.runtime.mode))
+        except Exception:
+            self.running.release()
+            raise
+
     def stream(self, cfg, graph_input, previous, base):
         def frame(name, **kw):
             return events.format_sse(name, getattr(events, name)(**base, **kw))
         yield frame('status', step='started', status_value='PROCESSING')
         try:
             retry = graph_input is _RETRY_EXECUTION
+            form = graph_input is _FORM_SUBMISSION
+            if form:
+                # Skip only language understanding; resolve, risk, confirmation and execution are shared.
+                self.graph.update_state(cfg, previous, as_node='understand_intent')
             if retry:
                 # 原执行失败已经走到 END，不能把它当作成功终态永远重放。
                 # 仅调度原执行节点；保留身份/请求/参数/挑战，幂等键仍回查授权表。
@@ -145,7 +173,7 @@ class Service:
             if graph_input is None:
                 state = previous  # 相同决定重放已完成结果，不再执行图。
             else:
-                for _ in self.graph.stream(None if retry else graph_input, cfg, stream_mode='updates'):
+                for _ in self.graph.stream(None if retry or form else graph_input, cfg, stream_mode='updates'):
                     pass
                 snapshot = self.graph.get_state(cfg)
                 state = snapshot.values
@@ -371,13 +399,12 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
         finally:
             service.running.release()
 
-    @app.post('/agent/chat')
-    async def chat(request: Request):
+    async def stream_request(request, prepare):
         try:
             payload = await request.json()
         except (ValueError, UnicodeDecodeError):
             raise ApiError('INVALID_REQUEST', '请求体必须是 JSON。', 400) from None
-        prepared = service.prepare(request.headers.get('authorization'), payload)
+        prepared = prepare(request.headers.get('authorization'), payload)
         released = False
         def release():
             nonlocal released
@@ -393,6 +420,14 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
                 release()
         return StreamingResponse(body(), media_type='text/event-stream',
                                  background=BackgroundTask(release))
+
+    @app.post('/agent/chat')
+    async def chat(request: Request):
+        return await stream_request(request, service.prepare)
+
+    @app.post('/bank/form')
+    async def form(request: Request):
+        return await stream_request(request, service.prepare_form)
     return app
 
 

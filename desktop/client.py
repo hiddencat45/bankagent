@@ -34,6 +34,9 @@ class QueryClient:
     def query(self, message, thread=None):
         return self._chat({'message': message, 'thread_id': thread}, thread)
 
+    def form(self, action, fields):
+        return self._chat({'action': action, 'fields': fields}, path='/bank/form')
+
     def accounts(self):
         with self.opener.open(Request(self.url + '/bank/accounts',
                 headers={'Authorization': 'Bearer ' + self.token}), timeout=20) as response:
@@ -108,8 +111,8 @@ class QueryClient:
             raise ValueError('request mismatch')
         return frames
 
-    def _chat(self, payload, thread):
-        with self.post('/agent/chat', payload) as response:
+    def _chat(self, payload, thread=None, path='/agent/chat'):
+        with self.post(path, payload) as response:
             if response.headers.get_content_type() != 'text/event-stream':
                 raise ValueError('invalid response')
             raw = response.read(2 * 1024 * 1024 + 1)

@@ -48,13 +48,15 @@ def test_real_desktop_lifecycle(tmp_path, monkeypatch):
         values = iter(values)
         monkeypatch.setattr(QInputDialog, 'getText', lambda *a: (next(values), True))
         monkeypatch.setattr(QInputDialog, 'getItem', lambda *a: ('购物', True))
-        next(b for b in window.business_buttons if b.text() == label).click()
-        wait(lambda: window.pending is not None and not window.busy)
-        assert not window.switch_account.isEnabled()
-        assert not any(b.isEnabled() for b in window.business_buttons)
-        pending = deepcopy(window.pending)
-        window.approve.click()
-        wait(lambda: not window.busy and window.pending is None)
+        with monkeypatch.context() as direct:
+            direct.setattr(window.client, 'query', lambda *a, **kw: pytest.fail('form used natural language'))
+            next(b for b in window.business_buttons if b.text() == label).click()
+            wait(lambda: window.pending is not None and not window.busy)
+            assert not window.switch_account.isEnabled()
+            assert not any(b.isEnabled() for b in window.business_buttons)
+            pending = deepcopy(window.pending)
+            window.approve.click()
+            wait(lambda: not window.busy and window.pending is None)
         return pending
     try:
         window = BankWindow(service.start())
@@ -78,6 +80,9 @@ def test_real_desktop_lifecycle(tmp_path, monkeypatch):
         assert limits['single_limit_minor'] == 1000 and limits['daily_limit_minor'] == 2000
         blocked = business_confirmation(window.client.query('使用「生活卡」在商户「商店」刷卡支付12.30元'))
         assert receipt(window.client.resume(blocked, 'approve'))['error_code'] == 'CARD_SINGLE_LIMIT_EXCEEDED'
+        wait(ready)
+        form('转账', ['张伟', '40'])
+        assert receipt(window.client.query('查询余额'))['data']['balance_minor'] == 94770
     finally:
         if window:
             window.close()
