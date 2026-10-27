@@ -113,6 +113,7 @@ class BankAgentState(TypedDict, total=False):
 
     # ── 用户输入 ──
     message: str
+    input_source: Literal['chat', 'form']  # Server-only entry marker, never trusted from a request.
 
     # ── 候选理解：未受信任，不得直接成为执行参数 ──
     scenario: str
@@ -325,6 +326,7 @@ SUPPORTED_CURRENCY = "CNY"
 UNTRUSTED_STATE_FIELDS: frozenset[str] = frozenset(
     {
         "user_id",
+        "input_source",
         "account_id",
         "request_id",
         "contact_id",

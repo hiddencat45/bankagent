@@ -288,7 +288,7 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
             history.append({"role": "assistant", "text": previous})
         history.append({"role": "user", "text": message.strip()})
 
-        return {**_cleared(), "status": "PROCESSING", "history": history[-_HISTORY_LIMIT:]}
+        return {**_cleared(), "input_source": "chat", "status": "PROCESSING", "history": history[-_HISTORY_LIMIT:]}
 
     def route_context(state: BankAgentState) -> Literal["continue", "end"]:
         return "continue" if state.get("status") == "PROCESSING" else "end"
@@ -716,7 +716,7 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
             except (ScenarioError, KeyError):
                 text = "操作未完成，请稍后重试。"
             # 模板先给出事实正确的原文，再由措辞层改写；改写不过校验就原样返回。
-            return {"response": rt.phraser.phrase(result, text)}
+            return {"response": text if state.get('input_source') == 'form' else rt.phraser.phrase(result, text)}
 
         if status == "REJECTED":
             return {"response": "该请求未获准办理。"}
