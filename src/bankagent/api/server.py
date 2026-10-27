@@ -34,7 +34,7 @@ DEMO_CUSTOMERS = {
 
 class Service:
     def __init__(self, *, clock=None, authenticate=None, candidate_model=None,
-                 registry=None, phraser=None, query_model=None, database_path=None):
+                 registry=None, phraser=None, query_model=None, database_path=None, allow_demo_customers=False):
         # 固定业务参考日，挑战仍随真实经过时间过期。
         started = datetime.now(SG_TZ)
         reference = datetime.combine(REFERENCE_DATE, datetime.min.time(), SG_TZ).replace(hour=12)
@@ -61,7 +61,7 @@ class Service:
         subscription_clock(clock=self.clock)
         configure_backend(data_factory=build_demo_data, lookup_authorization=self.challenges.lookup,
                           operation_hash=compute_operation_hash, lock=self.lock, clock=self.clock,
-                          database_path=database_path)
+                          database_path=database_path, allow_demo_customers=allow_demo_customers)
 
     def reserve(self):
         if not self.running.acquire(blocking=False):
@@ -228,7 +228,7 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
                registry=None, allow_lan=False, phraser=None, query_model=None, database_path=None):
     service = Service(clock=clock, authenticate=authenticate,
                       candidate_model=candidate_model, registry=registry, phraser=phraser, query_model=query_model,
-                      database_path=database_path)
+                      database_path=database_path, allow_demo_customers=demo and not allow_lan)
     app = FastAPI(title='有度 · 本地银行 Demo')
     app.state.service = service
 
@@ -311,10 +311,15 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
     def demo_customers(request: Request):
         require_local_customer_demo(request)
         current = service.sessions.resolve(request.headers.get('authorization'))
+        choices = customer_choices()
         return {'customers': [{'customer_ref': ref, 'display_name': row[0]}
-                              for ref, row in DEMO_CUSTOMERS.items()],
-                'current_customer_ref': next((ref for ref, row in DEMO_CUSTOMERS.items()
+                              for ref, row in choices.items()],
+                'current_customer_ref': next((ref for ref, row in choices.items()
                                                if row[1] == current.user_id), None)}
+
+    def customer_choices():
+        from bankagent.banking.bank_backend import demo_customer_choices
+        return {**DEMO_CUSTOMERS, **demo_customer_choices()}
 
     @app.post('/demo/customer-session')
     async def customer_session(request: Request):
@@ -325,7 +330,7 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
             raise ApiError('INVALID_REQUEST', '请选择演示客户。', 400) from None
         if (not isinstance(payload, dict) or set(payload) != {'customer_ref'}
                 or not isinstance(payload['customer_ref'], str)
-                or payload['customer_ref'] not in DEMO_CUSTOMERS):
+                or payload['customer_ref'] not in customer_choices()):
             raise ApiError('INVALID_REQUEST', '只能选择服务端提供的演示客户。', 400)
         service.reserve()
         try:
@@ -336,7 +341,10 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
                         record = service.challenges.lookup(service.challenge_by_thread.get(thread))
                         if record and record['decision'] == 'PENDING' and record['expires_at'] > service.clock():
                             raise ApiError('RUN_BUSY', '请先确认或取消当前业务，再切换演示客户。', 409)
-                _, user, account = DEMO_CUSTOMERS[payload['customer_ref']]
+                choices = customer_choices()
+                if payload['customer_ref'] not in choices:
+                    raise ApiError('ACCOUNT_NOT_ACCESSIBLE', '演示客户账户不可访问。', 403)
+                _, user, account = choices[payload['customer_ref']]
                 if get_balance(context=TrustedContext(user, account, 'demo-customer'))['status'] != 'COMPLETED':
                     raise ApiError('ACCOUNT_NOT_ACCESSIBLE', '演示客户账户不存在或归属不符。', 403)
                 issued = service.sessions.issue(user_id=user, account_id=account)

@@ -3,6 +3,7 @@ from bankagent.api.contracts import ApiError
 from bankagent.agent.scenarios import ScenarioError
 
 FORM_ACTIONS = {
+    'CREATE_DEMO_CUSTOMER': ('onboarding', 'DEMO_CUSTOMER_CREATE'),
     'OPEN_ACCOUNT': ('lifecycle', 'ACCOUNT_OPEN'),
     'ISSUE_DEBIT_CARD': ('lifecycle', 'DEBIT_ISSUE'),
     'ACTIVATE_DEBIT_CARD': ('lifecycle', 'DEBIT_ACTIVATE'),

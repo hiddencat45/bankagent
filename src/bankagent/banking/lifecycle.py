@@ -7,7 +7,7 @@ from uuid import uuid4
 from bankagent.banking.bank_types import TrustedContext, WriteContext
 
 DEMO_OPENING_BALANCE_MINOR = 100000
-OPERATIONS = frozenset({'OPEN_ACCOUNT', 'ISSUE_DEBIT_CARD', 'ACTIVATE_DEBIT_CARD', 'PAY_BY_CARD', 'SET_CARD_LIMITS'})
+OPERATIONS = frozenset({'CREATE_DEMO_CUSTOMER', 'OPEN_ACCOUNT', 'ISSUE_DEBIT_CARD', 'ACTIVATE_DEBIT_CARD', 'PAY_BY_CARD', 'SET_CARD_LIMITS'})
 DEFAULT_SINGLE_LIMIT_MINOR = 500000
 DEFAULT_DAILY_LIMIT_MINOR = 1000000
 
@@ -21,7 +21,43 @@ def text(value):
     return isinstance(value, str) and bool(value.strip()) and len(value) <= 80
 
 
+def _open_account_record(data, user_id, display_name, now):
+    account_id, transaction_id = 'account-' + uuid4().hex, 'txn-' + uuid4().hex
+    data['accounts'][account_id] = {'user_id': user_id,
+        'display_name': display_name, 'balance_minor': DEMO_OPENING_BALANCE_MINOR, 'currency': 'CNY'}
+    data['transactions'].append({'transaction_id': transaction_id, 'account_id': account_id,
+        'occurred_at': now.isoformat(), 'kind': 'INCOME',
+        'amount_minor': DEMO_OPENING_BALANCE_MINOR, 'category': '演示入账',
+        'merchant': '模拟银行演示资金', 'subscription_id': None})
+    return {'customer_id': user_id, 'account_id': account_id,
+        'display_name': display_name, 'balance_minor': DEMO_OPENING_BALANCE_MINOR,
+        'currency': 'CNY', 'funding_source': 'DEMO_CREDIT', 'transaction_id': transaction_id}
+
+
 class LifecycleMixin:
+    def demo_customer_choices(self):
+        with self._transaction():
+            return {row['demo_ref']: (f"{row['display_name']}（演示·{row['demo_ref'][-6:]}）", user,
+                    row['default_account_id']) for user, row in self._data.get('customers', {}).items()
+                    if row.get('identity_type') == 'DEMO' and row.get('demo_ref', '').startswith('demo-')
+                    and self._data['accounts'].get(row.get('default_account_id'), {}).get('user_id') == user}
+
+    def create_demo_customer(self, *, context: WriteContext, customer_name: str, account_name: str):
+        operation = 'CREATE_DEMO_CUSTOMER'
+        if not self._allow_demo_customers:
+            return result(operation, error='DEMO_CREATION_DISABLED')
+        if not text(customer_name) or not text(account_name):
+            return result(operation, error='INVALID_CUSTOMER_NAME')
+        params = dict(customer_name=customer_name, account_name=account_name)
+        def apply(data):
+            user, reference = 'user-' + uuid4().hex, 'demo-' + uuid4().hex
+            opened = _open_account_record(data, user, account_name, self._now())
+            data.setdefault('customers', {})[user] = {'display_name': customer_name,
+                'identity_type': 'DEMO', 'demo_ref': reference,
+                'default_account_id': opened['account_id'], 'created_at': self._now().isoformat()}
+            return result(operation, {**opened, 'customer_name': customer_name, 'customer_ref': reference})
+        return self._lifecycle_write(context, operation, params, apply)
+
     def _card_limits(self, card_id, card):
         today = self._now().date()
         used = sum(row['amount_minor'] for row in self._data['transactions']
@@ -102,18 +138,9 @@ class LifecycleMixin:
         if not text(display_name):
             return result(operation, error='INVALID_ACCOUNT_NAME')
         def apply(data):
-            account_id, transaction_id = 'account-' + uuid4().hex, 'txn-' + uuid4().hex
             data.setdefault('customers', {}).setdefault(context.user_id,
                 {'display_name': '演示客户', 'identity_type': 'DEMO'})
-            data['accounts'][account_id] = {'user_id': context.user_id,
-                'display_name': display_name, 'balance_minor': DEMO_OPENING_BALANCE_MINOR, 'currency': 'CNY'}
-            data['transactions'].append({'transaction_id': transaction_id, 'account_id': account_id,
-                'occurred_at': self._now().isoformat(), 'kind': 'INCOME',
-                'amount_minor': DEMO_OPENING_BALANCE_MINOR, 'category': '演示入账',
-                'merchant': '模拟银行演示资金', 'subscription_id': None})
-            return result(operation, {'customer_id': context.user_id, 'account_id': account_id,
-                'display_name': display_name, 'balance_minor': DEMO_OPENING_BALANCE_MINOR,
-                'currency': 'CNY', 'funding_source': 'DEMO_CREDIT', 'transaction_id': transaction_id})
+            return result(operation, _open_account_record(data, context.user_id, display_name, self._now()))
         return self._lifecycle_write(context, operation, {'display_name': display_name}, apply)
 
     def issue_debit_card(self, *, context: WriteContext, display_name: str):

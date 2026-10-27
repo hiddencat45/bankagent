@@ -229,7 +229,8 @@ def business_confirmation(frames):
         return None
     card = next(d['payload'] for e, d in frames if e == 'card' and d['type'] == 'confirm')
     signal = next(d for e, d in frames if e == 'interrupt')
-    labels = {'OPEN_ACCOUNT': '开立模拟账户', 'ISSUE_DEBIT_CARD': '办理借记卡',
+    labels = {'CREATE_DEMO_CUSTOMER': '创建演示客户并首次开户',
+              'OPEN_ACCOUNT': '开立模拟账户', 'ISSUE_DEBIT_CARD': '办理借记卡',
               'ACTIVATE_DEBIT_CARD': '激活借记卡', 'PAY_BY_CARD': '模拟消费',
               'FREEZE_CARD': '冻结卡片', 'UNFREEZE_CARD': '解冻卡片', 'SET_CARD_LIMITS': '设置消费限额'}
     operation = card.get('operation')
@@ -244,10 +245,14 @@ def business_confirmation(frames):
             or datetime.fromisoformat(card['expires_at']).utcoffset() is None):
         raise ValueError('invalid confirmation binding')
     summary = f"业务：{labels[operation]}\n名称：{card['display_name']}"
-    if operation == 'OPEN_ACCOUNT':
+    if operation in {'OPEN_ACCOUNT', 'CREATE_DEMO_CUSTOMER'}:
         if card.get('opening_credit_minor') != 100000 or card.get('currency') != 'CNY':
             raise ValueError('invalid opening credit')
         summary += '\n将记入 ¥ 1,000.00 演示资金（非真实存款）。'
+        if operation == 'CREATE_DEMO_CUSTOMER':
+            if not isinstance(card.get('account_name'), str) or not card['account_name'].strip():
+                raise ValueError('invalid first account')
+            summary += '\n首次开户名称：' + card['account_name'] + '\n仅创建虚构演示身份，不进行实名注册。'
     elif operation == 'PAY_BY_CARD':
         if (not isinstance(card.get('merchant'), str) or not card['merchant'].strip()
                 or card.get('currency') != 'CNY' or type(card.get('amount_minor')) is not int
