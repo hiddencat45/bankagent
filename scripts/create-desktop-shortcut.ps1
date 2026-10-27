@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 if (-not $Destination) { $Destination = Join-Path $root 'Youdu.lnk' }
 $python = Join-Path $root '.venv\Scripts\pythonw.exe'
-$icon = Join-Path $root 'desktop\assets\youdu.ico'
+$icon = Join-Path $root 'desktop\assets\youdu-app.ico'
 if (-not (Test-Path -LiteralPath $python)) { throw 'Run scripts/setup-desktop.ps1 first.' }
 if (-not (Test-Path -LiteralPath $icon)) { throw 'Application icon is missing.' }
 $shell = New-Object -ComObject WScript.Shell

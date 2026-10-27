@@ -160,7 +160,7 @@ def main():
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('Youdu.BankAgent.Desktop')
         app = QApplication(sys.argv[:1])
         from PySide6.QtGui import QIcon
-        app.setWindowIcon(QIcon(str(ROOT / 'desktop' / 'assets' / 'youdu.ico')))
+        app.setWindowIcon(QIcon(str(ROOT / 'desktop' / 'assets' / 'youdu-app.ico')))
         url = service.start()
         if not args.legacy:
             from desktop.preview import PreviewWindow
