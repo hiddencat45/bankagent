@@ -103,6 +103,19 @@ class BankBackend(LifecycleMixin):
                     context.account_id, self._now().date()),
             })
 
+    def desktop_objects(self, *, context):
+        with self._transaction():
+            if not self._owned(context):
+                return _result('DESKTOP_OBJECTS', error='ACCOUNT_NOT_ACCESSIBLE')
+            recipients = [{'display_name': row['display_name'], 'kind': '联系人'}
+                          for row in self._data['contacts'].values() if row['user_id'] == context.user_id]
+            recipients += [{'display_name': row.get('display_name', '默认演示账户'), 'kind': '本人账户'}
+                           for key, row in self._data['accounts'].items()
+                           if row['user_id'] == context.user_id and key != context.account_id]
+            cards = [{'display_name': row['display_name'], 'status': row['status']}
+                     for row in self._data['cards'].values() if row['account_id'] == context.account_id]
+            return _result('DESKTOP_OBJECTS', {'recipients': recipients, 'cards': cards})
+
     def find_contacts(self, *, context: TrustedContext, name: str) -> list[dict[str, str]]:
         with self._transaction():
             if not self._owned(context):
@@ -760,3 +773,7 @@ def execute_transfer_batch(*, context, items):
 
 def query_transfer_batches(*, context):
     return _configured().query_transfer_batches(context=context)
+
+
+def desktop_objects(*, context):
+    return _configured().desktop_objects(context=context)

@@ -1,0 +1,102 @@
+{
+  "platform": "windows",
+  "visible": true,
+  "window_logical": [
+    1280,
+    736
+  ],
+  "device_pixel_ratio": 1.25,
+  "logical_dpi": 96.0,
+  "screen_logical": [
+    1536,
+    864
+  ],
+  "screenshots": {
+    "overview": {
+      "width_px": 1600,
+      "height_px": 920
+    },
+    "form": {
+      "width_px": 1600,
+      "height_px": 920
+    },
+    "confirmation": {
+      "width_px": 1600,
+      "height_px": 920
+    },
+    "result": {
+      "width_px": 1600,
+      "height_px": 920
+    }
+  },
+  "model": "offline deterministic for UI acceptance",
+  "operation": [
+    "select 张伟, enter 40",
+    "back to overview and return: input retained",
+    "prepare 40, return to edit: old confirmation cancelled",
+    "prepare 30, approve once",
+    "query balance through assistant"
+  ],
+  "balance_minor_before": 500000,
+  "balance_minor_after": 497000,
+  "ledger_rows": [
+    {
+      "transaction_id": "txn-001",
+      "occurred_at": "2026-10-01T09:00:00+08:00",
+      "kind": "INCOME",
+      "amount_minor": 600000,
+      "category": "工资",
+      "merchant": "演示雇主"
+    },
+    {
+      "transaction_id": "txn-002",
+      "occurred_at": "2026-10-02T09:00:00+08:00",
+      "kind": "EXPENSE",
+      "amount_minor": 77000,
+      "category": "居住",
+      "merchant": "演示租赁"
+    },
+    {
+      "transaction_id": "txn-003",
+      "occurred_at": "2026-10-10T12:00:00+08:00",
+      "kind": "EXPENSE",
+      "amount_minor": 12000,
+      "category": "餐饮",
+      "merchant": "演示餐厅"
+    },
+    {
+      "transaction_id": "txn-004",
+      "occurred_at": "2026-10-11T08:00:00+08:00",
+      "kind": "EXPENSE",
+      "amount_minor": 6000,
+      "category": "交通",
+      "merchant": "演示交通"
+    },
+    {
+      "transaction_id": "txn-005",
+      "occurred_at": "2026-10-12T10:00:00+08:00",
+      "kind": "EXPENSE",
+      "amount_minor": 2500,
+      "category": "订阅",
+      "merchant": "演示影音会员"
+    },
+    {
+      "transaction_id": "txn-006",
+      "occurred_at": "2026-10-12T10:00:30+08:00",
+      "kind": "EXPENSE",
+      "amount_minor": 2500,
+      "category": "订阅",
+      "merchant": "演示影音会员"
+    },
+    {
+      "transaction_id": "txn-83cda2bce7cd4ce1924f916c01dd41e3",
+      "occurred_at": "2026-10-18T12:00:02.997736+08:00",
+      "kind": "TRANSFER_OUT",
+      "amount_minor": 3000,
+      "category": "转账",
+      "merchant": null,
+      "transfer_id": "transfer-55177a630e7047a3832c2e82ab861bb3",
+      "related_transaction_id": "txn-039a38d3490a43e89b8799f96d7e1340"
+    }
+  ]
+}

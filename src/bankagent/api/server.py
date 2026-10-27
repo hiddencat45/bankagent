@@ -309,6 +309,12 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
         if request.client.host not in {'127.0.0.1', '::1', 'testclient'}:
             raise ApiError('NOT_FOUND', '客户切换仅限本机演示。', 404)
 
+    @app.get('/bank/desktop-objects')
+    def desktop_objects(request: Request):
+        from bankagent.banking.bank_backend import desktop_objects as read_objects
+        current = service.sessions.resolve(request.headers.get('authorization'))
+        return read_objects(context=TrustedContext(current.user_id, current.account_id, 'desktop-objects'))
+
     @app.get('/bank/transfer-batches')
     def transfer_batches(request: Request):
         from bankagent.banking.bank_backend import query_transfer_batches
