@@ -41,6 +41,7 @@ presentation/*前端工作台预览*.pptx
 # Desktop diagnostics generated locally, never credentials or deliverables.
 .desktop-tmp/
 .desktop-check.log
+Youdu.lnk
 debug.log
 *.sqlite3
 *.sqlite3-journal
