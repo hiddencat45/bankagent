@@ -143,6 +143,7 @@ class LocalService:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--serve', metavar='READY_FILE')
+    parser.add_argument('--preview', action='store_true', help='Preview the two connected business views')
     args = parser.parse_args()
     if args.serve:
         serve(args.serve)
@@ -155,8 +156,13 @@ def main():
 
         app = QApplication(sys.argv[:1])
         url = service.start()
-        window = BankWindow(url)
-        window.statusBar().showMessage('当前账本：' + str(service.database_path))
+        if args.preview:
+            from desktop.preview import PreviewWindow
+            window = PreviewWindow(url)
+        else:
+            window = BankWindow(url)
+        window.statusBar().showMessage('本地模拟银行 · 两页预览，尚未替换正式布局' if args.preview else '当前账本：' + str(service.database_path))
+        window.statusBar().setToolTip('当前账本：' + str(service.database_path))
         window.show()
         app.exec()
     except Exception as exc:

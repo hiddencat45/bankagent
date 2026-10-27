@@ -79,6 +79,17 @@ class QueryClient:
             raise ValueError('invalid demo customers')
         return {**accounts, **data}
 
+    def workspace_overview(self):
+        overview = self.overview()
+        for path, key in [('/bank/desktop-objects', 'objects'), ('/bank/bills', 'ledger')]:
+            with self.opener.open(Request(self.url + path,
+                    headers={'Authorization': 'Bearer ' + self.token}), timeout=20) as response:
+                result = json.load(response)
+            if result.get('status') != 'COMPLETED':
+                raise ValueError('overview unavailable')
+            overview[key] = result['data']
+        return overview
+
     def bills(self):
         with self.opener.open(Request(self.url + '/bank/bills',
                 headers={'Authorization': 'Bearer ' + self.token}), timeout=20) as response:
