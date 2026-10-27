@@ -46,7 +46,7 @@ def test_real_desktop_lifecycle(tmp_path, monkeypatch):
         return not window.busy and window.client.token and window.accounts.count() > 0
     def form(label, values):
         values = iter(values)
-        monkeypatch.setattr(QInputDialog, 'getText', lambda *a: (next(values), True))
+        monkeypatch.setattr(QInputDialog, 'getText', lambda *a, **kw: (next(values), True))
         monkeypatch.setattr(QInputDialog, 'getItem', lambda *a: ('购物', True))
         with monkeypatch.context() as direct:
             direct.setattr(window.client, 'query', lambda *a, **kw: pytest.fail('form used natural language'))
