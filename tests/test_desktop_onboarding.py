@@ -26,7 +26,7 @@ def test_native_create_switch_issue_activate_reopen(tmp_path, monkeypatch):
         return not window.busy and window.customers.count() > 0 and window.accounts.count() > 0
     def write(button, values):
         values = iter(values)
-        monkeypatch.setattr(QInputDialog, 'getText', lambda *a: (next(values), True))
+        monkeypatch.setattr(QInputDialog, 'getText', lambda *a, **kw: (next(values), True))
         button.click()
         wait(lambda: window.pending is not None and not window.busy)
         assert not window.create_customer.isEnabled()

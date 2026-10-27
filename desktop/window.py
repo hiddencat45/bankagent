@@ -22,6 +22,8 @@ class BankWindow(QMainWindow):
         self.decision = None
         self.uncertain = False
         self.form_active = False
+        self.last_form = None
+        self.edit_requested = False
         self.closed = threading.Event()
         self.delivery = Delivery(self)
         self.delivery.completed.connect(self.receive)
@@ -107,10 +109,12 @@ class BankWindow(QMainWindow):
         self.approve = QPushButton('确认办理')
         self.reject = QPushButton('取消办理')
         self.retry = QPushButton('重试原决定 / 核对结果')
+        self.edit = QPushButton('修改表单')
+        self.edit.clicked.connect(self.edit_form)
         self.approve.clicked.connect(lambda: self.decide('approve'))
         self.reject.clicked.connect(lambda: self.decide('reject'))
         self.retry.clicked.connect(lambda: self.decide(self.decision))
-        for button in (self.approve, self.reject, self.retry):
+        for button in (self.approve, self.reject, self.edit, self.retry):
             actions.addWidget(button)
         confirm_layout.addLayout(actions)
         layout.addWidget(self.confirmation)
@@ -147,6 +151,7 @@ class BankWindow(QMainWindow):
         ready = self.pending is not None and not self.busy
         self.approve.setEnabled(ready and self.decision is None and self.pending['risk_level'] == 'YELLOW')
         self.reject.setEnabled(ready and self.decision is None)
+        self.edit.setEnabled(ready and self.decision is None and self.form_active and self.last_form is not None)
         self.retry.setVisible(self.decision is not None)
         self.retry.setEnabled(ready and self.decision is not None)
 
@@ -191,16 +196,24 @@ class BankWindow(QMainWindow):
         if reference and not self.busy and self.pending is None and not self.uncertain:
             self.run('connect', lambda: self.client.switch_account(reference))
 
-    def business_form(self, action):
+    def edit_form(self):
+        if self.busy or self.pending is None or self.decision is not None or not self.form_active or not self.last_form:
+            return
+        self.edit_requested = True
+        self.decide('reject')
+
+    def business_form(self, action, defaults=None):
         if self.busy or self.blocked or self.pending is not None:
             return
+        defaults = defaults or {}
         operations = {'创建演示客户': 'CREATE_DEMO_CUSTOMER', '开户': 'OPEN_ACCOUNT', '办理借记卡': 'ISSUE_DEBIT_CARD',
             '激活': 'ACTIVATE_DEBIT_CARD', '刷卡消费': 'PAY_BY_CARD', '转账': 'TRANSFER',
             '冻结': 'FREEZE_CARD', '解冻': 'UNFREEZE_CARD',
             '查询限额': 'QUERY_CARD_LIMITS', '设置限额': 'SET_CARD_LIMITS'}
         name, ok = QInputDialog.getText(self, action, '账户名称：' if action == '开户' else
                                        '虚构客户名称（勿填写真实身份资料）：' if action == '创建演示客户' else
-                                       '收款联系人或本人账户名称：' if action == '转账' else '卡片名称：')
+                                       '收款联系人或本人账户名称：' if action == '转账' else '卡片名称：',
+                                       text=next((defaults[k] for k in ('display_name', 'customer_name', 'recipient_name', 'card_name') if k in defaults), ''))
         if not ok:
             return
         name = name.strip()
@@ -210,7 +223,7 @@ class BankWindow(QMainWindow):
         key = 'display_name' if action in {'开户', '办理借记卡'} else 'recipient_name' if action == '转账' else 'card_name'
         fields = {key: name}
         if action == '创建演示客户':
-            account, ok = QInputDialog.getText(self, action, '首次开户名称（确认后记入1,000元演示资金）：')
+            account, ok = QInputDialog.getText(self, action, '首次开户名称（确认后记入1,000元演示资金）：', text=defaults.get('account_name', ''))
             if not ok:
                 return
             if not account.strip() or len(account) > 80 or any(c in account for c in '\n\r'):
@@ -221,7 +234,8 @@ class BankWindow(QMainWindow):
             import re
             amounts = []
             for label in ('单笔', '每日'):
-                value, ok = QInputDialog.getText(self, action, label + '消费限额（元；0 表示禁止消费）：')
+                value, ok = QInputDialog.getText(self, action, label + '消费限额（元；0 表示禁止消费）：',
+                                                text=defaults.get('single_limit' if label == '单笔' else 'daily_limit', ''))
                 if not ok:
                     return
                 if not re.fullmatch(r'[0-9]+(?:\.[0-9]{1,2})?', value):
@@ -231,14 +245,14 @@ class BankWindow(QMainWindow):
             fields.update(single_limit=amounts[0], daily_limit=amounts[1])
         elif action in {'刷卡消费', '转账'}:
             if action == '刷卡消费':
-                merchant, ok = QInputDialog.getText(self, action, '演示商户名称：')
+                merchant, ok = QInputDialog.getText(self, action, '演示商户名称：', text=defaults.get('merchant', ''))
                 if not ok:
                     return
                 if not merchant.strip() or len(merchant) > 80 or any(c in merchant for c in '\n\r'):
                     self.status.setText('商户名称不合法。')
                     return
                 fields['merchant'] = merchant.strip()
-            amount, ok = QInputDialog.getText(self, action, '金额（元，最多两位小数）：')
+            amount, ok = QInputDialog.getText(self, action, '金额（元，最多两位小数）：', text=defaults.get('amount', ''))
             if not ok:
                 return
             import re
@@ -247,12 +261,15 @@ class BankWindow(QMainWindow):
                 return
             fields['amount'] = amount
             if action == '刷卡消费':
-                category, ok = QInputDialog.getItem(self, action, '分类：', ['餐饮', '交通', '购物', '居住', '其他'], 4, False)
+                categories = ['餐饮', '交通', '购物', '居住', '其他']
+                category, ok = QInputDialog.getItem(self, action, '分类：', categories,
+                                                   categories.index(defaults.get('category', '其他')), False)
                 if not ok:
                     return
                 fields['category'] = category
         self.history.appendPlainText('表单：' + action + ' · ' + name)
         self.form_active = True
+        self.last_form = (action, dict(fields))
         self.status.setText('正在校验表单，请稍候…')
         self.run('query', lambda: self.client.form(operations[action], fields))
 
@@ -262,6 +279,8 @@ class BankWindow(QMainWindow):
             return
         self.history.appendPlainText('你：' + text)
         self.form_active = False
+        self.last_form = None
+        self.edit_requested = False
         self.input.clear()
         self.status.setText('正在查询，请稍候…')
         thread = self.thread
@@ -288,6 +307,8 @@ class BankWindow(QMainWindow):
         self.busy = False
         if kind in {'connect', 'customer'}:
             self.form_active = False
+            self.last_form = None
+            self.edit_requested = False
             self.clear_confirmation()
             self.thread = None
             self.blocked = False
@@ -373,6 +394,14 @@ class BankWindow(QMainWindow):
                                     + ' · ' + ('表单直达' if self.form_active else self.mode))
                 if final == 'COMPLETED' and self.pending is None:
                     QTimer.singleShot(0, self.load_accounts)
+                if kind == 'decision' and final == 'REJECTED' and self.edit_requested:
+                    self.edit_requested = False
+                    action, fields = self.last_form
+                    token = self.client.token
+                    self.status.setText('旧确认已取消，请修改表单并重新确认。')
+                    QTimer.singleShot(0, lambda: self.business_form(action, fields)
+                        if not self.closed.is_set() and self.client.token == token
+                        and self.last_form == (action, fields) else None)
             except (KeyError, TypeError, ValueError):
                 self.history.appendPlainText('有度：服务返回的数据不完整，已停止展示。请新建对话重试。')
                 self.blocked = True
@@ -383,6 +412,8 @@ class BankWindow(QMainWindow):
         if self.busy or self.uncertain:
             return
         self.clear_confirmation()
+        self.last_form = None
+        self.edit_requested = False
         self.thread = None
         self.blocked = False
         self.history.clear()
