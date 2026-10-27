@@ -1,7 +1,7 @@
 """本地单进程 Demo 的 FastAPI 接线；认证结果只来自服务端。"""
 import threading
 import secrets
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -384,6 +384,14 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
             current = service.sessions.resolve(request.headers.get('authorization'))
             start = service.clock().date().replace(day=1)
             end = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+            query = request.query_params
+            if set(query) - {'start', 'end'} or any(len(query.getlist(k)) != 1 for k in query):
+                raise ApiError('INVALID_REQUEST', '仅支持起止日期，账户由当前会话确定。', 400)
+            if query:
+                try:
+                    start, end = date.fromisoformat(query['start']), date.fromisoformat(query['end'])
+                except (KeyError, ValueError):
+                    raise ApiError('INVALID_DATE_RANGE', '请同时提供有效起止日期。', 400)
             return query_bills(context=TrustedContext(current.user_id, current.account_id, 'bill-list'),
                                start=start, end=end)
 

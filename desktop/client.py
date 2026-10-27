@@ -3,10 +3,15 @@ from datetime import datetime
 import json
 from urllib.request import Request, ProxyHandler, build_opener
 from urllib.error import HTTPError
+from urllib.parse import urlencode
 
 
 class CustomerSwitchBusy(Exception):
     """Server refused the switch before replacing the session."""
+
+
+class LedgerUnavailable(Exception):
+    """Safe, actionable error from the read-only ledger endpoint."""
 
 
 class VerificationRejected(Exception):
@@ -101,6 +106,17 @@ class QueryClient:
         if data.get('operation') != 'QUERY_BILLS' or data.get('status') != 'COMPLETED':
             raise ValueError('bill query failed')
         return query_result(data)
+
+    def ledger(self, start=None, end=None):
+        suffix = '?' + urlencode({'start': start, 'end': end}) if start is not None else ''
+        with self.opener.open(Request(self.url + '/bank/bills' + suffix,
+                headers={'Authorization': 'Bearer ' + self.token}), timeout=20) as response:
+            result = json.load(response)
+        if result.get('status') != 'COMPLETED':
+            raise LedgerUnavailable({'INVALID_DATE_RANGE':'日期范围无效，请选择不超过366天的范围。',
+                'TOO_MANY_TRANSACTIONS':'范围内超过100笔记录，请缩短日期范围后查询。'}.get(result.get('error_code'), '当前账单不可读取，请重新连接后查询。'))
+        query_result(result)  # Apply the existing evidence validation before displaying money.
+        return result['data']
 
     def transfer_batches(self):
         with self.opener.open(Request(self.url + '/bank/transfer-batches',

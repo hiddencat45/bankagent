@@ -1,12 +1,14 @@
-"""Opt-in two-view preview. Reuses BankWindow's sessions, confirmations and retry controller."""
+"""Native business workspace reusing BankWindow's session and confirmation controller."""
 import re
 from decimal import Decimal
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox, QStackedWidget, QScrollArea, QLineEdit, QComboBox, QListWidget,
-    QTableWidget, QTableWidgetItem, QHeaderView, QPlainTextEdit, QSizePolicy)
+    QTableWidget, QTableWidgetItem, QHeaderView, QPlainTextEdit, QSizePolicy, QMenu)
 from desktop.window import BankWindow
-from desktop.client import money
+from desktop.client import money, LedgerUnavailable
+from desktop.bills import BillsPage
+from desktop.orb import AssistantOrb
 
 STYLE = '''
 QWidget {font-family:"Microsoft YaHei";font-size:14px;color:#233631;background:#f4f6f5;}
@@ -54,7 +56,7 @@ def box(title):
 class PreviewWindow(BankWindow):
     def __init__(self, url):
         super().__init__(url)
-        # Preserve the existing controller/widgets; only these two views are previewed.
+        # Preserve the existing controller/widgets across the business views.
         self.legacy_root = self.takeCentralWidget()
         self.legacy_root.setParent(self)
         self.legacy_root.hide()
@@ -63,7 +65,7 @@ class PreviewWindow(BankWindow):
         self._prepared_from_form = False
         self.completed_form = False
         self.card_details = {}
-        self.setWindowTitle('有度 · 账户与转账预览')
+        self.setWindowTitle('有度 · 本地银行 AI 助手')
         self.resize(1280, 850)
         self.setMinimumSize(1040, 720)
         root = QWidget()
@@ -78,13 +80,17 @@ class PreviewWindow(BankWindow):
         nav.setContentsMargins(18, 26, 18, 20)
         nav.setSpacing(12)
         nav.addWidget(text('有度', 'brand'))
-        nav.addWidget(text('本地模拟银行\n两页设计预览', 'muted'))
+        nav.addWidget(text('本地模拟银行', 'muted'))
         self.overview_nav = QPushButton('账户概览')
         self.transfer_nav = QPushButton('转账')
-        for index, button in enumerate((self.overview_nav, self.transfer_nav)):
+        self.ledger_nav = QPushButton('交易记录')
+        for index, button in enumerate((self.overview_nav, self.transfer_nav, self.ledger_nav)):
             button.setCheckable(True)
             button.clicked.connect(lambda checked=False, page=index: self.show_page(page))
             nav.addWidget(button)
+        self.business_menu = QPushButton('账户与卡 ▾')
+        self.business_menu.clicked.connect(self.show_business_menu)
+        nav.insertWidget(3, self.business_menu)
         nav.addStretch()
         nav.addWidget(text('演示身份', 'muted'))
         nav.addWidget(self.customers)
@@ -94,7 +100,7 @@ class PreviewWindow(BankWindow):
         outer.addWidget(rail)
         body = QWidget()
         layout = QVBoxLayout(body)
-        layout.setContentsMargins(24, 18, 24, 16)
+        layout.setContentsMargins(24, 18, 24, 78)
         layout.setSpacing(14)
         identity = QHBoxLayout()
         labels = QVBoxLayout()
@@ -119,6 +125,9 @@ class PreviewWindow(BankWindow):
         self.pages = QStackedWidget()
         self.pages.addWidget(self.build_overview())
         self.pages.addWidget(self.build_transfer())
+        self.bills_page = BillsPage()
+        self.bills_page.requested.connect(self.load_ledger)
+        self.pages.addWidget(self.bills_page)
         main_layout.addWidget(self.pages)
         self.confirmation.setTitle('请核对 · 确认前不会扣款')
         self.approve.setObjectName('primary')
@@ -142,19 +151,31 @@ class PreviewWindow(BankWindow):
         columns.addWidget(scroll, 1)
         assistant, ai = box('AI 助手')
         self.assistant_box = assistant
-        assistant.setFixedWidth(310)
+        assistant.setParent(root)
+        assistant.setObjectName('floatingAssistant')
+        tools = QHBoxLayout()
+        self.ai_expand, self.ai_close = QPushButton('放大'), QPushButton('收起')
+        self.ai_expand.setCheckable(True)
+        self.ai_expand.toggled.connect(self.position_assistant)
+        self.ai_close.clicked.connect(lambda: self.toggle_assistant(False))
+        tools.addWidget(self.new); tools.addStretch(); tools.addWidget(self.ai_expand); tools.addWidget(self.ai_close)
+        ai.addLayout(tools)
+        self.ai_context = text('当前账户正在读取…', 'muted')
+        ai.addWidget(self.ai_context)
         ai.addWidget(text('与左侧业务共享当前客户、账户和账本。', 'muted'))
         self.conversation = QPlainTextEdit()
         self.conversation.setReadOnly(True)
+        self.conversation.setMinimumHeight(140)
         self.conversation.setPlaceholderText('可问余额、查询交易，或描述要办理的业务。写操作仍会显示确认卡。')
         ai.addWidget(self.conversation, 1)
+        shortcuts = QHBoxLayout()
         for button in self.buttons[:2]:
-            ai.addWidget(button)
+            shortcuts.addWidget(button)
+        ai.addLayout(shortcuts)
         self.input.setPlaceholderText('例如：转完后查看余额')
         ai.addWidget(self.input)
         self.submit.setObjectName('primary')
         ai.addWidget(self.submit)
-        ai.addWidget(self.new)
         diagnostics = QGroupBox('展开操作详情')
         diagnostics.setCheckable(True)
         diagnostics.setChecked(False)
@@ -164,12 +185,51 @@ class PreviewWindow(BankWindow):
         self.history.hide()
         diagnostics.toggled.connect(self.history.setVisible)
         ai.addWidget(diagnostics)
-        columns.addWidget(assistant)
+        assistant.hide()
+        self.orb = AssistantOrb(root)
+        self.orb.toggled.connect(self.toggle_assistant)
         layout.addLayout(columns, 1)
         outer.addWidget(body, 1)
-        self.setStyleSheet(STYLE)
+        self.setStyleSheet(STYLE + '\nQGroupBox#floatingAssistant {background: #fafffd; border: 1px solid #a8cfc2; border-radius:16px;} QLabel#ledgerTotal {background:white;padding:18px;border:1px solid #dbe3de;border-radius:8px;font-size:20px;}')
         self.show_page(0)
         self.controls()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.position_assistant()
+
+    def position_assistant(self):
+        if not hasattr(self, 'orb'): return
+        root = self.centralWidget()
+        self.orb.move(root.width()-82, root.height()-72)
+        width = min(620 if self.ai_expand.isChecked() else 390, root.width()-40)
+        height = min(580, root.height()-105)
+        self.assistant_box.setGeometry(root.width()-width-22, root.height()-height-86, width, height)
+        self.assistant_box.raise_(); self.orb.raise_()
+
+    def toggle_assistant(self, shown):
+        self.orb.blockSignals(True); self.orb.setChecked(shown); self.orb.blockSignals(False)
+        self.assistant_box.setVisible(shown); self.position_assistant()
+        if shown: self.input.setFocus()
+
+    def show_business_menu(self):
+        menu = QMenu(self)
+        for button in [self.create_customer] + self.business_buttons + [self.batch_receipts]:
+            action = menu.addAction(button.text()); action.setEnabled(button.isEnabled())
+            action.triggered.connect(button.click)
+        menu.exec(self.business_menu.mapToGlobal(self.business_menu.rect().bottomLeft()))
+
+    def load_ledger(self):
+        if self.busy or not self.client.token: return
+        start, end = self.bills_page.period()
+        if start >= end:
+            self.bills_page.clear('开始日期不能晚于结束日期。'); return
+        self.bills_page.clear('正在读取账本…')
+        def read():
+            try: return self.client.ledger(start, end)
+            except LedgerUnavailable as exc: return {'read_error':str(exc)}
+            except Exception: return {'read_error':'账单连接或响应异常，请重新查询。'}
+        self.run('ledger', read)
 
     def build_overview(self):
         page = QWidget()
@@ -221,6 +281,7 @@ class PreviewWindow(BankWindow):
         self.empty_ledger = text('正在读取流水…', 'muted')
         entries.addWidget(self.empty_ledger)
         layout.addWidget(ledger)
+        all_bills = QPushButton('查看全部账单'); all_bills.clicked.connect(lambda:self.show_page(2)); layout.addWidget(all_bills)
         return page
 
     def build_transfer(self):
@@ -263,6 +324,7 @@ class PreviewWindow(BankWindow):
         self.pages.setCurrentIndex(index)
         self.overview_nav.setChecked(index == 0)
         self.transfer_nav.setChecked(index == 1)
+        self.ledger_nav.setChecked(index == 2)
         for i in range(self.pages.count()):
             self.pages.widget(i).setSizePolicy(QSizePolicy.Policy.Preferred,
                 QSizePolicy.Policy.Preferred if i == index else QSizePolicy.Policy.Ignored)
@@ -276,13 +338,23 @@ class PreviewWindow(BankWindow):
     def run(self, kind, function):
         if self.busy:
             return
-        self.status.setText({'accounts': '正在更新账户与流水…', 'query': '正在处理请求，请稍候…',
+        self.status.setText({'ledger': '正在查询账本…', 'accounts': '正在更新账户与流水…', 'query': '正在处理请求，请稍候…',
                              'decision': '正在核对并办理，请勿重复提交…'}.get(kind, '正在连接服务…'))
         super().run(kind, function)
 
     def load_accounts(self):
         if self.client.token and not self.busy and self.pending is None and not self.uncertain:
-            self.run('accounts', self.client.workspace_overview)
+            period = self.bills_page.period() if self.bills_page.default_range else None
+            def read():
+                result = self.client.workspace_overview()
+                try:
+                    result['bill_ledger'] = self.client.ledger(*period) if period else result['ledger']
+                except LedgerUnavailable as exc:
+                    result['bill_error'] = str(exc)
+                except Exception:
+                    result['bill_error'] = '账单连接或响应异常，请重新查询。'
+                return result
+            self.run('accounts', read)
 
     def controls(self):
         super().controls()
@@ -301,6 +373,10 @@ class PreviewWindow(BankWindow):
         self.transfer_form.setVisible(not self.completed_form and not (self.pending and self._prepared_from_form))
         self.another_transfer.setVisible(self.completed_form)
         self.another_transfer.setEnabled(not self.busy and not self.pending and not self.uncertain)
+        self.bills_page.query.setEnabled(bool(self.client.token) and not self.busy)
+        self.bills_page.reset.setEnabled(bool(self.client.token) and not self.busy)
+        self.bills_page.start.setEnabled(not self.busy)
+        self.bills_page.end.setEnabled(not self.busy)
         self.fit_page()
         self.status.setProperty('state', 'pending' if self.pending else 'error' if self.blocked or self.uncertain else 'normal')
         self.status.style().unpolish(self.status)
@@ -388,10 +464,23 @@ class PreviewWindow(BankWindow):
         super().send(text)
 
     def receive(self, kind, result):
+        if kind == 'ledger':
+            self.busy = False
+            if 'read_error' in result:
+                self.bills_page.clear(result['read_error'])
+                self.status.setText('账单未更新，请重试；未执行任何资金操作。')
+            else:
+                self.bills_page.set_data(result)
+                self.status.setText('账单已更新 · 当前账户实际账本')
+            self.controls()
+            return
         super().receive(kind, result)
         if not hasattr(self, 'pages'):
             return
         if kind in {'connect', 'customer', 'customer_error'}:
+            self.bills_page.clear()
+            self.bills_page.default_range = None
+            self.ai_context.setText('当前账户正在读取…')
             self.snapshot = None
             self.actor = None
             self.completed_form = False
@@ -405,16 +494,29 @@ class PreviewWindow(BankWindow):
             self.payer.setText('付款账户尚未确认')
             self.conversation.clear()
             self.result_box.hide()
+        elif kind == 'batch_receipts':
+            self.conversation.appendPlainText(result)
+            self.toggle_assistant(True)
         elif kind == 'accounts':
             actor = (result.get('current_customer_ref'), result['current_account_ref'])
             if self.actor is not None and actor != self.actor:
                 self.amount.clear()
+            changed = self.actor != actor
             self.actor, self.snapshot = actor, result
+            if changed:
+                self.bills_page.search.clear()
+                self.bills_page.category.setCurrentIndex(0)
+                self.bills_page.select_tab(False)
+            if result.get('bill_error'):
+                self.bills_page.clear(result['bill_error'])
+            else:
+                self.bills_page.set_data(result.get('bill_ledger', result['ledger']), default=changed)
             self.status.setText('账户与流水已更新 · 与助手共享同一账本')
             for index, account in enumerate(result['accounts']):
                 self.accounts.setItemText(index, account['display_name'])
             current = next(a for a in result['accounts'] if a['account_ref'] == actor[1])
             self.current_account.setText('当前账户：' + current['display_name'])
+            self.ai_context.setText(self.current_customer.text() + '\n当前账户：' + current['display_name'])
             self.balance_value.setText('¥ ' + money(current['balance_minor']))
             self.balance_note.setText(current['display_name'] + ' · 人民币账户余额')
             self.payer.setText('付款账户：' + current['display_name'] + '\n可用余额：¥ ' + money(current['balance_minor']))
@@ -489,6 +591,7 @@ class PreviewWindow(BankWindow):
                     self.result_box.show()
                 self.conversation.appendPlainText('实际结果：\n' + '\n'.join(summaries))
             if self.pending:
+                self.toggle_assistant(False)
                 self.status.setText('办理结果待核对 · 请重试原决定，不要另建付款' if self.decision is not None else '等待确认 · 尚未执行付款或业务变更')
                 if self.decision is None:
                     self.result_box.hide()
