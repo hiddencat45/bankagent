@@ -119,6 +119,8 @@ def test_desktop_entry_reopens_same_ledger(tmp_path, monkeypatch):
             app.processEvents()
             time.sleep(.01)
         assert window.client.token
+        assert not window.windowIcon().isNull()
+        assert window.windowIcon().pixmap(32, 32).width() == 32
         assert str(original) in window.statusBar().currentMessage()
         assert receipt(window.client.query('查询余额'))['data']['balance_minor'] == 496000
         window.close()
