@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -12,6 +13,8 @@ import time
 from urllib.request import ProxyHandler, build_opener
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from desktop.startup import StartupError, database_error, prepare_database
 MODEL_SETTINGS = ('API_KEY', 'BASE_URL', 'NAME', 'TIMEOUT', 'MAX_TOKENS', 'THINKING')
 
 
@@ -43,13 +46,36 @@ def serve(ready_file):
 
     threading.Thread(target=watch_parent, daemon=True).start()
     sys.path[:0] = [str(ROOT), str(ROOT / 'src')]
-    import uvicorn
-    from frontend.dev_app import create_app
+    error_file = Path(ready_file).with_suffix('.error.json')
+    def report(code):
+        # Only a fixed category crosses the process boundary; no URLs, keys or tracebacks.
+        error_file.write_text(json.dumps({'code': code}), encoding='utf-8')
+
+    try:
+        import uvicorn
+        from frontend.dev_app import create_app
+        from bankagent.agent.model_providers import ProviderConfigError
+    except ImportError:
+        report('DEPENDENCY')
+        return
+
+    try:
+        os.environ['BANKAGENT_DEMO_ALLOW_LAN'] = '0'
+        application = create_app()
+    except ProviderConfigError:
+        report('MODEL_CONFIG')
+        return
+    except (OSError, sqlite3.Error, ValueError) as exc:
+        report(database_error(exc) if os.environ.get('BANKAGENT_DB_PATH') else 'SERVICE')
+        return
+    except Exception:
+        report('SERVICE')
+        return
 
     os.environ['BANKAGENT_DEMO_ALLOW_LAN'] = '0'
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
-        config = uvicorn.Config(create_app(), log_config=None, access_log=False)
+        config = uvicorn.Config(application, log_config=None, access_log=False)
         Path(ready_file).write_text(json.dumps({'port': sock.getsockname()[1]}))
         uvicorn.Server(config).run(sockets=[sock])
 
@@ -60,15 +86,18 @@ class LocalService:
         self.timeout = timeout
         self.process = None
         self.temp = None
+        self.database_path = None
 
     def start(self):
         self.temp = tempfile.TemporaryDirectory(prefix='bankagent-')
         ready = Path(self.temp.name) / 'ready.json'
         try:
+            env = dict(self.env) if self.env is not None else desktop_environment()
+            self.database_path = prepare_database(env, ROOT)
             self.process = subprocess.Popen(
                 [str(Path(sys.executable).with_name('python.exe')) if sys.platform == 'win32'
                  else sys.executable, str(Path(__file__).resolve()), '--serve', str(ready)],
-                cwd=ROOT, env=self.env if self.env is not None else desktop_environment(),
+                cwd=ROOT, env=env,
                 stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0,
             )
@@ -76,7 +105,12 @@ class LocalService:
             deadline = time.monotonic() + self.timeout
             while time.monotonic() < deadline:
                 if self.process.poll() is not None:
-                    raise RuntimeError('本地服务启动失败，请检查依赖与 BANKAGENT_MODEL_* 配置。')
+                    code = 'SERVICE'
+                    try:
+                        code = json.loads(ready.with_suffix('.error.json').read_text(encoding='utf-8'))['code']
+                    except (OSError, ValueError, KeyError):
+                        pass
+                    raise StartupError(code, self.database_path)
                 try:
                     port = json.loads(ready.read_text())['port']
                     url = f'http://127.0.0.1:{port}'
@@ -86,7 +120,7 @@ class LocalService:
                 except (OSError, ValueError, KeyError):
                     pass
                 time.sleep(0.1)
-            raise RuntimeError('本地服务启动超时，请关闭后重试。')
+            raise StartupError('TIMEOUT', self.database_path)
         except BaseException:
             self.close()
             raise
@@ -122,14 +156,16 @@ def main():
         app = QApplication(sys.argv[:1])
         url = service.start()
         window = BankWindow(url)
+        window.statusBar().showMessage('当前账本：' + str(service.database_path))
         window.show()
         app.exec()
-    except Exception:
+    except Exception as exc:
         # Provider exceptions and URLs can contain secrets; never show raw errors.
         import ctypes
         ctypes.windll.user32.MessageBoxW(
-            0, '启动失败。请先运行 scripts/setup-desktop.ps1，'
-            '并检查 BANKAGENT_MODEL_* 配置。', '有度', 0x10)
+            0, str(exc) if isinstance(exc, StartupError) else
+            str(StartupError('DEPENDENCY' if isinstance(exc, ImportError) else 'SERVICE')),
+            '有度 · 启动失败', 0x10)
     finally:
         service.close()
 
