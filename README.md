@@ -20,7 +20,9 @@ PySide6 本地桌面银行模拟应用。普通表单与 AI 共用业务服务�
 - [最新产品与实施方案](docs/bankagent-实施方案-2026-10-26.md)
 - [桌面预览、截图与交互边界](docs/桌面应用.md)
 
-应用图标采用用户提供的机器人原图，窗口与任务栏使用多尺寸ICO。运行 `scripts/create-desktop-shortcut.ps1` 生成带图标的 `Youdu.lnk`，双击即可启动；首次setup也会生成。`.cmd` 文件本身仍显示Windows脚本图标，请使用快捷方式。
+应用图标采用用户提供的机器人原图。**推荐双击项目根目录 `Youdu.exe`**：机器人图标内嵌在启动器中，调用原有 `.venv` 的 PySide6 应用。已有环境运行 `scripts/build-desktop-launcher.ps1` 生成；首次setup也会生成。构建需要Windows .NET Framework 4的C#编译器，不安装额外SDK；这只是启动器，不能脱离项目和Python环境单独运行。
+
+原 `Youdu.lnk` 在本机资源管理器仍显示空白，图标选择器可读取图片，重启资源管理器未解决；不将该系统显示问题宣称已修复。新入口 `Youdu.exe` 已实际确认能显示机器人图标。旧 `.cmd` 仍可启动，保留原快捷方式文件，不清理系统缓存或修改注册表。
 
 ## 快速启动
 

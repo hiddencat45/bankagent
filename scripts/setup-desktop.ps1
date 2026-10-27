@@ -5,5 +5,5 @@ $root = Split-Path -Parent $PSScriptRoot
 if ($LASTEXITCODE -ne 0) { exit 1 }
 & (Join-Path $root '.venv/Scripts/python.exe') -m pip install -r (Join-Path $root 'requirements-desktop.txt') -i $Mirror --disable-pip-version-check
 if ($LASTEXITCODE -ne 0) { exit 1 }
-& (Join-Path $PSScriptRoot 'create-desktop-shortcut.ps1')
-Write-Host 'Desktop ready. Double-click Youdu.lnk or start-desktop.cmd.'
+& (Join-Path $PSScriptRoot 'build-desktop-launcher.ps1')
+Write-Host 'Desktop ready. Double-click Youdu.exe or start-desktop.cmd.'

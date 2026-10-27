@@ -42,6 +42,7 @@ presentation/*前端工作台预览*.pptx
 .desktop-tmp/
 .desktop-check.log
 Youdu.lnk
+Youdu.exe
 debug.log
 *.sqlite3
 *.sqlite3-journal
