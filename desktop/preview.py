@@ -109,6 +109,7 @@ class PreviewWindow(BankWindow):
         self.status.setObjectName('status')
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
+        layout.addWidget(self.migration_notice)
         columns = QHBoxLayout()
         columns.setSpacing(20)
         main = QWidget()
@@ -350,9 +351,9 @@ class PreviewWindow(BankWindow):
         self.result_box.hide()
         self.run('query', lambda: self.client.form('TRANSFER', fields))
 
-    def business_form(self, action, defaults=None):
+    def business_form(self, action, defaults=None, _card_checked=False):
         if action != '转账':
-            return super().business_form(action, defaults)
+            return super().business_form(action, defaults, _card_checked)
         if self.busy or self.pending or self.uncertain:
             return
         self.show_page(1)
@@ -493,7 +494,7 @@ class PreviewWindow(BankWindow):
                     self.result_box.hide()
                 QTimer.singleShot(0, lambda: self.main_scroll.ensureWidgetVisible(self.confirmation))
                 if self._prepared_from_form and self.decision is None:
-                    guidance = ('该操作需要独立认证，当前尚未接入，只能取消或返回修改。' if self.pending['risk_level'] == 'RED'
+                    guidance = ('当日累计转出（含本笔）超过1,000元。请点“前往模拟认证”，核对后继续原转账；也可取消。' if self.pending['risk_level'] == 'RED'
                                 else '请核对收款人和金额，确认后才会扣款。')
                     self.confirm_text.setText('付款：' + self.payer.text().split('\n')[0].removeprefix('付款账户：') + '\n' + self.pending['summary'] + '\n' + guidance)
             elif result[-1][1]['status'] == 'REJECTED' and not summaries:

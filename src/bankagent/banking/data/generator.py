@@ -21,6 +21,8 @@ def build_demo_data() -> dict:
                         "currency": "CNY"},
         "account-003": {"user_id": "user-003", "balance_minor": 0,
                         "currency": "CNY"},
+        "account-card-card-002": {"user_id": "user-001", "balance_minor": 0,
+                        "currency": "CNY", "display_name": "备用卡独立账户"},
     }
     contacts = {
         "contact-001": {"user_id": "user-001", "display_name": "张伟", "recipient_account_id": "account-002"},
@@ -30,7 +32,7 @@ def build_demo_data() -> dict:
     cards = {
         "card-001": {"account_id": "account-001", "display_name": "日常消费卡",
                      "status": "ACTIVE"},
-        "card-002": {"account_id": "account-001", "display_name": "备用卡",
+        "card-002": {"account_id": "account-card-card-002", "display_name": "备用卡",
                      "status": "FROZEN"},
         "card-003": {"account_id": "account-002", "display_name": "日常消费卡",
                      "status": "ACTIVE"},

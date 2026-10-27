@@ -1,0 +1,218 @@
+{
+  "mode": "live model / ASGI / isolated SQLite",
+  "steps": [
+    {
+      "input": "看看这个账户关联的银行卡和余额",
+      "events": [
+        [
+          "status",
+          {
+            "thread_id": "conv-7a6272f004964ff6bcd2daaae8da5845",
+            "request_id": "req-924f6b50fc134b1eb4e68286514226bb",
+            "mode": "model",
+            "step": "started",
+            "status": "PROCESSING"
+          }
+        ],
+        [
+          "message",
+          {
+            "thread_id": "conv-7a6272f004964ff6bcd2daaae8da5845",
+            "request_id": "req-924f6b50fc134b1eb4e68286514226bb",
+            "mode": "model",
+            "text": "当前账户关联 1 张卡：\n\n- **日常消费卡**（状态：正常/ACTIVE）\n\n账户余额：**5,000.00 元**（CNY）。\n\n需要看这张卡的限额或近期流水吗？"
+          }
+        ],
+        [
+          "card",
+          {
+            "thread_id": "conv-7a6272f004964ff6bcd2daaae8da5845",
+            "request_id": "req-924f6b50fc134b1eb4e68286514226bb",
+            "mode": "model",
+            "type": "result",
+            "payload": {
+              "operation": "QUERY_CARDS",
+              "status": "COMPLETED",
+              "data": {
+                "cards": [
+                  {
+                    "card_id": "card-001",
+                    "display_name": "日常消费卡",
+                    "status": "ACTIVE"
+                  }
+                ]
+              },
+              "error_code": null
+            }
+          }
+        ],
+        [
+          "card",
+          {
+            "thread_id": "conv-7a6272f004964ff6bcd2daaae8da5845",
+            "request_id": "req-924f6b50fc134b1eb4e68286514226bb",
+            "mode": "model",
+            "type": "result",
+            "payload": {
+              "operation": "GET_BALANCE",
+              "status": "COMPLETED",
+              "data": {
+                "balance_minor": 500000,
+                "currency": "CNY"
+              },
+              "error_code": null
+            }
+          }
+        ],
+        [
+          "status",
+          {
+            "thread_id": "conv-7a6272f004964ff6bcd2daaae8da5845",
+            "request_id": "req-924f6b50fc134b1eb4e68286514226bb",
+            "mode": "model",
+            "step": "finished",
+            "status": "COMPLETED"
+          }
+        ],
+        [
+          "done",
+          {
+            "thread_id": "conv-7a6272f004964ff6bcd2daaae8da5845",
+            "request_id": "req-924f6b50fc134b1eb4e68286514226bb",
+            "mode": "model",
+            "status": "COMPLETED"
+          }
+        ]
+      ]
+    },
+    {
+      "input": "给张伟转1200元",
+      "events": [
+        [
+          "status",
+          {
+            "thread_id": "conv-5674dde1c09d493093ef0a9f80a96976",
+            "request_id": "req-d2b1682f6746454a972a3b417f9077ca",
+            "mode": "model",
+            "step": "started",
+            "status": "PROCESSING"
+          }
+        ],
+        [
+          "status",
+          {
+            "thread_id": "conv-5674dde1c09d493093ef0a9f80a96976",
+            "request_id": "req-d2b1682f6746454a972a3b417f9077ca",
+            "mode": "model",
+            "step": "awaiting_authentication",
+            "status": "AWAITING_AUTHENTICATION"
+          }
+        ],
+        [
+          "card",
+          {
+            "thread_id": "conv-5674dde1c09d493093ef0a9f80a96976",
+            "request_id": "req-d2b1682f6746454a972a3b417f9077ca",
+            "mode": "model",
+            "type": "confirm",
+            "payload": {
+              "operation": "TRANSFER",
+              "risk_level": "RED",
+              "expires_at": "2026-10-18T12:05:07.219068+08:00",
+              "recipient": "张伟",
+              "amount_minor": 120000,
+              "currency": "CNY"
+            }
+          }
+        ],
+        [
+          "interrupt",
+          {
+            "thread_id": "conv-5674dde1c09d493093ef0a9f80a96976",
+            "request_id": "req-d2b1682f6746454a972a3b417f9077ca",
+            "mode": "model",
+            "kind": "STRONG_AUTH",
+            "prompt": "请确认本次操作；高风险操作需要独立认证。"
+          }
+        ],
+        [
+          "done",
+          {
+            "thread_id": "conv-5674dde1c09d493093ef0a9f80a96976",
+            "request_id": "req-d2b1682f6746454a972a3b417f9077ca",
+            "mode": "model",
+            "status": "AWAITING_AUTHENTICATION"
+          }
+        ]
+      ]
+    },
+    {
+      "input": "complete local simulated verification, approve original transfer",
+      "events": [
+        [
+          "status",
+          {
+            "thread_id": "conv-5674dde1c09d493093ef0a9f80a96976",
+            "request_id": "req-d2b1682f6746454a972a3b417f9077ca",
+            "mode": "model",
+            "step": "started",
+            "status": "PROCESSING"
+          }
+        ],
+        [
+          "message",
+          {
+            "thread_id": "conv-5674dde1c09d493093ef0a9f80a96976",
+            "request_id": "req-d2b1682f6746454a972a3b417f9077ca",
+            "mode": "model",
+            "text": "已向张伟转账 1200 元，交易已完成，当前余额为 3800 元。"
+          }
+        ],
+        [
+          "card",
+          {
+            "thread_id": "conv-5674dde1c09d493093ef0a9f80a96976",
+            "request_id": "req-d2b1682f6746454a972a3b417f9077ca",
+            "mode": "model",
+            "type": "result",
+            "payload": {
+              "operation": "TRANSFER",
+              "status": "COMPLETED",
+              "data": {
+                "transaction_id": "txn-b50c2b90953a4505aab69eee0c7cf9da",
+                "transfer_id": "transfer-1b31c0bde7764ffb805f99c4657205b9",
+                "incoming_transaction_id": "txn-eeb375a5cc004740b7fcb7dcf98c08cd",
+                "recipient": "张伟",
+                "amount_minor": 120000,
+                "currency": "CNY",
+                "remaining_balance_minor": 380000
+              },
+              "error_code": null
+            }
+          }
+        ],
+        [
+          "status",
+          {
+            "thread_id": "conv-5674dde1c09d493093ef0a9f80a96976",
+            "request_id": "req-d2b1682f6746454a972a3b417f9077ca",
+            "mode": "model",
+            "step": "finished",
+            "status": "COMPLETED"
+          }
+        ],
+        [
+          "done",
+          {
+            "thread_id": "conv-5674dde1c09d493093ef0a9f80a96976",
+            "request_id": "req-d2b1682f6746454a972a3b417f9077ca",
+            "mode": "model",
+            "status": "COMPLETED"
+          }
+        ]
+      ]
+    }
+  ],
+  "restart_balance_minor": 380000,
+  "result": "PASS"
+}

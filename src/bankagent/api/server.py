@@ -1,5 +1,6 @@
 """本地单进程 Demo 的 FastAPI 接线；认证结果只来自服务端。"""
 import threading
+import secrets
 from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -47,6 +48,8 @@ class Service:
         self.phraser = phraser
         self.query_model = query_model
         self.authenticate = authenticate or (lambda context, otp: False)
+        self.demo_verification_enabled = allow_demo_customers and authenticate is None
+        self.demo_verifications = {}
         self.lock = threading.RLock()
         self.running = threading.Lock()
         self.sessions = DemoSessionStore(lock=self.lock)
@@ -94,7 +97,20 @@ class Service:
                 authenticated = False
                 if record['risk_level'] == 'RED' and req.resume.decision == 'approve' and record['decision'] == 'PENDING':
                     try:
-                        authenticated = self.authenticate(context, req.resume.otp) is True
+                        if self.demo_verification_enabled:
+                            entry = self.demo_verifications.get(cid)
+                            if not entry or self.clock() >= entry['expires_at']:
+                                raise ApiError('DEMO_AUTH_EXPIRED', '模拟验证码未获取或已过期，请重新获取；尚未执行。', 409)
+                            if entry['attempts'] >= 3:
+                                raise ApiError('DEMO_AUTH_LOCKED', '验证码连续错误三次，请取消本次转账后重新发起。', 409)
+                            authenticated = isinstance(req.resume.otp, str) and secrets.compare_digest(entry['code'], req.resume.otp)
+                            if not authenticated:
+                                entry['attempts'] += 1
+                                raise ApiError('DEMO_AUTH_INVALID', f"验证码错误，剩余{3-entry['attempts']}次；尚未执行。", 409)
+                        else:
+                            authenticated = self.authenticate(context, req.resume.otp) is True
+                    except ApiError:
+                        raise
                     except Exception:
                         raise ApiError('CHALLENGE_INVALID', '认证服务暂时不可用，尚未执行。', 409) from None
                 settled = self.challenges.decide(challenge_id=cid, user_id=session.user_id,
@@ -308,6 +324,43 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
         require_demo(request)
         if request.client.host not in {'127.0.0.1', '::1', 'testclient'}:
             raise ApiError('NOT_FOUND', '客户切换仅限本机演示。', 404)
+
+    @app.post('/demo/verification')
+    async def demo_verification(request: Request):
+        require_local_customer_demo(request)
+        if not service.demo_verification_enabled:
+            raise ApiError('NOT_FOUND', '模拟认证仅在本机演示模式开放。', 404)
+        current = service.sessions.resolve(request.headers.get('authorization'))
+        try:
+            body = await request.json()
+        except ValueError:
+            raise ApiError('INVALID_REQUEST', '认证请求必须是 JSON 对象。', 400)
+        if not isinstance(body, dict) or set(body) != {'thread_id', 'challenge_id'} or not all(isinstance(v, str) for v in body.values()):
+            raise ApiError('INVALID_REQUEST', '需要当前转账的会话及确认引用。', 400)
+        service.sessions.require_thread(current, body['thread_id'])
+        service.reserve()
+        try:
+            cid = body['challenge_id']
+            record = service.challenges.lookup(cid)
+            state = service.graph.get_state({'configurable': {'thread_id': body['thread_id']}}).values
+            if not record or service.challenge_by_thread.get(body['thread_id']) != cid or record['risk_level'] != 'RED' or record['decision'] != 'PENDING':
+                raise ApiError('CHALLENGE_INVALID', '当前没有需要认证的有效确认。', 409)
+            context = TrustedContext(current.user_id, current.account_id, state['request_id'])
+            if record['user_id'] != current.user_id or record['operation_hash'] != compute_operation_hash(context, state['operation'], state['params']):
+                raise ApiError('CHALLENGE_INVALID', '认证与当前账户或操作不匹配。', 409)
+            expires = record['expires_at']
+            if service.clock() >= expires:
+                raise ApiError('CHALLENGE_INVALID', '本次确认已过期，请重新发起。', 409)
+            service.demo_verifications = {k: v for k, v in service.demo_verifications.items() if v['expires_at'] > service.clock()}
+            entry = service.demo_verifications.setdefault(cid, {'code': f'{secrets.randbelow(1000000):06d}', 'attempts': 0, 'expires_at': expires})
+            if entry['attempts'] >= 3:
+                raise ApiError('DEMO_AUTH_LOCKED', '验证码连续错误三次，请取消本次转账。', 409)
+            total = get_balance(context=context)['data']['daily_transfer_total_minor']
+            return {'demo_code': entry['code'], 'expires_at': expires.isoformat(),
+                    'attempts_remaining': 3-entry['attempts'], 'daily_transfer_total_minor': total,
+                    'threshold_minor': 100000, 'notice': '仅本机模拟认证，不是短信或真实银行强认证。认证并确认后继续原转账。'}
+        finally:
+            service.running.release()
 
     @app.get('/bank/desktop-objects')
     def desktop_objects(request: Request):

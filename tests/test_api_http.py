@@ -191,6 +191,7 @@ def test_authentication_input_never_enters_checkpoint(client):
     thread, intr = confirmation(client, auth, 1500)
     service = client.app.state.service
     transient = secrets.token_urlsafe(24)
+    service.demo_verification_enabled = False
     service.authenticate = lambda context, value: value == transient and context.request_id == intr['request_id']
     out = decision(client, auth, thread, intr, otp=transient)
     assert result(out)['data']['remaining_balance_minor'] == 350000

@@ -26,9 +26,9 @@ def test_preview_transfer_back_edit_cancel_and_shared_account(tmp_path, monkeypa
         window = PreviewWindow(service.start())
         wait(lambda: not window.busy and window.snapshot is not None)
         assert window.balance_value.text() == '¥ 5,000.00'
-        assert window.card_list.count() == 2
-        window.card_list.setCurrentRow(1)
-        assert '备用卡' in window.card_note.text() and '已冻结' in window.card_note.text()
+        assert window.card_list.count() == 1
+        window.card_list.setCurrentRow(0)
+        assert '日常消费卡' in window.card_note.text() and '已激活' in window.card_note.text()
         window.card_limits.click()
         wait(lambda: not window.busy and '单笔限额' in window.card_note.text())
         window.go_transfer.click()

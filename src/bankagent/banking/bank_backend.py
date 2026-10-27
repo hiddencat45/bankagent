@@ -79,7 +79,9 @@ class BankBackend(LifecycleMixin):
             return _result('QUERY_ACCOUNTS', {'accounts': [
                 {'account_ref': key, 'display_name': row.get('display_name', '默认演示账户'),
                  'balance_minor': row['balance_minor'], 'currency': row['currency']}
-                for key, row in self._data['accounts'].items() if row['user_id'] == context.user_id]})
+                for key, row in self._data['accounts'].items() if row['user_id'] == context.user_id],
+                'card_account_migration': [dict(row) for row in self._data.get('card_account_migration', [])
+                    if self._data['accounts'][row['account_id']]['user_id'] == context.user_id]})
 
     def _now(self):
         value = self._clock()

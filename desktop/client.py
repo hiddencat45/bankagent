@@ -9,6 +9,10 @@ class CustomerSwitchBusy(Exception):
     """Server refused the switch before replacing the session."""
 
 
+class VerificationRejected(Exception):
+    """Server explicitly rejected authentication before deciding the transfer."""
+
+
 class QueryClient:
     def __init__(self, url):
         self.url = url
@@ -119,13 +123,29 @@ class QueryClient:
         self.token = data['token']
         return data['mode']
 
-    def resume(self, pending, decision):
+    def verification(self, pending):
+        try:
+            with self.post('/demo/verification', {k: pending[k] for k in ('thread_id', 'challenge_id')}) as response:
+                return json.load(response)
+        except HTTPError as exc:
+            if exc.code in {404, 409}:
+                raise VerificationRejected(json.load(exc).get('message', '认证不可用，请取消本次操作。')) from None
+            raise
+
+    def resume(self, pending, decision, otp=None):
         if decision not in {'approve', 'reject'}:
             raise ValueError('invalid decision')
-        if decision == 'approve' and pending['risk_level'] != 'YELLOW':
-            raise ValueError('independent authentication required')
-        frames = self._chat({'thread_id': pending['thread_id'], 'resume': {
-            'challenge_id': pending['challenge_id'], 'decision': decision}}, pending['thread_id'])
+        payload = {'challenge_id': pending['challenge_id'], 'decision': decision}
+        if otp is not None:
+            payload['otp'] = otp
+        try:
+            frames = self._chat({'thread_id': pending['thread_id'], 'resume': payload}, pending['thread_id'])
+        except HTTPError as exc:
+            if exc.code == 409:
+                problem = json.load(exc)
+                if problem.get('code', '').startswith('DEMO_AUTH_'):
+                    raise VerificationRejected(problem['message']) from None
+            raise
         if frames[0][1]['request_id'] != pending['request_id']:
             raise ValueError('request mismatch')
         return frames
@@ -319,6 +339,8 @@ def business_confirmation(frames):
                 or card['amount_minor'] <= 0 or card.get('category') not in ['餐饮', '交通', '购物', '居住', '其他']):
             raise ValueError('invalid payment')
         summary += f"\n商户：{card['merchant']}\n金额：¥ {money(card['amount_minor'])}\n分类：{card['category']}"
+    elif operation == 'ISSUE_DEBIT_CARD':
+        summary += '\n当前账户的一张独立普通卡。账户已有卡时无法再发卡，请先开户并切换账户。'
     elif operation == 'SET_CARD_LIMITS':
         single, daily = card.get('single_limit_minor'), card.get('daily_limit_minor')
         if type(single) is not int or type(daily) is not int or not 0 <= single <= daily <= 100000000 or card.get('currency') != 'CNY':

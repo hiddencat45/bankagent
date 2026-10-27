@@ -116,7 +116,9 @@ def test_card_samples_cover_both_states_account_isolation_and_fresh_copies():
     first, second = build_demo_data(), build_demo_data()
     own = [c for c in first["cards"].values() if c["account_id"] == "account-001"]
     foreign = [c for c in first["cards"].values() if c["account_id"] == "account-002"]
-    assert {c["status"] for c in own} == {"ACTIVE", "FROZEN"}
+    assert len(own) == 1 and own[0]["status"] == "ACTIVE"
+    assert first["cards"]["card-002"]["account_id"] == "account-card-card-002"
+    assert first["accounts"]["account-card-card-002"]["balance_minor"] == 0
     assert len(foreign) == 1
     # 同名跨账户，后续解析不能按全局名称选择第一条。
     assert foreign[0]["display_name"] == first["cards"]["card-001"]["display_name"]

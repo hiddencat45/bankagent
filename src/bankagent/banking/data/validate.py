@@ -36,8 +36,10 @@ def validate_demo_data(data: dict) -> None:
     owners = set()
     for account_id, account in accounts.items():
         _require(_text(account_id) and isinstance(account, dict), "invalid account")
-        _require(set(account) == {"user_id", "balance_minor", "currency"},
+        _require(set(account) - {'display_name'} == {"user_id", "balance_minor", "currency"},
                  "unexpected account fields")
+        if 'display_name' in account:
+            _require(_text(account['display_name']), 'invalid account name')
         _require(_text(account["user_id"]), "account owner required")
         _require(_minor(account["balance_minor"]), "invalid balance_minor")
         _require(account["currency"] == "CNY", "unsupported currency")
