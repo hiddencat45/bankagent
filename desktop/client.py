@@ -140,8 +140,10 @@ def query_result(payload):
         lines = [f"消费合计：¥ {money(data['total_minor'])}",
                  f"查询期间：{data['start']} 至 {data['end']}（不含结束日）"]
         kinds = {'INCOME': '收入', 'EXPENSE': '消费', 'TRANSFER_OUT': '转出', 'TRANSFER_IN': '转入'}
-        lines += [f"{row['occurred_at']}  {kinds[row['kind']]}  {row.get('merchant') or row['category']}  ¥ {money(row['amount_minor'])}"
-                  for row in data['transactions']]
+        for row in data['transactions']:
+            lines.append(f"{row['occurred_at']}  {kinds[row['kind']]}  {row.get('merchant') or row['category']}  ¥ {money(row['amount_minor'])}")
+            if row.get('transfer_id') and row.get('related_transaction_id'):
+                lines.append(f"流水：{row['transaction_id']}\n转账编号：{row['transfer_id']}\n关联流水：{row['related_transaction_id']}")
         return '\n'.join(lines)
     return ''
 
