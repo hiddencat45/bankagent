@@ -58,7 +58,7 @@ export function readBills(data) {
   for (const row of data.transactions) {
     if (!object(row) || !text(row.transaction_id) || ids.has(row.transaction_id)
         || !minor(row.amount_minor) || !text(row.occurred_at) || !text(row.category)
-        || !['INCOME', 'EXPENSE', 'TRANSFER_OUT'].includes(row.kind)
+        || !['INCOME', 'EXPENSE', 'TRANSFER_OUT', 'TRANSFER_IN'].includes(row.kind)
         || (row.merchant !== null && !text(row.merchant))) invalid();
     ids.add(row.transaction_id);
   }

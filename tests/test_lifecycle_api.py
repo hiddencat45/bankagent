@@ -61,3 +61,24 @@ def test_invalid_payment_and_account_selection_cannot_write():
         for body in ({'account_ref': 'account-001', 'user_id': 'user-002'}, {'account_ref': None}, []):
             assert c.post('/bank/account-session', headers=auth, json=body).status_code == 400
         assert result(chat(c, auth, message='查询余额'))['data']['balance_minor'] == 500000
+
+
+def test_bilateral_transfer_and_limits_through_agent(tmp_path):
+    with TestClient(create_app(demo=True, database_path=tmp_path / 'bank.sqlite3'), base_url='http://localhost') as c:
+        auth = login(c)
+        submit(c, auth, '给张伟转40元')
+        # Receiver identity is issued only by this trusted test harness, not public input.
+        receiver = c.app.state.service.sessions.issue(user_id='user-002', account_id='account-002')
+        receiver_auth = {'Authorization': 'Bearer ' + receiver.token}
+        assert result(chat(c, receiver_auth, message='查询余额'))['data']['balance_minor'] == 44000
+        bill = result(chat(c, receiver_auth, message='本月账单'))['data']
+        assert bill['total_minor'] == 0 and any(t['kind'] == 'TRANSFER_IN' for t in bill['transactions'])
+        own = result(submit(c, auth, '开户「储蓄账户」'))['data']['account_id']
+        submit(c, auth, '给储蓄账户转50元')
+        row = next(a for a in c.get('/bank/accounts', headers=auth).json()['accounts'] if a['account_ref'] == own)
+        assert row['balance_minor'] == 105000
+        assert submit(c, auth, '设置限额「日常消费卡」单笔10元，每日20元', False)[-1][1]['status'] == 'REJECTED'
+        assert result(chat(c, auth, message='查询限额「日常消费卡」'))['data']['single_limit_minor'] == 500000
+        submit(c, auth, '设置限额「日常消费卡」单笔10元，每日20元')
+        pay = result(submit(c, auth, '使用「日常消费卡」在商户「商店」刷卡支付11元'))
+        assert pay['error_code'] == 'CARD_SINGLE_LIMIT_EXCEEDED'

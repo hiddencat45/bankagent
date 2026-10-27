@@ -23,8 +23,9 @@ NEXT = 300_00              # 再转，累计 1100 元越过 1000 元阈值
 
 def _data():
     return {
-        "accounts": {"a1": {"user_id": "u1", "balance_minor": BALANCE}},
-        "contacts": {"c1": {"user_id": "u1", "display_name": "演示收款人"}},
+        "accounts": {"a1": {"user_id": "u1", "balance_minor": BALANCE, "currency": "CNY"},
+                     "a2": {"user_id": "u2", "balance_minor": 0, "currency": "CNY"}},
+        "contacts": {"c1": {"user_id": "u1", "display_name": "演示收款人", "recipient_account_id": "a2"}},
         "transactions": [],
     }
 

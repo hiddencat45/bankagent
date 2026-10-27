@@ -73,6 +73,11 @@ def test_real_desktop_lifecycle(tmp_path, monkeypatch):
         form('解冻', ['生活卡'])
         assert receipt(window.client.query('查询余额'))['data']['balance_minor'] == 98770
         assert '模拟支付 12.30 元' in window.history.toPlainText()
+        form('设置限额', ['生活卡', '10', '20'])
+        limits = receipt(window.client.query('查询限额「生活卡」'))['data']
+        assert limits['single_limit_minor'] == 1000 and limits['daily_limit_minor'] == 2000
+        blocked = business_confirmation(window.client.query('使用「生活卡」在商户「商店」刷卡支付12.30元'))
+        assert receipt(window.client.resume(blocked, 'approve'))['error_code'] == 'CARD_SINGLE_LIMIT_EXCEEDED'
     finally:
         if window:
             window.close()

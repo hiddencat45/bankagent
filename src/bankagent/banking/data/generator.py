@@ -19,10 +19,12 @@ def build_demo_data() -> dict:
                         "currency": "CNY"},
         "account-002": {"user_id": "user-002", "balance_minor": 40000,
                         "currency": "CNY"},
+        "account-003": {"user_id": "user-003", "balance_minor": 0,
+                        "currency": "CNY"},
     }
     contacts = {
-        "contact-001": {"user_id": "user-001", "display_name": "张伟"},
-        "contact-002": {"user_id": "user-001", "display_name": "李娜"},
+        "contact-001": {"user_id": "user-001", "display_name": "张伟", "recipient_account_id": "account-002"},
+        "contact-002": {"user_id": "user-001", "display_name": "李娜", "recipient_account_id": "account-003"},
     }
     # 只准备内部状态；不含卡号，也不表示冻结/解冻接口已经启用。
     cards = {
