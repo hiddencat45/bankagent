@@ -138,10 +138,17 @@ class BankWindow(QMainWindow):
         self.controls()
         QTimer.singleShot(0, lambda: self.run('connect', self.client.connect))
 
+    def can_interrupt_chat(self):
+        return (self.pending is not None and not self.form_active and self.mode == '真实模型'
+                and self.decision is None and not self.uncertain)
+
     def controls(self):
         enabled = bool(self.client.token) and not self.busy and not self.blocked
         for item in self.buttons + [self.input, self.submit]:
             item.setEnabled(enabled)
+        if self.can_interrupt_chat() and not self.busy:
+            self.input.setEnabled(True)
+            self.submit.setEnabled(True)
         for item in self.business_buttons + [self.accounts, self.refresh_accounts, self.switch_account,
                                             self.customers, self.switch_customer, self.create_customer, self.bills]:
             item.setEnabled(enabled and self.pending is None and not self.uncertain)
@@ -275,7 +282,7 @@ class BankWindow(QMainWindow):
 
     def send(self, text=None):
         text = (text if text is not None else self.input.text()).strip()
-        if not text or self.busy or self.blocked or not self.client.token:
+        if not text or self.busy or (self.blocked and not self.can_interrupt_chat()) or not self.client.token:
             return
         self.history.appendPlainText('你：' + text)
         self.form_active = False
@@ -379,7 +386,7 @@ class BankWindow(QMainWindow):
                 if pending is not None:
                     self.pending, self.decision = pending, None
                     extra = ('\n该操作需要独立认证，当前仅支持取消。' if pending['risk_level'] == 'RED' else
-                             '\n确认后才会执行；如需修改，请先取消，再重新提出请求。')
+                             '\n确认后才会执行；对话业务可直接提出修改、取消或先查询，旧确认将失效。')
                     self.confirm_text.setText(pending['summary'] + extra)
                 elif kind != 'decision' or final not in {'FAILED', 'PENDING'}:
                     self.clear_confirmation()

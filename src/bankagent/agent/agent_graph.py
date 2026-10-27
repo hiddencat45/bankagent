@@ -120,7 +120,7 @@ class BankAgentRuntime:
         # 澄清续轮的期限元数据，按 (user_id, thread_id) 记，**不进 State**
         # （契约 §1.5：澄清期限保存在服务端待补任务元数据中）。
         self._clarify_tasks: dict[tuple[str, str], dict[str, Any]] = {}
-        self.query_agent = QueryAgent(query_model, self.clock) if query_model is not None else None
+        self.query_agent = QueryAgent(query_model, self.clock, registry=self.registry) if query_model is not None else None
 
     # -- 澄清期限 ---------------------------------------------------------
 
@@ -175,7 +175,7 @@ def _cleared() -> dict[str, Any]:
         "challenge_id": "",
         "authorized": False,
         "result": {},
-        "query_results": [],
+        "query_results": [], "task_loop": False,
         "response": "",
     }
 
@@ -668,6 +668,28 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
 
     # -- 8. 澄清与拒绝 ---------------------------------------------------
 
+    def continue_task(state: BankAgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
+        if not state.get('task_loop') or rt.query_agent is None:
+            return {}
+        context = TrustedContext(state['user_id'], state['account_id'], state['request_id'])
+        try:
+            outcome = rt.query_agent.run(context=context, thread=_thread_id(config), message='', history=[],
+                                         execution=state['result'])
+            if outcome.get('task_loop'):
+                from uuid import uuid4
+                return {**_cleared(), **outcome, 'request_id': f'req-{uuid4().hex}'}
+            outcome.pop('operation', None)
+            return {**outcome, 'task_loop': False}
+        except Exception:
+            rt.query_agent.stop(context, _thread_id(config))
+            # A committed payment stays committed even if the following model request fails.
+            return {'status': 'NEEDS_CLARIFICATION' if state['result']['status'] == 'COMPLETED' else state['status'],
+                    'task_loop': False, 'query_results': [r for r in state.get('query_results', []) if r != state['result']] + [state['result']],
+                    'response': '执行结果已记录，后续查询未完成；请按实际回执核对，勿重复提交付款。'}
+
+    def route_continuation(state):
+        return 'resolve' if state.get('task_loop') and state.get('status') == 'PROCESSING' else 'end'
+
     def ask_clarification(state: BankAgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
         if config is not None:
             rt.remember_clarification(state, _thread_id(config))
@@ -737,6 +759,7 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
     builder.add_node("execute_operation", execute_operation)
     builder.add_node("reject_operation", reject_operation)
     builder.add_node("compose_response", compose_response)
+    builder.add_node("continue_task", continue_task)
 
     builder.add_edge(START, "load_context")
     builder.add_conditional_edges(
@@ -760,7 +783,7 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
         {"green": "execute_query", "yellow": "interrupt_for_confirmation",
          "red": "interrupt_for_authentication", "deny": "reject_operation"},
     )
-    builder.add_edge("execute_query", "compose_response")
+    builder.add_edge("execute_query", "continue_task")
 
     builder.add_conditional_edges(
         "interrupt_for_confirmation", route_authorization,
@@ -770,8 +793,9 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
         "interrupt_for_authentication", route_authorization,
         {"execute": "execute_operation", "reject": "reject_operation"},
     )
-    builder.add_edge("execute_operation", "compose_response")
-    builder.add_edge("reject_operation", "compose_response")
+    builder.add_edge("execute_operation", "continue_task")
+    builder.add_conditional_edges("continue_task", route_continuation, {"resolve": "resolve_entities", "end": "compose_response"})
+    builder.add_edge("reject_operation", "continue_task")
     builder.add_edge("compose_response", END)
 
     # 中断/恢复必须有 checkpointer；不传时用内存实现，方便单测与演示。
