@@ -88,6 +88,8 @@ def rejected_result(params, candidate_params, code):
 
 
 def render(result):
+    if result.get('error_code') == 'SOURCE_CARD_FROZEN':
+        return '付款账户的银行卡已冻结，整批转账未执行。请先解冻；模拟认证不能解除冻结。'
     data = result.get('data') or {}
     if result['operation'] == 'QUERY_TRANSFER_BATCHES':
         return '\n\n'.join(render(row) for row in data.get('receipts', [])) or '当前账户没有批量转账回执。'
@@ -100,6 +102,7 @@ def render(result):
         lines.append('批量编号：' + data['batch_id'])
     labels = {'COMPLETED': '成功', 'FAILED': '失败', 'NOT_EXECUTED': '未执行'}
     errors = {'INSUFFICIENT_BALANCE': '余额不足', 'BATCH_ABORTED': '整批未提交',
+              'SOURCE_CARD_FROZEN': '付款卡已冻结，请先解冻',
               'USER_CANCELLED': '用户取消', 'REAUTHORIZATION_REQUIRED': '需重新认证',
               'RECIPIENT_ACCOUNT_INVALID': '收款账户不可用', 'CONTACT_NOT_ACCESSIBLE': '收款人不可用'}
     for row in data.get('items', []):

@@ -351,6 +351,9 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
             expires = record['expires_at']
             if service.clock() >= expires:
                 raise ApiError('CHALLENGE_INVALID', '本次确认已过期，请重新发起。', 409)
+            from bankagent.banking.bank_backend import transfer_block_reason
+            if transfer_block_reason(context=context) == 'SOURCE_CARD_FROZEN':
+                raise ApiError('SOURCE_CARD_FROZEN', '付款卡已冻结，不能转账；请取消本次操作并先解冻。模拟认证不能解除冻结。', 409)
             service.demo_verifications = {k: v for k, v in service.demo_verifications.items() if v['expires_at'] > service.clock()}
             entry = service.demo_verifications.setdefault(cid, {'code': f'{secrets.randbelow(1000000):06d}', 'attempts': 0, 'expires_at': expires})
             if entry['attempts'] >= 3:

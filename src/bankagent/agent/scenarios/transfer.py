@@ -285,6 +285,7 @@ def render(result: BackendResult) -> str:
         if explained is not None:
             return explained
         return {
+            "SOURCE_CARD_FROZEN": "付款账户的银行卡已冻结，不能转出资金。请先解冻；模拟认证不能解除冻结，本次未扣款。",
             "AUTHORIZATION_REQUIRED": "这笔转账还没有完成确认，请先确认后再提交。",
             "AUTHORIZATION_INVALID": "确认已失效或不匹配，请重新发起转账。",
             "IDEMPOTENCY_CONFLICT": "同一请求的转账参数不一致，已拒绝以避免重复扣款。",

@@ -513,6 +513,12 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
         )
 
         try:
+            if operation in {'TRANSFER', 'BATCH_TRANSFER'}:
+                from bankagent.banking.bank_backend import transfer_block_reason
+                blocked = transfer_block_reason(context=context)
+                if blocked:
+                    return {'risk_level': 'DENY', 'result': _rejected(operation, blocked),
+                            'status': 'REJECTED'}
             risk_level = registry.evaluate_risk(scenario_name, operation, params, context)
         except (ScenarioError, ValueError):
             # 失败关闭：算不出风险就不执行。

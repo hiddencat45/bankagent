@@ -55,7 +55,11 @@ def test_complete_funds_chain_and_service_restart(tmp_path):
         submit(client, sender, '冻结链路卡')
         assert pay(client, sender, '1')['error_code'] == 'CARD_NOT_ACTIVE'
         assert used(client, sender) == 6000
-        # Frozen card does not freeze the account; transfer cannot consume card quota.
+        # Frozen source card now blocks transfer; unfreezing preserves used quota.
+        blocked = chat(client, sender, message='给张伟转40元')
+        assert result(blocked)['error_code'] == 'SOURCE_CARD_FROZEN'
+        assert not any(kind == 'interrupt' for kind, _ in blocked)
+        submit(client, sender, '解冻链路卡')
         frames = chat(client, sender, message='给张伟转40元')
         assert balance(client, receiver) == 40000  # Still awaiting confirmation.
         signal = next(data for kind, data in frames if kind == 'interrupt')

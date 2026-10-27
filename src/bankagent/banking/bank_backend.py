@@ -240,9 +240,25 @@ class BankBackend(LifecycleMixin):
             return None
         return record
 
+    @staticmethod
+    def _transfer_block_reason(data, account_id):
+        if any(card['account_id'] == account_id and card['status'] == 'FROZEN'
+               for card in data.get('cards', {}).values()):
+            return 'SOURCE_CARD_FROZEN'
+        return None
+
+    def transfer_block_reason(self, *, context):
+        with self._transaction():
+            if not self._owned(context):
+                return 'ACCOUNT_NOT_ACCESSIBLE'
+            return self._transfer_block_reason(self._data, context.account_id)
+
     def _check_transfer(self, data, context, contact, amount_minor, currency, now, risk_level):
         def reject(code, **detail):
             return _result("TRANSFER", data=detail or None, error=code)
+        blocked = self._transfer_block_reason(data, context.account_id)
+        if blocked:
+            return reject(blocked)
         if amount_minor > TRANSFER_SINGLE_LIMIT_MINOR:
             return reject("TRANSFER_LIMIT_EXCEEDED", amount_minor=amount_minor,
                           limit_minor=TRANSFER_SINGLE_LIMIT_MINOR)
@@ -621,6 +637,10 @@ def _configured() -> BankBackend:
 
 def get_balance(*, context: TrustedContext) -> BackendResult:
     return _configured().get_balance(context=context)
+
+
+def transfer_block_reason(*, context: TrustedContext):
+    return _configured().transfer_block_reason(context=context)
 
 
 def find_contacts(*, context: TrustedContext, name: str) -> list[dict[str, str]]:
