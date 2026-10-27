@@ -159,11 +159,13 @@ class BankBackend(LifecycleMixin):
                 if len(window[1]) == 2:
                     anomalies.append({"type": "POSSIBLE_DUPLICATE", "evidence": window[1]})
             fields = ("transaction_id", "occurred_at", "kind", "amount_minor", "category", "merchant")
+            links = ('transfer_id', 'related_transaction_id')
             data = {"start": start.isoformat(), "end": end.isoformat(),
                     "currency": SUPPORTED_CURRENCY, "total_minor": sum(categories.values()),
                     "by_category": categories,
                     "top_category": min(categories, key=lambda c: (-categories[c], c)) if categories else None,
-                    "transactions": [{f: t[f] for f in fields} for t in selected],
+                    "transactions": [{**{f: t[f] for f in fields},
+                                      **{f: t[f] for f in links if f in t}} for t in selected],
                     "anomalies": anomalies}
             return _result("QUERY_BILLS", deepcopy(data))
 
