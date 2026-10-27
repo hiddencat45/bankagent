@@ -2,6 +2,11 @@
 from datetime import datetime
 import json
 from urllib.request import Request, ProxyHandler, build_opener
+from urllib.error import HTTPError
+
+
+class CustomerSwitchBusy(Exception):
+    """Server refused the switch before replacing the session."""
 
 
 class QueryClient:
@@ -51,6 +56,42 @@ class QueryClient:
     def switch_account(self, reference):
         with self.post('/bank/account-session', {'account_ref': reference}) as response:
             data = json.load(response)
+        if not isinstance(data.get('token'), str) or not data['token'] or data.get('mode') not in {'offline', 'model'}:
+            raise ValueError('invalid session')
+        self.token = data['token']
+        return data['mode']
+
+    def overview(self):
+        accounts = self.accounts()
+        with self.opener.open(Request(self.url + '/demo/customers',
+                headers={'Authorization': 'Bearer ' + self.token}), timeout=20) as response:
+            data = json.load(response)
+        rows = data['customers']
+        if (not isinstance(rows, list) or not rows or any(
+                not isinstance(row, dict) or not isinstance(row.get('customer_ref'), str)
+                or not row['customer_ref'] or not isinstance(row.get('display_name'), str)
+                or not row['display_name'] for row in rows)
+                or len({row['customer_ref'] for row in rows}) != len(rows)
+                or data.get('current_customer_ref') not in {row['customer_ref'] for row in rows}):
+            raise ValueError('invalid demo customers')
+        return {**accounts, **data}
+
+    def bills(self):
+        with self.opener.open(Request(self.url + '/bank/bills',
+                headers={'Authorization': 'Bearer ' + self.token}), timeout=20) as response:
+            data = json.load(response)
+        if data.get('operation') != 'QUERY_BILLS' or data.get('status') != 'COMPLETED':
+            raise ValueError('bill query failed')
+        return query_result(data)
+
+    def switch_customer(self, reference):
+        try:
+            with self.post('/demo/customer-session', {'customer_ref': reference}) as response:
+                data = json.load(response)
+        except HTTPError as exc:
+            if exc.code == 409:
+                raise CustomerSwitchBusy() from None
+            raise
         if not isinstance(data.get('token'), str) or not data['token'] or data.get('mode') not in {'offline', 'model'}:
             raise ValueError('invalid session')
         self.token = data['token']

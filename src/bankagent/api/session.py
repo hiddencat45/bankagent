@@ -32,6 +32,7 @@ class Session:
     account_id: str
     # 该会话可见的 thread。新建 thread 时登记，用于归属校验。
     threads: set[str] = field(default_factory=set)
+    family_id: str = field(default_factory=lambda: secrets.token_urlsafe(_TOKEN_BYTES))
 
 
 class DemoSessionStore:
@@ -47,7 +48,7 @@ class DemoSessionStore:
 
     # -- 发放 -------------------------------------------------------------
 
-    def issue(self, *, user_id: str, account_id: str) -> Session:
+    def issue(self, *, user_id: str, account_id: str, family_id: str | None = None) -> Session:
         """为已核实的用户签发一个演示会话。
 
         调用方（演示入口）负责确认这确实是一个合法演示用户；本方法不做
@@ -60,6 +61,8 @@ class DemoSessionStore:
 
         token = secrets.token_urlsafe(_TOKEN_BYTES)
         session = Session(token=token, user_id=user_id, account_id=account_id)
+        if family_id is not None:
+            session.family_id = family_id
         with self._lock:
             self._by_token[token] = session
         return session
@@ -112,6 +115,16 @@ class DemoSessionStore:
             raise ApiError("THREAD_NOT_FOUND", "会话不存在或已失效。", 404)
 
     # -- 失效 -------------------------------------------------------------
+
+    def family_sessions(self, session: Session) -> list[Session]:
+        """Server-only lineage, including earlier account selections in this client."""
+        with self._lock:
+            return [s for s in self._by_token.values() if s.family_id == session.family_id]
+
+    def invalidate_family(self, session: Session) -> None:
+        with self._lock:
+            for old in self.family_sessions(session):
+                self._by_token.pop(old.token, None)
 
     def invalidate_all(self) -> None:
         """使全部会话失效（``POST /demo/reset`` 用）。

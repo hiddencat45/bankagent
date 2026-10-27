@@ -3,7 +3,7 @@ import threading
 from PySide6.QtCore import QObject, Signal, QTimer, Qt
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QPlainTextEdit, QLineEdit, QGroupBox, QComboBox, QInputDialog)
-from desktop.client import QueryClient, query_result, business_confirmation, money
+from desktop.client import QueryClient, query_result, business_confirmation, money, CustomerSwitchBusy
 
 
 class Delivery(QObject):
@@ -37,6 +37,17 @@ class BankWindow(QMainWindow):
         self.status = QLabel('正在连接本地模拟银行…')
         layout.addWidget(self.status)
         layout.addWidget(QLabel('模拟开户、借记卡、消费与转账 · 所有写操作先确认 · 理财推荐尚未开放'))
+        self.current_customer = QLabel('当前演示客户：正在读取…')
+        self.current_customer.setTextFormat(Qt.TextFormat.PlainText)
+        layout.addWidget(self.current_customer)
+        customers = QHBoxLayout()
+        self.customers = QComboBox()
+        self.customers.setAccessibleName('选择演示客户')
+        self.switch_customer = QPushButton('切换演示客户')
+        self.switch_customer.clicked.connect(self.select_customer)
+        customers.addWidget(self.customers, 1)
+        customers.addWidget(self.switch_customer)
+        layout.addLayout(customers)
         accounts = QHBoxLayout()
         self.current_account = QLabel('当前账户：正在读取…')
         self.current_account.setTextFormat(Qt.TextFormat.PlainText)
@@ -45,11 +56,14 @@ class BankWindow(QMainWindow):
         self.accounts.setAccessibleName('选择待切换账户')
         self.refresh_accounts = QPushButton('刷新账户')
         self.switch_account = QPushButton('切换账户')
+        self.bills = QPushButton('本月流水')
+        self.bills.clicked.connect(lambda: self.run('bills', self.client.bills))
         self.refresh_accounts.clicked.connect(self.load_accounts)
         self.switch_account.clicked.connect(self.select_account)
         accounts.addWidget(self.accounts, 1)
         accounts.addWidget(self.refresh_accounts)
         accounts.addWidget(self.switch_account)
+        accounts.addWidget(self.bills)
         layout.addLayout(accounts)
         business = QHBoxLayout()
         self.business_buttons = []
@@ -120,7 +134,8 @@ class BankWindow(QMainWindow):
         enabled = bool(self.client.token) and not self.busy and not self.blocked
         for item in self.buttons + [self.input, self.submit]:
             item.setEnabled(enabled)
-        for item in self.business_buttons + [self.accounts, self.refresh_accounts, self.switch_account]:
+        for item in self.business_buttons + [self.accounts, self.refresh_accounts, self.switch_account,
+                                            self.customers, self.switch_customer, self.bills]:
             item.setEnabled(enabled and self.pending is None and not self.uncertain)
         self.new.setEnabled(bool(self.client.token) and not self.busy and not self.uncertain)
         self.reconnect.setEnabled(not self.busy and not self.uncertain)
@@ -141,8 +156,11 @@ class BankWindow(QMainWindow):
         def work():
             try:
                 result = function()
+            except CustomerSwitchBusy:
+                kind_result, result = 'customer_busy', None
             except Exception:
-                kind_result = 'decision_error' if kind == 'decision' else 'error'
+                kind_result = ('customer_error' if kind == 'customer' else
+                               'decision_error' if kind == 'decision' else 'error')
                 result = ('会话建立失败，请点击「重新连接」重试。' if kind == 'connect' else
                           '提交后的结果尚未确认。请重试原决定核对结果，勿另建同一笔业务。' if kind == 'decision' else
                           '连接或响应异常，结果尚未确认。请新建对话或重新连接后重试；不会自动重发。')
@@ -157,7 +175,12 @@ class BankWindow(QMainWindow):
 
     def load_accounts(self):
         if self.client.token and not self.busy and self.pending is None and not self.uncertain:
-            self.run('accounts', self.client.accounts)
+            self.run('accounts', self.client.overview)
+
+    def select_customer(self):
+        reference = self.customers.currentData()
+        if reference and not self.busy and not self.blocked and self.pending is None and not self.uncertain:
+            self.run('customer', lambda: self.client.switch_customer(reference))
 
     def select_account(self):
         reference = self.accounts.currentData()
@@ -237,17 +260,27 @@ class BankWindow(QMainWindow):
 
     def receive(self, kind, result):
         self.busy = False
-        if kind == 'connect':
+        if kind in {'connect', 'customer'}:
             self.clear_confirmation()
             self.thread = None
             self.blocked = False
             self.accounts.clear()
+            self.customers.clear()
+            self.current_customer.setText('当前演示客户：正在读取新会话…')
             self.current_account.setText('当前账户：正在读取新会话账户…')
             self.mode = '真实模型' if result == 'model' else '离线规则'
+            self.history.clear()
+            self.input.clear()
             self.history.appendPlainText('有度：已建立新会话，可以开始查询。')
             self.status.setText('已连接 · ' + self.mode)
             QTimer.singleShot(0, self.load_accounts)
         elif kind == 'accounts':
+            self.customers.clear()
+            for row in result.get('customers', []):
+                self.customers.addItem(row['display_name'], row['customer_ref'])
+                if row['customer_ref'] == result['current_customer_ref']:
+                    self.current_customer.setText('当前演示客户：' + row['display_name'])
+            self.customers.setCurrentIndex(self.customers.findData(result.get('current_customer_ref')))
             self.accounts.clear()
             for row in result['accounts']:
                 label = f"{row['display_name']} · {row['account_ref'][-6:]} · ¥ {money(row['balance_minor'])}"
@@ -255,6 +288,24 @@ class BankWindow(QMainWindow):
                 if row['account_ref'] == result['current_account_ref']:
                     self.current_account.setText('当前账户：' + label)
             self.accounts.setCurrentIndex(self.accounts.findData(result['current_account_ref']))
+        elif kind == 'bills':
+            self.history.appendPlainText(result + '\n')
+            self.status.setText('本月流水已读取 · 直接查询本地账本')
+        elif kind == 'customer_busy':
+            self.status.setText('服务正在办理业务或有待确认操作，请先完成或取消，再切换演示客户。')
+        elif kind == 'customer_error':
+            # The response may have been lost after the old session was revoked.
+            self.client.token = None
+            self.thread = None
+            self.clear_confirmation()
+            self.accounts.clear()
+            self.customers.clear()
+            self.history.clear()
+            self.input.clear()
+            self.current_customer.setText('当前演示客户：未确认')
+            self.current_account.setText('当前账户：未确认')
+            self.blocked = True
+            self.status.setText('客户切换未确认，请重新连接默认演示客户；不会自动重试切换。')
         elif kind in {'error', 'decision_error'}:
             self.history.appendPlainText('有度：' + result)
             self.status.setText('请求失败')
