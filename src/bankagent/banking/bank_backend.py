@@ -28,7 +28,7 @@ class BankBackend(LifecycleMixin):
     """单个模拟实例；工厂数据是后端私有副本，所有读写使用共享互斥锁。"""
 
     def __init__(self, *, data_factory, lookup_authorization=None,
-                 operation_hash=None, lock=None, clock=None, database_path=None):
+                 operation_hash=None, lock=None, clock=None, database_path=None, allow_demo_customers=False):
         self.lock = lock if lock is not None else RLock()
         self._factory = data_factory
         self._lookup = lookup_authorization or (lambda _: None)
@@ -37,6 +37,7 @@ class BankBackend(LifecycleMixin):
         self._data = deepcopy(data_factory())
         self._completed = {}
         self._store = None
+        self._allow_demo_customers = allow_demo_customers
         if database_path is not None:
             from bankagent.banking.storage import SQLiteStore
             self._store = SQLiteStore(database_path, self._data)
@@ -629,6 +630,15 @@ def query_expenses(*, context: TrustedContext, start: date, end: date,
 
 def open_account(*, context: WriteContext, display_name: str) -> BackendResult:
     return _configured().open_account(context=context, display_name=display_name)
+
+
+def create_demo_customer(*, context: WriteContext, customer_name: str, account_name: str) -> BackendResult:
+    return _configured().create_demo_customer(context=context, customer_name=customer_name, account_name=account_name)
+
+
+def demo_customer_choices():
+    """Server-internal identity mapping, never a model tool or public result."""
+    return _configured().demo_customer_choices()
 
 
 def query_accounts(*, context: TrustedContext) -> BackendResult:

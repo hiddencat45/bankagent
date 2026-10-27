@@ -46,8 +46,11 @@ class BankWindow(QMainWindow):
         self.customers.setAccessibleName('选择演示客户')
         self.switch_customer = QPushButton('切换演示客户')
         self.switch_customer.clicked.connect(self.select_customer)
+        self.create_customer = QPushButton('创建演示客户')
+        self.create_customer.clicked.connect(lambda: self.business_form('创建演示客户'))
         customers.addWidget(self.customers, 1)
         customers.addWidget(self.switch_customer)
+        customers.addWidget(self.create_customer)
         layout.addLayout(customers)
         accounts = QHBoxLayout()
         self.current_account = QLabel('当前账户：正在读取…')
@@ -136,7 +139,7 @@ class BankWindow(QMainWindow):
         for item in self.buttons + [self.input, self.submit]:
             item.setEnabled(enabled)
         for item in self.business_buttons + [self.accounts, self.refresh_accounts, self.switch_account,
-                                            self.customers, self.switch_customer, self.bills]:
+                                            self.customers, self.switch_customer, self.create_customer, self.bills]:
             item.setEnabled(enabled and self.pending is None and not self.uncertain)
         self.new.setEnabled(bool(self.client.token) and not self.busy and not self.uncertain)
         self.reconnect.setEnabled(not self.busy and not self.uncertain)
@@ -191,11 +194,12 @@ class BankWindow(QMainWindow):
     def business_form(self, action):
         if self.busy or self.blocked or self.pending is not None:
             return
-        operations = {'开户': 'OPEN_ACCOUNT', '办理借记卡': 'ISSUE_DEBIT_CARD',
+        operations = {'创建演示客户': 'CREATE_DEMO_CUSTOMER', '开户': 'OPEN_ACCOUNT', '办理借记卡': 'ISSUE_DEBIT_CARD',
             '激活': 'ACTIVATE_DEBIT_CARD', '刷卡消费': 'PAY_BY_CARD', '转账': 'TRANSFER',
             '冻结': 'FREEZE_CARD', '解冻': 'UNFREEZE_CARD',
             '查询限额': 'QUERY_CARD_LIMITS', '设置限额': 'SET_CARD_LIMITS'}
         name, ok = QInputDialog.getText(self, action, '账户名称：' if action == '开户' else
+                                       '虚构客户名称（勿填写真实身份资料）：' if action == '创建演示客户' else
                                        '收款联系人或本人账户名称：' if action == '转账' else '卡片名称：')
         if not ok:
             return
@@ -205,7 +209,15 @@ class BankWindow(QMainWindow):
             return
         key = 'display_name' if action in {'开户', '办理借记卡'} else 'recipient_name' if action == '转账' else 'card_name'
         fields = {key: name}
-        if action == '设置限额':
+        if action == '创建演示客户':
+            account, ok = QInputDialog.getText(self, action, '首次开户名称（确认后记入1,000元演示资金）：')
+            if not ok:
+                return
+            if not account.strip() or len(account) > 80 or any(c in account for c in '\n\r'):
+                self.status.setText('请输入1–80字的账户名称，不含换行。')
+                return
+            fields = {'customer_name': name, 'account_name': account.strip()}
+        elif action == '设置限额':
             import re
             amounts = []
             for label in ('单笔', '每日'):
