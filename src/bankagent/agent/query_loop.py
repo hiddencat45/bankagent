@@ -1,11 +1,11 @@
-"""Bounded, read-only native tool loop. Identity and query state remain server-owned."""
+"""Bounded native task loop with server-owned write continuations. Identity and query state remain server-owned."""
 import json
 import time
 from copy import deepcopy
 from datetime import timedelta
 
 from bankagent.banking import bank_backend
-from bankagent.agent.scenarios import bills
+from bankagent.agent.scenarios import bills, REGISTRY
 
 
 def _tool(name, description, properties, required=()):
@@ -38,7 +38,11 @@ SYSTEM = """你是模拟银行助手。先选择工具，不凭空回答个人�
 '列出超过一百的'继承已有条件并增加金额筛选；'重新看本月全部消费'重置筛选。
 current_query是服务端保存的上一笔成功查询；为空且用户只说'这几笔'等指代时应补问。
 默认最近为近30天，日期以business_date为准。先使用已有信息，只补问缺项。
-这里只开放当前账户的只读工具，不可转账、冻结、投资或产生授权。其他业务通过handoff_banking。
+写业务使用prepare_*提交候选，服务端解析对象、校验规则并暂停等待本人确认。你不能授权或直接执行。
+可先查询，再准备，确认执行结果返回后继续查询实际流水或下一步。不要把准备成功当作执行成功。
+查询交易记录用query_transactions（含转账）；query_expenses只含商户消费。
+用户新消息优先于旧计划；修改时重新准备完整候选；取消用cancel_task；先查询则只查询，保留草稿供后续明确继续。
+缺少必要信息用ask_user，不能猜收款人或金额。取消或执行失败后不得继续依赖该写入的步骤。
 查询结果包含真实汇总与证据，金额单位为分。只依据本轮工具结果回答，说明实际日期范围和筛选。
 回复简洁自然，不输出JSON、不逐条念工具名，不宣称未提供的功能已可用。不做异常分析或跨期比较。
 可以解释结果，但不能把失败说成成功，不能把旧结果当成最新结果。"""
@@ -51,10 +55,29 @@ class QueryLoopError(Exception):
 
 
 class QueryAgent:
-    def __init__(self, model, clock, *, max_rounds=5, max_calls=6, time_limit=45):
+    def __init__(self, model, clock, *, max_rounds=5, max_calls=12, time_limit=45, registry=None):
         self.model, self.clock = model, clock
         self.max_rounds, self.max_calls, self.time_limit = max_rounds, max_calls, time_limit
         self._contexts = {}
+        self._tasks = {}
+        self.preparations, self.reads = {}, {}
+        self.tools = [deepcopy(t) for t in TOOLS if t['function']['name'] != 'handoff_banking']
+        self.tools += [_tool("query_transactions", "查询当前账户真实流水，包含转账和关联流水编号。", {
+            "period": {"type": "string"}}, ("period",)),
+            _tool("cancel_task", "取消尚未执行的任务；不能撤销已完成交易。", {})]
+        self.registry = registry = registry or REGISTRY
+        for operation in sorted(registry.allowed_operations):
+            spec = registry.spec_for_operation(operation)
+            intent = spec.intent_for_operation(operation)
+            declaration = spec.intents[intent]
+            if spec.name in {'subscription', 'bills', 'balance'}:
+                continue
+            name = ('prepare_' if declaration['effect'] == 'WRITE' else '') + operation.lower()
+            mapping = self.preparations if declaration['effect'] == 'WRITE' else self.reads
+            mapping[name] = (spec.name, intent, declaration)
+            description = ('准备写操作，等待本人确认；金额为元的字符串。' if declaration['effect'] == 'WRITE' else '只读查询。')
+            self.tools.append(_tool(name, operation + '：' + description + '仅提供名称等候选，不接受身份或授权。',
+                {k: {'type': 'string', 'maxLength': 80} for k in declaration['slots']}, declaration['required']))
 
     def _key(self, context, thread):
         return context.user_id, context.account_id, thread
@@ -86,7 +109,16 @@ class QueryAgent:
             raise QueryLoopError("MODEL_OUTPUT_INVALID")
         return filters
 
-    def run(self, *, context, thread, message, history, pending=None):
+    def stop(self, context, thread):
+        self._tasks.pop(self._key(context, thread), None)
+
+    def interrupt_task(self, context, thread):
+        task = self._tasks.get(self._key(context, thread))
+        if task and task.get('pending_call'):
+            task['messages'].append({'role': 'tool', 'tool_call_id': task.pop('pending_call'),
+                'content': '此候选没有执行，旧确认（如有）已失效。以最新消息为准，继续或修改需重新准备；缺项或对象无法解析须补问。'})
+
+    def run(self, *, context, thread, message, history, pending=None, execution=None):
         current = self.current(context, thread)
         # No identity, credentials, approval records or risk totals enter the model.
         messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": json.dumps({
@@ -94,14 +126,38 @@ class QueryAgent:
             "business_date": self.clock().date().isoformat(),
             "pending_banking": {k: pending[k] for k in ("scenario", "intent", "missing_fields")} if pending else None,
         }, ensure_ascii=False)}]
-        results, seen_ids, calls_used = [], set(), 0
+        key = self._key(context, thread)
+        self._tasks = {k: v for k, v in self._tasks.items() if v['expires_at'] > self.clock()}
+        task = self._tasks.get(key)
+        if task:
+            messages = task['messages']
+            current = task.get('filters', current)
+            if execution is not None:
+                messages.append({'role': 'tool', 'tool_call_id': task.pop('pending_call'),
+                                 'content': json.dumps(execution, ensure_ascii=False)})
+                task['results'].append(execution)
+                task.pop('draft', None)
+            else:
+                self.interrupt_task(context, thread)
+                messages.append({'role': 'user', 'content': message})
+        else:
+            task = {'messages': messages, 'results': [], 'seen_ids': set(), 'calls_used': 0,
+                    'rounds': 0, 'expires_at': self.clock() + timedelta(minutes=30)}
+        results, seen_ids, calls_used = task['results'], task['seen_ids'], task['calls_used']
+        if execution is not None and execution['status'] != 'COMPLETED':
+            self._tasks.pop(key, None)
+            return {'status': execution['status'], 'result': execution, 'query_results': results,
+                    'response': '本次操作未完成，已停止后续步骤。已完成部分见实际回执。'}
         deadline = time.monotonic() + self.time_limit
         for _ in range(self.max_rounds):
+            task["rounds"] += 1
+            if task["rounds"] > self.max_calls + self.max_rounds:
+                raise QueryLoopError("QUERY_LIMIT_REACHED")
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise QueryLoopError("QUERY_LIMIT_REACHED")
             try:
-                answer = self.model.complete_tools(deepcopy(messages), deepcopy(TOOLS),
+                answer = self.model.complete_tools(deepcopy(messages), deepcopy(self.tools),
                     require_tool=not results, timeout=remaining)
             except Exception:
                 raise QueryLoopError("MODEL_UNAVAILABLE") from None
@@ -118,6 +174,8 @@ class QueryAgent:
                 if thread and current is not None:
                     self._contexts[self._key(context, thread)] = {
                         "filters": current, "expires_at": self.clock() + timedelta(minutes=30)}
+                if not task.get('draft'):
+                    self._tasks.pop(key, None)
                 return {"status": "COMPLETED", "result": results[-1], "query_results": results,
                         "operation": results[-1]["operation"], "response": text.strip()}
             if not isinstance(calls, list) or calls_used + len(calls) > self.max_calls:
@@ -130,7 +188,7 @@ class QueryAgent:
                     raise QueryLoopError("MODEL_OUTPUT_INVALID")
                 seen_ids.add(call["id"])
                 function = call["function"]
-                if function.get("name") not in {t["function"]["name"] for t in TOOLS}:
+                if function.get("name") not in {t["function"]["name"] for t in self.tools} | {'handoff_banking'}:
                     raise QueryLoopError("MODEL_OUTPUT_INVALID")
                 try:
                     args = json.loads(function["arguments"])
@@ -141,7 +199,7 @@ class QueryAgent:
                 prepared.append((call["id"], function["name"], args))
             # Handoff never executes a write, and may not silently discard completed reads.
             if any(name in {"handoff_banking", "ask_user"} for _, name, _ in prepared):
-                if len(prepared) != 1 or results:
+                if len(prepared) != 1 or (results and prepared[0][1] == "handoff_banking"):
                     raise QueryLoopError("MODEL_OUTPUT_INVALID")
                 _, name, args = prepared[0]
                 if name == "handoff_banking":
@@ -151,11 +209,37 @@ class QueryAgent:
                 if (set(args) != {"question"} or not isinstance(args["question"], str)
                         or not args["question"].strip() or len(args["question"]) > 500):
                     raise QueryLoopError("MODEL_OUTPUT_INVALID")
-                return {"status": "NEEDS_CLARIFICATION", "response": args["question"].strip()}
+                messages.append({k: answer[k] for k in ('role', 'content', 'tool_calls', 'reasoning_content') if k in answer})
+                messages.append({'role': 'tool', 'tool_call_id': prepared[0][0],
+                                 'content': json.dumps({'status': 'NEEDS_CLARIFICATION', **args}, ensure_ascii=False)})
+                task['calls_used'] = calls_used + 1
+                task['draft'] = True
+                self._tasks[key] = task
+                return {"status": "NEEDS_CLARIFICATION", "query_results": results, "response": args["question"].strip()}
+            if any(name in self.preparations or name == 'cancel_task' for _, name, _ in prepared):
+                if len(prepared) != 1:
+                    raise QueryLoopError('MODEL_OUTPUT_INVALID')
+                call_id, name, args = prepared[0]
+                if name == 'cancel_task':
+                    if args:
+                        raise QueryLoopError('MODEL_OUTPUT_INVALID')
+                    self._tasks.pop(key, None)
+                    return {'status': 'REJECTED', 'query_results': results,
+                            'response': '已取消尚未执行的任务；已完成的操作不会撤回，见实际回执。'}
+                scenario, intent, declaration = self.preparations[name]
+                if (set(args) - set(declaration['slots']) or
+                        any(not isinstance(v, str) or not v.strip() or len(v) > 80 for v in args.values())):
+                    raise QueryLoopError('MODEL_OUTPUT_INVALID')
+                task.update(pending_call=call_id, draft=True, calls_used=calls_used + 1)
+                messages.append({k: answer[k] for k in ('role', 'content', 'tool_calls', 'reasoning_content') if k in answer})
+                self._tasks[key] = task
+                return {'scenario': scenario, 'intent': intent, 'candidate_params': args,
+                        'status': 'PROCESSING', 'task_loop': True, 'query_results': results, 'response': ''}
             messages.append({k: answer[k] for k in
                 ("role", "content", "tool_calls", "reasoning_content") if k in answer})
             for call_id, name, args in prepared:
                 calls_used += 1
+                task["calls_used"] = calls_used
                 next_filters = current
                 if name == "get_balance":
                     if args:
@@ -163,6 +247,22 @@ class QueryAgent:
                     result = bank_backend.get_balance(context=context)
                     if result["status"] == "COMPLETED":
                         result = {**result, "data": {k: result["data"][k] for k in ("balance_minor", "currency")}}
+                elif name in self.reads:
+                    scenario, intent, declaration = self.reads[name]
+                    if (set(args) - set(declaration['slots']) or
+                            any(not isinstance(v, str) or not v.strip() or len(v) > 80 for v in args.values())):
+                        raise QueryLoopError('MODEL_OUTPUT_INVALID')
+                    spec = self.registry.get(scenario)
+                    params = self.registry.resolve_params(scenario, args, context)
+                    if spec.validate is not None and not spec.validate(declaration['operation'], params):
+                        self.stop(context, thread)
+                        return {'status': 'NEEDS_CLARIFICATION', 'query_results': results,
+                                'response': '查询对象不明确，请补充准确名称。'}
+                    result = self.registry.execute(scenario, declaration['operation'], params, context)
+                elif name == 'query_transactions':
+                    if set(args) != {'period'}:
+                        raise QueryLoopError('MODEL_OUTPUT_INVALID')
+                    result = bills.execute('QUERY_BILLS', bills.resolve(args, context), context)
                 else:
                     next_filters = self._filters(args, current)
                     if next_filters is None:
@@ -171,10 +271,12 @@ class QueryAgent:
                     result = bank_backend.query_expenses(context=context, **dates,
                         **{k: next_filters[k] for k in ("category", "merchant", "amount_gt_minor")})
                 if result["status"] != "COMPLETED":
+                    self.stop(context, thread)
                     return {"status": result["status"], "operation": result["operation"],
-                            "result": result, "response": bills.render(result) if name == "query_expenses"
+                            "result": result, "query_results": [*results, result], "response": bills.render(result) if name in {"query_expenses", "query_transactions"}
                             else "余额查询未完成，请检查当前账户后重试。"}
                 current = next_filters
+                task['filters'] = current
                 results.append(result)
                 messages.append({"role": "tool", "tool_call_id": call_id,
                                  "content": json.dumps(result, ensure_ascii=False)})

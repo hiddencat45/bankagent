@@ -135,6 +135,8 @@ class BankAgentState(TypedDict, total=False):
 
     # ── 输出 ──
     response: str
+    api_request_id: str  # Stable SSE request; each subsequent write gets its own internal request_id.
+    task_loop: bool  # Server-owned continuation marker; never grants authorization.
     query_results: list[BackendResult]  # 本轮已核实只读结果，供确定性回执使用
 
     # ── 跨轮记忆 ──

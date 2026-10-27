@@ -106,19 +106,27 @@ class Service:
                 # 不限定 operation：是否经过确认由 challenge_id 绑定、authorized
                 # 与服务端 APPROVED 记录三者共同证明，与具体是哪个写操作无关。
                 if (not snapshot.next and state.get('status') == 'FAILED'
+                        and state.get('result', {}).get('operation') == state.get('operation')
                         and state.get('challenge_id') == cid and state.get('authorized') is True
                         and settled['decision'] == 'APPROVED'):
                     graph_input = _RETRY_EXECUTION
-                request_id = context.request_id
+                request_id = state.get('api_request_id', context.request_id)
             else:
                 if waiting:
                     record = self.challenges.lookup(waiting[0].value['challenge_id'])
                     if record and record['expires_at'] > self.clock():
-                        raise ApiError('RUN_BUSY', '请先确认或拒绝当前操作。', 409)
+                        if self.runtime.query_agent is None or state.get('input_source') == 'form':
+                            raise ApiError('RUN_BUSY', '请先确认或拒绝当前操作。', 409)
+                        self.challenges.decide(challenge_id=record['challenge_id'], user_id=session.user_id,
+                            request_id=record['request_id'], operation_hash=record['operation_hash'], decision='reject')
+                    if self.runtime.query_agent is not None:
+                        self.runtime.query_agent.interrupt_task(
+                            TrustedContext(session.user_id, session.account_id, state['request_id']), thread)
+                    self.challenge_by_thread.pop(thread, None)
                     self.saver.delete_thread(thread)
                 request_id = f'req-{uuid4().hex}'
                 graph_input = {'user_id': session.user_id, 'account_id': session.account_id,
-                               'request_id': request_id, 'message': req.message}
+                               'request_id': request_id, 'api_request_id': request_id, 'message': req.message}
                 if not req.thread_id:
                     self.sessions.register_thread(session, thread)
             return cfg, graph_input, state, dict(thread_id=thread, request_id=request_id, mode=self.runtime.mode)
@@ -197,6 +205,8 @@ class Service:
                             candidate_params=state.get('candidate_params') or {},
                             context=context,
                         ))
+                    for receipt in state.get('query_results') or []:
+                        yield frame('card', card_type='result', payload=receipt)
                     yield frame('card', card_type='confirm', payload=payload)
                     yield frame('interrupt', kind=intr['kind'], challenge_id=record['challenge_id'],
                                 operation_hash=record['operation_hash'], prompt='请确认本次操作；高风险操作需要独立认证。')
@@ -211,6 +221,7 @@ class Service:
             else:
                 if state.get('response'):
                     yield frame('message', text=state['response'])
+            if status != 'FAILED' or state.get('query_results'):
                 for result in state.get("query_results") or ([result] if result else []):
                     if result['operation'] == 'GET_BALANCE' and result['data']:
                         result = {**result, 'data': {k: result['data'][k] for k in ('balance_minor', 'currency')}}
