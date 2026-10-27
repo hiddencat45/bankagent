@@ -16,8 +16,7 @@
 - 时间范围左闭右开 ``[start, end)``，时区 ``Asia/Singapore``；
 - 可信上下文只由服务端注入，模型与前端一律不可写。
 
-本文件只做声明，不改变任何现有行为；旧教学文件 ``bank_agent_graph.py``
-保留自己的旧版 State，按契约 §3.2「旧教学文件暂不改」，另行迁移。
+本文件只做声明；运行入口共用这里的 State 与可信上下文。
 """
 
 from __future__ import annotations

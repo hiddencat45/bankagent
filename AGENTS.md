@@ -21,13 +21,13 @@
 | `src/bankagent/api/` | HTTP/SSE、会话与确认恢复 |
 | `frontend/` | 现有业务界面、开发入口及 Node 测试 |
 | `desktop/` | PySide6 桌面窗口、本地服务生命周期与启动入口 |
-| `tests/` | Python 测试，含教学回归 |
+| `tests/` | 正式业务、Agent、安全与桌面回归 |
 | `presentation/` | PPT 源、成品、预览素材与流程图 |
 | `docs/`、`scripts/` | 文档与启动、检查脚本 |
 
 使用 `bankagent.*` 包导入，不再依赖顶层 agent_graph、bank_backend、scenarios 或 api 模块。入口把 src 加入路径，内部不增加 sys.path 补丁或旧名称别名。公共类型仍只依赖标准库。
 
-旧教学源码位于 `src/bankagent/agent/bank_agent_graph.py`，不是新功能入口。PPT 与图示属于设计/教学材料，不是实现证据。桌面采用 PySide6 原生控件，开放对话查询、账户切换及模拟开户/借记卡/消费/转账确认，frontend 保留作开发工作台；可选依赖见 requirements-desktop.txt。新增生命周期业务以原生桌面为验收入口，理财推荐尚未开放。
+旧教学入口已在交付核对分支移除，历史可从 Git 查看。PPT 与图示不能替代实际证据。桌面采用 PySide6 原生控件，frontend 保留作开发工作台；可选依赖见 requirements-desktop.txt。交付状态、证据层级与未完成项见 docs/交付核对.md，理财推荐尚未开放。
 
 ## 3. 安全边界
 
