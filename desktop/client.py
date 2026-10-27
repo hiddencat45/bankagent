@@ -87,6 +87,14 @@ class QueryClient:
             raise ValueError('bill query failed')
         return query_result(data)
 
+    def transfer_batches(self):
+        with self.opener.open(Request(self.url + '/bank/transfer-batches',
+                headers={'Authorization': 'Bearer ' + self.token}), timeout=20) as response:
+            result = json.load(response)
+        if result.get('operation') != 'QUERY_TRANSFER_BATCHES' or result.get('status') != 'COMPLETED':
+            raise ValueError('invalid batch receipts')
+        return query_result(result)
+
     def switch_customer(self, reference):
         try:
             with self.post('/demo/customer-session', {'customer_ref': reference}) as response:
@@ -166,6 +174,35 @@ def money(minor):
 
 
 def query_result(payload):
+    if payload.get('operation') == 'QUERY_TRANSFER_BATCHES' and payload.get('status') == 'COMPLETED':
+        return '\n\n'.join(query_result(r) for r in payload['data']['receipts']) or '当前账户没有批量转账回执。'
+    if payload.get('operation') == 'BATCH_TRANSFER' and payload.get('data'):
+        data = payload['data']
+        if data.get('atomic') is not True or data.get('currency') != 'CNY':
+            raise ValueError('invalid batch receipt')
+        committed = data.get('committed') is True
+        if committed != (payload['status'] == 'COMPLETED'):
+            raise ValueError('invalid batch status')
+        lines = ['整批转账成功' if committed else '整批未提交，全部款项均未扣除']
+        if 'total_minor' in data:
+            lines.append('整批合计：¥ ' + money(data['total_minor']))
+        if 'starting_balance_minor' in data:
+            lines.append('办理前余额：¥ ' + money(data['starting_balance_minor']))
+        if data.get('batch_id'):
+            lines.append('批量编号：' + data['batch_id'])
+        labels = {'COMPLETED': '成功', 'FAILED': '失败', 'NOT_EXECUTED': '未执行'}
+        for row in data['items']:
+            if (row['status'] == 'COMPLETED') != committed:
+                raise ValueError('inconsistent atomic receipt')
+            lines.append(f"{row['recipient']}：¥ {money(row['amount_minor'])} — {labels[row['status']]}")
+            if row.get('error_code'):
+                lines.append('原因：' + {'INSUFFICIENT_BALANCE': '余额不足', 'BATCH_ABORTED': '整批未提交',
+                    'USER_CANCELLED': '用户取消', 'REAUTHORIZATION_REQUIRED': '需重新认证',
+                    'TRANSFER_LIMIT_EXCEEDED': '超过单笔上限', 'CONTACT_NOT_ACCESSIBLE': '收款人不可用',
+                    'RECIPIENT_ACCOUNT_INVALID': '收款账户不可用'}.get(row['error_code'], row['error_code']))
+            if row.get('transaction_id'):
+                lines.append(f"流水：{row['transaction_id']}；转账编号：{row['transfer_id']}")
+        return '\n'.join(lines)
     if payload.get('status') != 'COMPLETED':
         return ''
     data = payload['data']
@@ -201,13 +238,21 @@ def transfer_confirmation(frames):
     if len(cards) != 1 or len(signals) != 1:
         raise ValueError('missing confirmation binding')
     card, signal = cards[0], signals[0]
-    if card.get('operation') != 'TRANSFER':
+    if card.get('operation') not in {'TRANSFER', 'BATCH_TRANSFER'}:
         return None  # Other operations are validated by business_confirmation.
-    required = ('recipient', 'challenge_id', 'operation_hash', 'expires_at')
+    batch = card['operation'] == 'BATCH_TRANSFER'
+    if batch:
+        rows = card.get('items')
+        if (card.get('atomic') is not True or not isinstance(rows, list) or not 2 <= len(rows) <= 10
+                or any(not isinstance(r, dict) or not isinstance(r.get('recipient'), str) or not r['recipient'].strip()
+                       or type(r.get('amount_minor')) is not int or r['amount_minor'] <= 0 or r.get('currency') != 'CNY' for r in rows)
+                or type(card.get('total_minor')) is not int or card['total_minor'] != sum(r['amount_minor'] for r in rows)):
+            raise ValueError('invalid batch confirmation')
+    required = ('challenge_id', 'operation_hash', 'expires_at') + (() if batch else ('recipient',))
     if any(not isinstance(card.get(key), str) or not card[key].strip() for key in required):
         raise ValueError('invalid confirmation')
-    money(card['amount_minor'])
-    if card['amount_minor'] == 0 or card.get('currency') != 'CNY':
+    money(card['total_minor'] if batch else card['amount_minor'])
+    if (not batch and card['amount_minor'] == 0) or card.get('currency') != 'CNY':
         raise ValueError('invalid transfer amount')
     if datetime.fromisoformat(card['expires_at']).utcoffset() is None:
         raise ValueError('invalid expiry')
@@ -217,12 +262,16 @@ def transfer_confirmation(frames):
         raise ValueError('invalid confirmation risk')
     if any(card[key] != signal.get(key) for key in ('challenge_id', 'operation_hash')):
         raise ValueError('confirmation mismatch')
-    return {**{key: card[key] for key in (*required, 'amount_minor', 'currency', 'risk_level')},
+    fields = ('items', 'total_minor', 'atomic', 'operation') if batch else ('amount_minor',)
+    return {**{key: card[key] for key in (*required, *fields, 'currency', 'risk_level')},
             'thread_id': frames[0][1]['thread_id'], 'request_id': frames[0][1]['request_id']}
 
 
 def business_confirmation(frames):
     transfer = transfer_confirmation(frames)
+    if transfer is not None and transfer.get('operation') == 'BATCH_TRANSFER':
+        summary = '\n'.join(f"{i}. {row['recipient']}：¥ {money(row['amount_minor'])}" for i, row in enumerate(transfer['items'], 1))
+        return {**transfer, 'summary': summary + f"\n合计：¥ {money(transfer['total_minor'])}\n整批全有或全无：任一笔失败，整批不扣款。"}
     if transfer is not None:
         return {**transfer, 'summary': f"收款人：{transfer['recipient']}\n金额：¥ {money(transfer['amount_minor'])}"}
     if frames[-1][1]['status'] not in {'AWAITING_CONFIRMATION', 'AWAITING_AUTHENTICATION'}:

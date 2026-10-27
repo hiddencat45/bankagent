@@ -176,7 +176,8 @@ class Service:
                 # 后端先查成功幂等结果；未落账时才复核授权期限/风险并写入。
                 predecessor = ('interrupt_for_authentication' if previous['risk_level'] == 'RED'
                                else 'interrupt_for_confirmation')
-                self.graph.update_state(cfg, {'status': 'PROCESSING', 'result': {}, 'response': ''},
+                self.graph.update_state(cfg, {'status': 'PROCESSING', 'result': {}, 'response': '',
+                                         'query_results': [r for r in previous.get('query_results', []) if r['status'] == 'COMPLETED']},
                                         as_node=predecessor)
             if graph_input is None:
                 state = previous  # 相同决定重放已完成结果，不再执行图。
@@ -307,6 +308,12 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
         require_demo(request)
         if request.client.host not in {'127.0.0.1', '::1', 'testclient'}:
             raise ApiError('NOT_FOUND', '客户切换仅限本机演示。', 404)
+
+    @app.get('/bank/transfer-batches')
+    def transfer_batches(request: Request):
+        from bankagent.banking.bank_backend import query_transfer_batches
+        current = service.sessions.resolve(request.headers.get('authorization'))
+        return query_transfer_batches(context=TrustedContext(current.user_id, current.account_id, 'batch-receipts'))
 
     @app.get('/bank/bills')
     def account_bills(request: Request):

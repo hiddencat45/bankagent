@@ -5,6 +5,7 @@ API 的授权终态修改/整体验示重置必须持有同一锁；本模块不
 未配置服务时失败关闭；未指定 database_path 时仍为隔离的内存实例。
 """
 
+import json
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import date, datetime, timedelta, timezone
@@ -86,8 +87,8 @@ class BankBackend(LifecycleMixin):
             raise ValueError("backend clock must be timezone aware")
         return value.astimezone(timezone(timedelta(hours=8)))
 
-    def _daily_total(self, account_id, today):
-        return sum(t["amount_minor"] for t in self._data["transactions"]
+    def _daily_total(self, account_id, today, *, data=None):
+        return sum(t["amount_minor"] for t in (self._data if data is None else data)["transactions"]
                    if t["account_id"] == account_id and t["kind"] == "TRANSFER_OUT"
                    and datetime.fromisoformat(t["occurred_at"]).date() == today)
 
@@ -160,7 +161,7 @@ class BankBackend(LifecycleMixin):
                 if len(window[1]) == 2:
                     anomalies.append({"type": "POSSIBLE_DUPLICATE", "evidence": window[1]})
             fields = ("transaction_id", "occurred_at", "kind", "amount_minor", "category", "merchant")
-            links = ('transfer_id', 'related_transaction_id')
+            links = ('transfer_id', 'related_transaction_id', 'batch_id')
             data = {"start": start.isoformat(), "end": end.isoformat(),
                     "currency": SUPPORTED_CURRENCY, "total_minor": sum(categories.values()),
                     "by_category": categories,
@@ -206,6 +207,75 @@ class BankBackend(LifecycleMixin):
                 "filters": {"category": category, "merchant": merchant, "amount_gt_minor": amount_gt_minor},
             })
 
+    def _transfer_authorization(self, context, operation, params, now):
+        record = deepcopy(self._lookup(context.authorization_ref))
+        if not isinstance(record, dict) or self._hash is None:
+            return None
+        identity = {"user_id": context.user_id, "account_id": context.account_id,
+                    "request_id": context.request_id, "idempotency_key": context.idempotency_key,
+                    "operation": operation, "params": params, "decision": "APPROVED"}
+        expiry = record.get("expires_at")
+        if (any(record.get(k) != v for k, v in identity.items())
+                or not record.get("challenge_id") or record.get("risk_level") not in {"YELLOW", "RED"}
+                or not isinstance(expiry, datetime) or expiry.utcoffset() is None or expiry <= now):
+            return None
+        base_context = TrustedContext(context.user_id, context.account_id, context.request_id)
+        expected_hash = self._hash(base_context, operation, params)
+        if not isinstance(expected_hash, str) or not expected_hash or record.get("operation_hash") != expected_hash:
+            return None
+        return record
+
+    def _check_transfer(self, data, context, contact, amount_minor, currency, now, risk_level):
+        def reject(code, **detail):
+            return _result("TRANSFER", data=detail or None, error=code)
+        if amount_minor > TRANSFER_SINGLE_LIMIT_MINOR:
+            return reject("TRANSFER_LIMIT_EXCEEDED", amount_minor=amount_minor,
+                          limit_minor=TRANSFER_SINGLE_LIMIT_MINOR)
+        spent_today = self._daily_total(context.account_id, now.date(), data=data)
+        total = spent_today + amount_minor
+        if total > YELLOW_DAILY_LIMIT_MINOR and risk_level != "RED":
+            return reject("REAUTHORIZATION_REQUIRED", daily_total_minor=spent_today,
+                          amount_minor=amount_minor, limit_minor=YELLOW_DAILY_LIMIT_MINOR)
+        account = data["accounts"][context.account_id]
+        if amount_minor > account["balance_minor"]:
+            return reject("INSUFFICIENT_BALANCE", balance_minor=account["balance_minor"],
+                          amount_minor=amount_minor)
+        destination = contact.get('recipient_account_id')
+        recipient_account = data['accounts'].get(destination)
+        if not recipient_account or destination == context.account_id:
+            return reject('RECIPIENT_ACCOUNT_INVALID')
+        if recipient_account['currency'] != currency:
+            return reject('UNSUPPORTED_CURRENCY')
+        return None
+
+    def _post_transfer(self, updated, context, contact, amount_minor, currency, now):
+        destination = contact['recipient_account_id']
+        account = updated['accounts'][context.account_id]
+        balance = account["balance_minor"] - amount_minor
+        updated["accounts"][context.account_id]["balance_minor"] = balance
+        updated['accounts'][destination]['balance_minor'] += amount_minor
+        transaction_id = f"txn-{uuid4().hex}"
+        incoming_id = f"txn-{uuid4().hex}"
+        transfer_id = f"transfer-{uuid4().hex}"
+        updated["transactions"].append({"transaction_id": transaction_id,
+            "account_id": context.account_id, "occurred_at": now.isoformat(),
+            "kind": "TRANSFER_OUT", "amount_minor": amount_minor,
+            "category": "转账", "merchant": None, "subscription_id": None,
+            'transfer_id': transfer_id, 'counterparty_account_id': destination,
+            'related_transaction_id': incoming_id, 'balance_after_minor': balance})
+        updated['transactions'].append({'transaction_id': incoming_id,
+            'account_id': destination, 'occurred_at': now.isoformat(),
+            'kind': 'TRANSFER_IN', 'amount_minor': amount_minor,
+            'category': '转账', 'merchant': None, 'subscription_id': None,
+            'transfer_id': transfer_id, 'counterparty_account_id': context.account_id,
+            'related_transaction_id': transaction_id,
+            'balance_after_minor': updated['accounts'][destination]['balance_minor']})
+        result = _result("TRANSFER", {"transaction_id": transaction_id,
+            'transfer_id': transfer_id, 'incoming_transaction_id': incoming_id,
+            "recipient": contact["display_name"], "amount_minor": amount_minor,
+            "currency": currency, "remaining_balance_minor": balance})
+        return result
+
     def execute_transfer(self, *, context: WriteContext, contact_id: str,
                          amount_minor: int, currency: str = SUPPORTED_CURRENCY) -> BackendResult:
         with self._transaction():
@@ -235,67 +305,83 @@ class BankBackend(LifecycleMixin):
             if not contact or contact["user_id"] != context.user_id:
                 return reject("CONTACT_NOT_ACCESSIBLE")
             now = self._now()
-            record = deepcopy(self._lookup(context.authorization_ref))
-            if not isinstance(record, dict) or self._hash is None:
+            record = self._transfer_authorization(context, "TRANSFER", params, now)
+            if record is None:
                 return reject("AUTHORIZATION_INVALID")
-            identity = {"user_id": context.user_id, "account_id": context.account_id,
-                        "request_id": context.request_id, "idempotency_key": context.idempotency_key,
-                        "operation": "TRANSFER", "params": params, "decision": "APPROVED"}
-            expiry = record.get("expires_at")
-            if (any(record.get(k) != v for k, v in identity.items())
-                    or not record.get("challenge_id") or record.get("risk_level") not in {"YELLOW", "RED"}
-                    or not isinstance(expiry, datetime) or expiry.utcoffset() is None or expiry <= now):
-                return reject("AUTHORIZATION_INVALID")
-            base_context = TrustedContext(context.user_id, context.account_id, context.request_id)
-            expected_hash = self._hash(base_context, "TRANSFER", params)
-            if not isinstance(expected_hash, str) or not expected_hash or record.get("operation_hash") != expected_hash:
-                return reject("AUTHORIZATION_INVALID")
-            if amount_minor > TRANSFER_SINGLE_LIMIT_MINOR:
-                return reject("TRANSFER_LIMIT_EXCEEDED", amount_minor=amount_minor,
-                              limit_minor=TRANSFER_SINGLE_LIMIT_MINOR)
-            spent_today = self._daily_total(context.account_id, now.date())
-            total = spent_today + amount_minor
-            if total > YELLOW_DAILY_LIMIT_MINOR and record["risk_level"] != "RED":
-                return reject("REAUTHORIZATION_REQUIRED", daily_total_minor=spent_today,
-                              amount_minor=amount_minor, limit_minor=YELLOW_DAILY_LIMIT_MINOR)
-            account = self._data["accounts"][context.account_id]
-            if amount_minor > account["balance_minor"]:
-                return reject("INSUFFICIENT_BALANCE", balance_minor=account["balance_minor"],
-                              amount_minor=amount_minor)
-            destination = contact.get('recipient_account_id')
-            recipient_account = self._data['accounts'].get(destination)
-            if not recipient_account or destination == context.account_id:
-                return reject('RECIPIENT_ACCOUNT_INVALID')
-            if recipient_account['currency'] != currency:
-                return reject('UNSUPPORTED_CURRENCY')
-            # 在锁内先构造完整副本与幂等结果，全部成功后一起发布，不留半笔账。
+            rejected = self._check_transfer(self._data, context, contact, amount_minor, currency, now, record['risk_level'])
+            if rejected:
+                return rejected
             updated = deepcopy(self._data)
-            balance = account["balance_minor"] - amount_minor
-            updated["accounts"][context.account_id]["balance_minor"] = balance
-            updated['accounts'][destination]['balance_minor'] += amount_minor
-            transaction_id = f"txn-{uuid4().hex}"
-            incoming_id = f"txn-{uuid4().hex}"
-            transfer_id = f"transfer-{uuid4().hex}"
-            updated["transactions"].append({"transaction_id": transaction_id,
-                "account_id": context.account_id, "occurred_at": now.isoformat(),
-                "kind": "TRANSFER_OUT", "amount_minor": amount_minor,
-                "category": "转账", "merchant": None, "subscription_id": None,
-                'transfer_id': transfer_id, 'counterparty_account_id': destination,
-                'related_transaction_id': incoming_id, 'balance_after_minor': balance})
-            updated['transactions'].append({'transaction_id': incoming_id,
-                'account_id': destination, 'occurred_at': now.isoformat(),
-                'kind': 'TRANSFER_IN', 'amount_minor': amount_minor,
-                'category': '转账', 'merchant': None, 'subscription_id': None,
-                'transfer_id': transfer_id, 'counterparty_account_id': context.account_id,
-                'related_transaction_id': transaction_id,
-                'balance_after_minor': updated['accounts'][destination]['balance_minor']})
-            result = _result("TRANSFER", {"transaction_id": transaction_id,
-                'transfer_id': transfer_id, 'incoming_transaction_id': incoming_id,
-                "recipient": contact["display_name"], "amount_minor": amount_minor,
-                "currency": currency, "remaining_balance_minor": balance})
+            result = self._post_transfer(updated, context, contact, amount_minor, currency, now)
             completed = {**self._completed, key: (fingerprint, deepcopy(result))}
             self._data, self._completed = updated, completed
             return result
+
+    def execute_transfer_batch(self, *, context: WriteContext, items: list) -> BackendResult:
+        """One authorized list, one existing ledger transaction, no intermediate publication."""
+        operation = 'BATCH_TRANSFER'
+        with self._transaction():
+            if not self._owned(context):
+                return _result(operation, error='ACCOUNT_NOT_ACCESSIBLE')
+            if not isinstance(context, WriteContext) or not context.authorization_ref:
+                return _result(operation, error='AUTHORIZATION_REQUIRED')
+            if not isinstance(context.idempotency_key, str) or not context.idempotency_key:
+                return _result(operation, error='AUTHORIZATION_INVALID')
+            if (not isinstance(items, list) or not 2 <= len(items) <= 10 or any(
+                    not isinstance(row, dict) or set(row) != {'contact_id', 'amount_minor', 'currency'}
+                    or not isinstance(row['contact_id'], str) or not row['contact_id']
+                    or type(row['amount_minor']) is not int or row['amount_minor'] <= 0
+                    or row['currency'] != SUPPORTED_CURRENCY for row in items)):
+                return _result(operation, error='INVALID_BATCH')
+            params = {'items': items}
+            key = (context.user_id, context.account_id, context.idempotency_key)
+            fingerprint = (context.request_id, operation, json.dumps(params, sort_keys=True, ensure_ascii=False))
+            previous = self._completed.get(key)
+            if previous:
+                return deepcopy(previous[1]) if previous[0] == fingerprint else _result(operation, error='IDEMPOTENCY_CONFLICT')
+            now = self._now()
+            record = self._transfer_authorization(context, operation, params, now)
+            if record is None:
+                return _result(operation, error='AUTHORIZATION_INVALID')
+            contacts = [self._transfer_contact(context, row['contact_id']) for row in items]
+            batch_id = f'batch-{uuid4().hex}'
+            summary = {'batch_id': batch_id, 'occurred_at': now.isoformat(), 'atomic': True,
+                       'total_minor': sum(r['amount_minor'] for r in items), 'currency': SUPPORTED_CURRENCY,
+                       'starting_balance_minor': self._data['accounts'][context.account_id]['balance_minor']}
+            # All work stays on this copy. The same single-transfer checks/posting are reused.
+            updated = deepcopy(self._data)
+            results = []
+            for index, (row, contact) in enumerate(zip(items, contacts)):
+                failure = (_result('TRANSFER', error='CONTACT_NOT_ACCESSIBLE')
+                           if not contact or contact['user_id'] != context.user_id else
+                           self._check_transfer(updated, context, contact, row['amount_minor'], row['currency'], now, record['risk_level']))
+                if failure:
+                    result = _result(operation, {**summary, 'committed': False, 'items': [
+                        {'recipient': c['display_name'] if c and c['user_id'] == context.user_id else '收款方不可用',
+                         'amount_minor': item['amount_minor'], 'status': 'FAILED' if i == index else 'NOT_EXECUTED',
+                         'error_code': failure['error_code'] if i == index else 'BATCH_ABORTED'}
+                        for i, (item, c) in enumerate(zip(items, contacts))]}, failure['error_code'])
+                    # Persist the rejected receipt too: retries cannot turn this same batch into a new payment.
+                    self._data = deepcopy(self._data)
+                    self._completed = {**self._completed, key: (fingerprint, deepcopy(result))}
+                    return result
+                posted = self._post_transfer(updated, context, contact, row['amount_minor'], row['currency'], now)
+                for transaction in updated['transactions'][-2:]:
+                    transaction['batch_id'] = batch_id
+                results.append({**posted['data'], 'status': 'COMPLETED'})
+            result = _result(operation, {**summary, 'committed': True, 'items': results,
+                'remaining_balance_minor': updated['accounts'][context.account_id]['balance_minor']})
+            self._data, self._completed = updated, {**self._completed, key: (fingerprint, deepcopy(result))}
+            return result
+
+    def query_transfer_batches(self, *, context: TrustedContext) -> BackendResult:
+        with self._transaction():
+            if not self._owned(context):
+                return _result('QUERY_TRANSFER_BATCHES', error='ACCOUNT_NOT_ACCESSIBLE')
+            receipts = [deepcopy(result) for key, (_, result) in self._completed.items()
+                        if key[:2] == (context.user_id, context.account_id) and result['operation'] == 'BATCH_TRANSFER']
+            receipts.sort(key=lambda r: (r['data']['occurred_at'], r['data']['batch_id']), reverse=True)
+            return _result('QUERY_TRANSFER_BATCHES', {'receipts': receipts})
 
     def query_cards(self, *, context: TrustedContext) -> BackendResult:
         with self._transaction():
@@ -666,3 +752,11 @@ def pay_by_card(*, context: WriteContext, card_id: str, amount_minor: int,
                 merchant: str, category: str = '其他') -> BackendResult:
     return _configured().pay_by_card(context=context, card_id=card_id,
         amount_minor=amount_minor, merchant=merchant, category=category)
+
+
+def execute_transfer_batch(*, context, items):
+    return _configured().execute_transfer_batch(context=context, items=items)
+
+
+def query_transfer_batches(*, context):
+    return _configured().query_transfer_batches(context=context)

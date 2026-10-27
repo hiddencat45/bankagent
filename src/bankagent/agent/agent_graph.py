@@ -463,6 +463,9 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
                 if key not in candidates and key not in resolved
             ]
 
+        missing_hook = getattr(spec.module, 'missing_candidates', None)
+        if missing_hook and intent_spec['effect'] == 'WRITE':
+            missing = missing_hook(candidates, resolved)
         if missing:
             labels = [spec.clarify_labels.get(slot, slot) for slot in missing]
             return {
@@ -596,11 +599,15 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
         )
 
         if not authorized:
+            rejection = _rejected(operation, 'USER_CANCELLED')
+            hook = getattr(registry.get(scenario_name).module, 'rejected_result', None)
+            if hook:
+                rejection = hook(params, state.get('candidate_params', {}), 'USER_CANCELLED')
             return {
                 "challenge_id": challenge_id,
                 "authorized": False,
                 "status": "REJECTED",
-                "result": _rejected(operation, "USER_CANCELLED"),
+                "result": rejection,
             }
 
         # 已批准：只记录"已授权"这个事实。
@@ -670,7 +677,7 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
 
     def continue_task(state: BankAgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
         if not state.get('task_loop') or rt.query_agent is None:
-            return {}
+            return {'query_results': [*state['query_results'], state['result']]} if state.get('query_results') else {}
         context = TrustedContext(state['user_id'], state['account_id'], state['request_id'])
         try:
             outcome = rt.query_agent.run(context=context, thread=_thread_id(config), message='', history=[],
@@ -693,6 +700,9 @@ def build_graph(runtime: BankAgentRuntime | None = None, *, checkpointer=None):
     def ask_clarification(state: BankAgentState, config: RunnableConfig | None = None) -> dict[str, Any]:
         if config is not None:
             rt.remember_clarification(state, _thread_id(config))
+            if state.get('task_loop') and rt.query_agent:
+                rt.query_agent.interrupt_task(TrustedContext(state['user_id'], state['account_id'], state['request_id']),
+                    _thread_id(config), detail=state.get('response', '请补充缺项；已提供项保留，不需重复询问。'))
         return {"status": "NEEDS_CLARIFICATION"}
 
     def reject_operation(state: BankAgentState) -> dict[str, Any]:

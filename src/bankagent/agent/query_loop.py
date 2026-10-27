@@ -42,6 +42,7 @@ current_query是服务端保存的上一笔成功查询；为空且用户只说'
 可先查询，再准备，确认执行结果返回后继续查询实际流水或下一步。不要把准备成功当作执行成功。
 查询交易记录用query_transactions（含转账）；query_expenses只含商户消费。
 用户新消息优先于旧计划；修改时重新准备完整候选；取消用cancel_task；先查询则只查询，保留草稿供后续明确继续。
+同一请求给多位联系人转账必须用prepare_batch_transfer，一次列全后确认，不能拆成多个单笔确认。整批全有或全无。
 缺少必要信息用ask_user，不能猜收款人或金额。取消或执行失败后不得继续依赖该写入的步骤。
 查询结果包含真实汇总与证据，金额单位为分。只依据本轮工具结果回答，说明实际日期范围和筛选。
 回复简洁自然，不输出JSON、不逐条念工具名，不宣称未提供的功能已可用。不做异常分析或跨期比较。
@@ -76,8 +77,10 @@ class QueryAgent:
             mapping = self.preparations if declaration['effect'] == 'WRITE' else self.reads
             mapping[name] = (spec.name, intent, declaration)
             description = ('准备写操作，等待本人确认；金额为元的字符串。' if declaration['effect'] == 'WRITE' else '只读查询。')
+            description = getattr(spec.module, 'TOOL_DESCRIPTIONS', {}).get(operation, description)
             self.tools.append(_tool(name, operation + '：' + description + '仅提供名称等候选，不接受身份或授权。',
-                {k: {'type': 'string', 'maxLength': 80} for k in declaration['slots']}, declaration['required']))
+                (getattr(spec.module, 'CANDIDATE_SCHEMA', None) if declaration['effect'] == 'WRITE' else None)
+                or {k: {'type': 'string', 'maxLength': 80} for k in declaration['slots']}, declaration['required']))
 
     def _key(self, context, thread):
         return context.user_id, context.account_id, thread
@@ -112,11 +115,11 @@ class QueryAgent:
     def stop(self, context, thread):
         self._tasks.pop(self._key(context, thread), None)
 
-    def interrupt_task(self, context, thread):
+    def interrupt_task(self, context, thread, detail=None):
         task = self._tasks.get(self._key(context, thread))
         if task and task.get('pending_call'):
             task['messages'].append({'role': 'tool', 'tool_call_id': task.pop('pending_call'),
-                'content': '此候选没有执行，旧确认（如有）已失效。以最新消息为准，继续或修改需重新准备；缺项或对象无法解析须补问。'})
+                'content': detail or '此候选没有执行，旧确认（如有）已失效。以最新消息为准，继续或修改需重新准备；缺项或对象无法解析须补问。'})
 
     def run(self, *, context, thread, message, history, pending=None, execution=None):
         current = self.current(context, thread)
@@ -227,8 +230,10 @@ class QueryAgent:
                     return {'status': 'REJECTED', 'query_results': results,
                             'response': '已取消尚未执行的任务；已完成的操作不会撤回，见实际回执。'}
                 scenario, intent, declaration = self.preparations[name]
-                if (set(args) - set(declaration['slots']) or
-                        any(not isinstance(v, str) or not v.strip() or len(v) > 80 for v in args.values())):
+                validator = getattr(self.registry.get(scenario).module, 'validate_candidates', None)
+                valid = validator(args) if validator else (not set(args) - set(declaration['slots']) and
+                    all(isinstance(v, str) and v.strip() and len(v) <= 80 for v in args.values()))
+                if not valid:
                     raise QueryLoopError('MODEL_OUTPUT_INVALID')
                 task.update(pending_call=call_id, draft=True, calls_used=calls_used + 1)
                 messages.append({k: answer[k] for k in ('role', 'content', 'tool_calls', 'reasoning_content') if k in answer})
