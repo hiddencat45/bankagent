@@ -371,13 +371,12 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
         finally:
             service.running.release()
 
-    @app.post('/agent/chat')
-    async def chat(request: Request):
+    async def stream_request(request, prepare):
         try:
             payload = await request.json()
         except (ValueError, UnicodeDecodeError):
             raise ApiError('INVALID_REQUEST', '请求体必须是 JSON。', 400) from None
-        prepared = service.prepare(request.headers.get('authorization'), payload)
+        prepared = prepare(request.headers.get('authorization'), payload)
         released = False
         def release():
             nonlocal released
@@ -393,6 +392,10 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
                 release()
         return StreamingResponse(body(), media_type='text/event-stream',
                                  background=BackgroundTask(release))
+
+    @app.post('/agent/chat')
+    async def chat(request: Request):
+        return await stream_request(request, service.prepare)
     return app
 
 
