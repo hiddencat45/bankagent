@@ -5,6 +5,7 @@ API 的授权终态修改/整体验示重置必须持有同一锁；本模块不
 未配置服务时失败关闭；未指定 database_path 时仍为隔离的内存实例。
 """
 
+import json
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import date, datetime, timedelta, timezone
@@ -160,7 +161,7 @@ class BankBackend(LifecycleMixin):
                 if len(window[1]) == 2:
                     anomalies.append({"type": "POSSIBLE_DUPLICATE", "evidence": window[1]})
             fields = ("transaction_id", "occurred_at", "kind", "amount_minor", "category", "merchant")
-            links = ('transfer_id', 'related_transaction_id')
+            links = ('transfer_id', 'related_transaction_id', 'batch_id')
             data = {"start": start.isoformat(), "end": end.isoformat(),
                     "currency": SUPPORTED_CURRENCY, "total_minor": sum(categories.values()),
                     "by_category": categories,
@@ -315,6 +316,72 @@ class BankBackend(LifecycleMixin):
             completed = {**self._completed, key: (fingerprint, deepcopy(result))}
             self._data, self._completed = updated, completed
             return result
+
+    def execute_transfer_batch(self, *, context: WriteContext, items: list) -> BackendResult:
+        """One authorized list, one existing ledger transaction, no intermediate publication."""
+        operation = 'BATCH_TRANSFER'
+        with self._transaction():
+            if not self._owned(context):
+                return _result(operation, error='ACCOUNT_NOT_ACCESSIBLE')
+            if not isinstance(context, WriteContext) or not context.authorization_ref:
+                return _result(operation, error='AUTHORIZATION_REQUIRED')
+            if not isinstance(context.idempotency_key, str) or not context.idempotency_key:
+                return _result(operation, error='AUTHORIZATION_INVALID')
+            if (not isinstance(items, list) or not 2 <= len(items) <= 10 or any(
+                    not isinstance(row, dict) or set(row) != {'contact_id', 'amount_minor', 'currency'}
+                    or not isinstance(row['contact_id'], str) or not row['contact_id']
+                    or type(row['amount_minor']) is not int or row['amount_minor'] <= 0
+                    or row['currency'] != SUPPORTED_CURRENCY for row in items)):
+                return _result(operation, error='INVALID_BATCH')
+            params = {'items': items}
+            key = (context.user_id, context.account_id, context.idempotency_key)
+            fingerprint = (context.request_id, operation, json.dumps(params, sort_keys=True, ensure_ascii=False))
+            previous = self._completed.get(key)
+            if previous:
+                return deepcopy(previous[1]) if previous[0] == fingerprint else _result(operation, error='IDEMPOTENCY_CONFLICT')
+            now = self._now()
+            record = self._transfer_authorization(context, operation, params, now)
+            if record is None:
+                return _result(operation, error='AUTHORIZATION_INVALID')
+            contacts = [self._transfer_contact(context, row['contact_id']) for row in items]
+            batch_id = f'batch-{uuid4().hex}'
+            summary = {'batch_id': batch_id, 'occurred_at': now.isoformat(), 'atomic': True,
+                       'total_minor': sum(r['amount_minor'] for r in items), 'currency': SUPPORTED_CURRENCY,
+                       'starting_balance_minor': self._data['accounts'][context.account_id]['balance_minor']}
+            # All work stays on this copy. The same single-transfer checks/posting are reused.
+            updated = deepcopy(self._data)
+            results = []
+            for index, (row, contact) in enumerate(zip(items, contacts)):
+                failure = (_result('TRANSFER', error='CONTACT_NOT_ACCESSIBLE')
+                           if not contact or contact['user_id'] != context.user_id else
+                           self._check_transfer(updated, context, contact, row['amount_minor'], row['currency'], now, record['risk_level']))
+                if failure:
+                    result = _result(operation, {**summary, 'committed': False, 'items': [
+                        {'recipient': c['display_name'] if c and c['user_id'] == context.user_id else '收款方不可用',
+                         'amount_minor': item['amount_minor'], 'status': 'FAILED' if i == index else 'NOT_EXECUTED',
+                         'error_code': failure['error_code'] if i == index else 'BATCH_ABORTED'}
+                        for i, (item, c) in enumerate(zip(items, contacts))]}, failure['error_code'])
+                    # Persist the rejected receipt too: retries cannot turn this same batch into a new payment.
+                    self._data = deepcopy(self._data)
+                    self._completed = {**self._completed, key: (fingerprint, deepcopy(result))}
+                    return result
+                posted = self._post_transfer(updated, context, contact, row['amount_minor'], row['currency'], now)
+                for transaction in updated['transactions'][-2:]:
+                    transaction['batch_id'] = batch_id
+                results.append({**posted['data'], 'status': 'COMPLETED'})
+            result = _result(operation, {**summary, 'committed': True, 'items': results,
+                'remaining_balance_minor': updated['accounts'][context.account_id]['balance_minor']})
+            self._data, self._completed = updated, {**self._completed, key: (fingerprint, deepcopy(result))}
+            return result
+
+    def query_transfer_batches(self, *, context: TrustedContext) -> BackendResult:
+        with self._transaction():
+            if not self._owned(context):
+                return _result('QUERY_TRANSFER_BATCHES', error='ACCOUNT_NOT_ACCESSIBLE')
+            receipts = [deepcopy(result) for key, (_, result) in self._completed.items()
+                        if key[:2] == (context.user_id, context.account_id) and result['operation'] == 'BATCH_TRANSFER']
+            receipts.sort(key=lambda r: (r['data']['occurred_at'], r['data']['batch_id']), reverse=True)
+            return _result('QUERY_TRANSFER_BATCHES', {'receipts': receipts})
 
     def query_cards(self, *, context: TrustedContext) -> BackendResult:
         with self._transaction():
@@ -685,3 +752,11 @@ def pay_by_card(*, context: WriteContext, card_id: str, amount_minor: int,
                 merchant: str, category: str = '其他') -> BackendResult:
     return _configured().pay_by_card(context=context, card_id=card_id,
         amount_minor=amount_minor, merchant=merchant, category=category)
+
+
+def execute_transfer_batch(*, context, items):
+    return _configured().execute_transfer_batch(context=context, items=items)
+
+
+def query_transfer_batches(*, context):
+    return _configured().query_transfer_batches(context=context)

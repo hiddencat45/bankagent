@@ -62,6 +62,8 @@ class BankWindow(QMainWindow):
         self.accounts.setAccessibleName('选择待切换账户')
         self.refresh_accounts = QPushButton('刷新账户')
         self.switch_account = QPushButton('切换账户')
+        self.batch_receipts = QPushButton('批量回执')
+        self.batch_receipts.clicked.connect(lambda: self.run('batch_receipts', self.client.transfer_batches))
         self.bills = QPushButton('本月流水')
         self.bills.clicked.connect(lambda: self.run('bills', self.client.bills))
         self.refresh_accounts.clicked.connect(self.load_accounts)
@@ -70,6 +72,7 @@ class BankWindow(QMainWindow):
         accounts.addWidget(self.refresh_accounts)
         accounts.addWidget(self.switch_account)
         accounts.addWidget(self.bills)
+        accounts.addWidget(self.batch_receipts)
         layout.addLayout(accounts)
         business = QHBoxLayout()
         self.business_buttons = []
@@ -150,7 +153,7 @@ class BankWindow(QMainWindow):
             self.input.setEnabled(True)
             self.submit.setEnabled(True)
         for item in self.business_buttons + [self.accounts, self.refresh_accounts, self.switch_account,
-                                            self.customers, self.switch_customer, self.create_customer, self.bills]:
+                                            self.customers, self.switch_customer, self.create_customer, self.bills, self.batch_receipts]:
             item.setEnabled(enabled and self.pending is None and not self.uncertain)
         self.new.setEnabled(bool(self.client.token) and not self.busy and not self.uncertain)
         self.reconnect.setEnabled(not self.busy and not self.uncertain)
@@ -343,9 +346,9 @@ class BankWindow(QMainWindow):
                 if row['account_ref'] == result['current_account_ref']:
                     self.current_account.setText('当前账户：' + label)
             self.accounts.setCurrentIndex(self.accounts.findData(result['current_account_ref']))
-        elif kind == 'bills':
+        elif kind in {'bills', 'batch_receipts'}:
             self.history.appendPlainText(result + '\n')
-            self.status.setText('本月流水已读取 · 直接查询本地账本')
+            self.status.setText('业务记录已读取 · 直接查询本地账本')
         elif kind == 'customer_busy':
             self.status.setText('服务正在办理业务或有待确认操作，请先完成或取消，再切换演示客户。')
         elif kind == 'customer_error':
