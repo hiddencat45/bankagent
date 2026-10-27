@@ -177,11 +177,19 @@ class BankBackend(LifecycleMixin):
                     anomalies.append({"type": "POSSIBLE_DUPLICATE", "evidence": window[1]})
             fields = ("transaction_id", "occurred_at", "kind", "amount_minor", "category", "merchant")
             links = ('transfer_id', 'related_transaction_id', 'batch_id')
+            def counterparty(t):
+                target = t.get('counterparty_account_id')
+                if not target:
+                    return {}
+                contact = next((c for c in self._data.get('contacts', {}).values()
+                    if c['user_id'] == context.user_id and c.get('recipient_account_id') == target), None)
+                name = contact['display_name'] if contact else self._data['accounts'].get(target, {}).get('display_name', '对方账户')
+                return {'counterparty_name': name}
             data = {"start": start.isoformat(), "end": end.isoformat(),
                     "currency": SUPPORTED_CURRENCY, "total_minor": sum(categories.values()),
                     "by_category": categories,
                     "top_category": min(categories, key=lambda c: (-categories[c], c)) if categories else None,
-                    "transactions": [{**{f: t[f] for f in fields},
+                    "transactions": [{**{f: t[f] for f in fields}, **counterparty(t),
                                       **{f: t[f] for f in links if f in t}} for t in selected],
                     "anomalies": anomalies}
             return _result("QUERY_BILLS", deepcopy(data))

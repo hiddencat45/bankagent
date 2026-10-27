@@ -8,11 +8,11 @@ PySide6 本地桌面银行模拟应用。普通表单与 AI 共用业务服务�
 
 ## 当前交付状态
 
-本说明对应 `docs/delivery-evidence-audit`，基于桌面预览提交 `c325aeb`。2026-10-27 核对时 #56、#61–#69 仍为开放 PR，以下分支能力不能当作 main 已交付。没有自动合并。
+本说明对应 `contract/desktop-bills-floating-ai`，基于 #72 的 `53919c4`，沿用此前业务分支。本轮核对 #72 仍开放；以下分支能力不能当作 main 已交付，没有自动合并。历史目标核对见交付核对。
 
 已具备演示客户创建、首账户及增开账户、借记卡申请/激活/冻结/解冻、模拟消费、双边转账、一次确认整批原子转账、连续账单查询和读写任务回路。写业务需确认，普通表单不依赖模型解析。模型故障明确失败，不自动伪装为模型成功。
 
-**仍未完成：理财推荐（保留范围，本轮暂缓）、生产身份/强认证接入、同名对象及账号/卡号解析完整体验、独立安装包、其余业务页视觉改版。** 两页预览尚待认可。聊天、任务和确认不跨重启恢复；已执行账务与幂等结果持久化，可重新登录查流水及批量回执。
+**仍未完成：理财推荐（保留范围，本轮暂缓）、生产身份/强认证接入、同名对象及账号/卡号解析完整体验、独立安装包、其余业务页视觉改版。** 已按用户认可方向接入账户概览、转账、真实账单和悬浮助手，其余业务继续使用既有表单。聊天、任务和确认不跨重启恢复；已执行账务与幂等结果持久化，可重新登录查流水及批量回执。
 
 - [逐项目标、成功与失败证据](docs/交付核对.md)
 - [从下载安装到完整演示](docs/复演指南.md)
@@ -25,13 +25,13 @@ PySide6 本地桌面银行模拟应用。普通表单与 AI 共用业务服务�
 Windows、Python 3.10，PowerShell 中运行：
 
 ```powershell
-git clone --branch docs/delivery-evidence-audit https://github.com/hiddencat45/bankagent.git
+git clone --branch contract/desktop-bills-floating-ai https://github.com/hiddencat45/bankagent.git
 cd bankagent
 .\scripts\setup-desktop.ps1
 .\start-desktop.cmd
 ```
 
-默认入口包含完整现有业务按钮。两页预览入口为 `start-desktop-preview.cmd`，未替换默认布局。应用自动管理本地服务，无需打开浏览器。仍是依赖 Python 的源码启动版；本轮复用了现有虚拟环境，未冒称在全新电脑完成安装验收。
+默认 `start-desktop.cmd` 现在打开账户概览、转账和交易记录，右下角半透明悬浮球展开 AI；其他业务在“账户与卡”菜单。`start-desktop-preview.cmd` 是同一布局的兼容入口；`desktop/app.py --legacy` 可打开旧布局。应用自动管理本地服务，无需打开浏览器。仍是依赖 Python 的源码启动版；本轮复用了现有虚拟环境，未冒称在全新电脑完成安装验收。
 
 正式自然语言体验需要 `BANKAGENT_MODEL_API_KEY`、`BANKAGENT_MODEL_BASE_URL`、`BANKAGENT_MODEL_NAME`；配置说明、独立演示账本与安全重开见[复演指南](docs/复演指南.md)。未配置模型时显示“离线规则”，只适合固定表达和普通表单演示。不要把密钥、运行数据库或原始诊断日志提交仓库。
 
