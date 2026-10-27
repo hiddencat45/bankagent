@@ -21,6 +21,19 @@ def text(value):
     return isinstance(value, str) and bool(value.strip()) and len(value) <= 80
 
 
+def _open_account_record(data, user_id, display_name, now):
+    account_id, transaction_id = 'account-' + uuid4().hex, 'txn-' + uuid4().hex
+    data['accounts'][account_id] = {'user_id': user_id,
+        'display_name': display_name, 'balance_minor': DEMO_OPENING_BALANCE_MINOR, 'currency': 'CNY'}
+    data['transactions'].append({'transaction_id': transaction_id, 'account_id': account_id,
+        'occurred_at': now.isoformat(), 'kind': 'INCOME',
+        'amount_minor': DEMO_OPENING_BALANCE_MINOR, 'category': '演示入账',
+        'merchant': '模拟银行演示资金', 'subscription_id': None})
+    return {'customer_id': user_id, 'account_id': account_id,
+        'display_name': display_name, 'balance_minor': DEMO_OPENING_BALANCE_MINOR,
+        'currency': 'CNY', 'funding_source': 'DEMO_CREDIT', 'transaction_id': transaction_id}
+
+
 class LifecycleMixin:
     def _card_limits(self, card_id, card):
         today = self._now().date()
@@ -102,18 +115,9 @@ class LifecycleMixin:
         if not text(display_name):
             return result(operation, error='INVALID_ACCOUNT_NAME')
         def apply(data):
-            account_id, transaction_id = 'account-' + uuid4().hex, 'txn-' + uuid4().hex
             data.setdefault('customers', {}).setdefault(context.user_id,
                 {'display_name': '演示客户', 'identity_type': 'DEMO'})
-            data['accounts'][account_id] = {'user_id': context.user_id,
-                'display_name': display_name, 'balance_minor': DEMO_OPENING_BALANCE_MINOR, 'currency': 'CNY'}
-            data['transactions'].append({'transaction_id': transaction_id, 'account_id': account_id,
-                'occurred_at': self._now().isoformat(), 'kind': 'INCOME',
-                'amount_minor': DEMO_OPENING_BALANCE_MINOR, 'category': '演示入账',
-                'merchant': '模拟银行演示资金', 'subscription_id': None})
-            return result(operation, {'customer_id': context.user_id, 'account_id': account_id,
-                'display_name': display_name, 'balance_minor': DEMO_OPENING_BALANCE_MINOR,
-                'currency': 'CNY', 'funding_source': 'DEMO_CREDIT', 'transaction_id': transaction_id})
+            return result(operation, _open_account_record(data, context.user_id, display_name, self._now()))
         return self._lifecycle_write(context, operation, {'display_name': display_name}, apply)
 
     def issue_debit_card(self, *, context: WriteContext, display_name: str):
