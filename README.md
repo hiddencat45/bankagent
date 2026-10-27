@@ -8,7 +8,7 @@ PySide6 本地桌面银行模拟应用。普通表单与 AI 共用业务服务�
 
 ## 当前交付状态
 
-本说明对应 `feat/desktop-app-icon`，基于 #73 的 `6f919f9`，沿用此前业务分支。本轮核对 #73 仍开放；以下分支能力不能当作 main 已交付，没有自动合并。历史目标核对见交付核对。
+2026-10-28 凌晨，经用户明确授权同步10月27日进度，#56、#61–#74 已按依赖顺序合入 `main`；业务代码与已验证的 `b1f1a1f` 一致。本说明描述当前主线能力，历史阶段证据及未完成项见交付核对。
 
 已具备演示客户创建、首账户及增开账户、借记卡申请/激活/冻结/解冻、模拟消费、双边转账、一次确认整批原子转账、连续账单查询和读写任务回路。写业务需确认，普通表单不依赖模型解析。模型故障明确失败，不自动伪装为模型成功。
 
@@ -29,7 +29,7 @@ PySide6 本地桌面银行模拟应用。普通表单与 AI 共用业务服务�
 Windows、Python 3.10，PowerShell 中运行：
 
 ```powershell
-git clone --branch feat/desktop-app-icon https://github.com/hiddencat45/bankagent.git
+git clone --branch main https://github.com/hiddencat45/bankagent.git
 cd bankagent
 .\scripts\setup-desktop.ps1
 .\start-desktop.cmd
