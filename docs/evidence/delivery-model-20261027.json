@@ -1,0 +1,2650 @@
+{
+  "mode": "live provider / TestClient ASGI / isolated SQLite",
+  "cases": [
+    {
+      "name": "账单追问",
+      "steps": [
+        {
+          "input": "这个月的钱主要用在哪些地方？",
+          "seconds": 5.14,
+          "events": [
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-a67c4875e1054e7e9185b13ea884cafa",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-a67c4875e1054e7e9185b13ea884cafa",
+              "mode": "model",
+              "text": "本月（10月1日至10月31日）消费合计 1,000.00 元，主要集中在：\n\n- **居住**：770.00 元（占 77%），10月2日演示租赁\n- **餐饮**：120.00 元，10月10日演示餐厅\n- **交通**：60.00 元，10月11日演示交通\n- **订阅**：50.00 元，10月12日演示影音会员两笔各 25.00 元\n\n最大头是房租类居住支出，其余日常开销都不大。需要看某一类的明细吗？"
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-a67c4875e1054e7e9185b13ea884cafa",
+              "mode": "model",
+              "type": "evidence",
+              "payload": {
+                "operation": "QUERY_BILLS",
+                "data": {
+                  "start": "2026-10-01",
+                  "end": "2026-11-01",
+                  "currency": "CNY",
+                  "total_minor": 100000,
+                  "by_category": {
+                    "居住": 77000,
+                    "餐饮": 12000,
+                    "交通": 6000,
+                    "订阅": 5000
+                  },
+                  "top_category": "居住",
+                  "transactions": [
+                    {
+                      "transaction_id": "txn-002",
+                      "occurred_at": "2026-10-02T09:00:00+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 77000,
+                      "category": "居住",
+                      "merchant": "演示租赁"
+                    },
+                    {
+                      "transaction_id": "txn-003",
+                      "occurred_at": "2026-10-10T12:00:00+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 12000,
+                      "category": "餐饮",
+                      "merchant": "演示餐厅"
+                    },
+                    {
+                      "transaction_id": "txn-004",
+                      "occurred_at": "2026-10-11T08:00:00+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 6000,
+                      "category": "交通",
+                      "merchant": "演示交通"
+                    },
+                    {
+                      "transaction_id": "txn-005",
+                      "occurred_at": "2026-10-12T10:00:00+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 2500,
+                      "category": "订阅",
+                      "merchant": "演示影音会员"
+                    },
+                    {
+                      "transaction_id": "txn-006",
+                      "occurred_at": "2026-10-12T10:00:30+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 2500,
+                      "category": "订阅",
+                      "merchant": "演示影音会员"
+                    }
+                  ],
+                  "anomalies": [],
+                  "filters": {
+                    "category": null,
+                    "merchant": null,
+                    "amount_gt_minor": null
+                  }
+                }
+              }
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-a67c4875e1054e7e9185b13ea884cafa",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "QUERY_BILLS",
+                "status": "COMPLETED",
+                "data": {
+                  "start": "2026-10-01",
+                  "end": "2026-11-01",
+                  "currency": "CNY",
+                  "total_minor": 100000,
+                  "by_category": {
+                    "居住": 77000,
+                    "餐饮": 12000,
+                    "交通": 6000,
+                    "订阅": 5000
+                  },
+                  "top_category": "居住",
+                  "transactions": [
+                    {
+                      "transaction_id": "txn-002",
+                      "occurred_at": "2026-10-02T09:00:00+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 77000,
+                      "category": "居住",
+                      "merchant": "演示租赁"
+                    },
+                    {
+                      "transaction_id": "txn-003",
+                      "occurred_at": "2026-10-10T12:00:00+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 12000,
+                      "category": "餐饮",
+                      "merchant": "演示餐厅"
+                    },
+                    {
+                      "transaction_id": "txn-004",
+                      "occurred_at": "2026-10-11T08:00:00+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 6000,
+                      "category": "交通",
+                      "merchant": "演示交通"
+                    },
+                    {
+                      "transaction_id": "txn-005",
+                      "occurred_at": "2026-10-12T10:00:00+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 2500,
+                      "category": "订阅",
+                      "merchant": "演示影音会员"
+                    },
+                    {
+                      "transaction_id": "txn-006",
+                      "occurred_at": "2026-10-12T10:00:30+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 2500,
+                      "category": "订阅",
+                      "merchant": "演示影音会员"
+                    }
+                  ],
+                  "anomalies": [],
+                  "filters": {
+                    "category": null,
+                    "merchant": null,
+                    "amount_gt_minor": null
+                  }
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-a67c4875e1054e7e9185b13ea884cafa",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-a67c4875e1054e7e9185b13ea884cafa",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        },
+        {
+          "input": "吃饭这一类单独给我看看",
+          "seconds": 2.28,
+          "events": [
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-73f1c31d24dd4599bd7aceae02d3204e",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-73f1c31d24dd4599bd7aceae02d3204e",
+              "mode": "model",
+              "text": "本月（10月1日至10月31日）餐饮消费合计 **120.00 元**，只有一笔：\n\n- 10月10日 演示餐厅 120.00 元\n\n需要看其他类别，或加上金额筛选吗？"
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-73f1c31d24dd4599bd7aceae02d3204e",
+              "mode": "model",
+              "type": "evidence",
+              "payload": {
+                "operation": "QUERY_BILLS",
+                "data": {
+                  "start": "2026-10-01",
+                  "end": "2026-11-01",
+                  "currency": "CNY",
+                  "total_minor": 12000,
+                  "by_category": {
+                    "餐饮": 12000
+                  },
+                  "top_category": "餐饮",
+                  "transactions": [
+                    {
+                      "transaction_id": "txn-003",
+                      "occurred_at": "2026-10-10T12:00:00+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 12000,
+                      "category": "餐饮",
+                      "merchant": "演示餐厅"
+                    }
+                  ],
+                  "anomalies": [],
+                  "filters": {
+                    "category": "餐饮",
+                    "merchant": null,
+                    "amount_gt_minor": null
+                  }
+                }
+              }
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-73f1c31d24dd4599bd7aceae02d3204e",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "QUERY_BILLS",
+                "status": "COMPLETED",
+                "data": {
+                  "start": "2026-10-01",
+                  "end": "2026-11-01",
+                  "currency": "CNY",
+                  "total_minor": 12000,
+                  "by_category": {
+                    "餐饮": 12000
+                  },
+                  "top_category": "餐饮",
+                  "transactions": [
+                    {
+                      "transaction_id": "txn-003",
+                      "occurred_at": "2026-10-10T12:00:00+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 12000,
+                      "category": "餐饮",
+                      "merchant": "演示餐厅"
+                    }
+                  ],
+                  "anomalies": [],
+                  "filters": {
+                    "category": "餐饮",
+                    "merchant": null,
+                    "amount_gt_minor": null
+                  }
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-73f1c31d24dd4599bd7aceae02d3204e",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-73f1c31d24dd4599bd7aceae02d3204e",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        },
+        {
+          "input": "其中一笔超过一百块的留下",
+          "seconds": 2.36,
+          "events": [
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-27d5664ce9914cad802e722e78358c54",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-27d5664ce9914cad802e722e78358c54",
+              "mode": "model",
+              "text": "本月（10月1日至10月31日）餐饮中超过100元的消费只有一笔：\n\n- 10月10日 演示餐厅 120.00 元\n\n合计 120.00 元。"
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-27d5664ce9914cad802e722e78358c54",
+              "mode": "model",
+              "type": "evidence",
+              "payload": {
+                "operation": "QUERY_BILLS",
+                "data": {
+                  "start": "2026-10-01",
+                  "end": "2026-11-01",
+                  "currency": "CNY",
+                  "total_minor": 12000,
+                  "by_category": {
+                    "餐饮": 12000
+                  },
+                  "top_category": "餐饮",
+                  "transactions": [
+                    {
+                      "transaction_id": "txn-003",
+                      "occurred_at": "2026-10-10T12:00:00+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 12000,
+                      "category": "餐饮",
+                      "merchant": "演示餐厅"
+                    }
+                  ],
+                  "anomalies": [],
+                  "filters": {
+                    "category": "餐饮",
+                    "merchant": null,
+                    "amount_gt_minor": 10000
+                  }
+                }
+              }
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-27d5664ce9914cad802e722e78358c54",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "QUERY_BILLS",
+                "status": "COMPLETED",
+                "data": {
+                  "start": "2026-10-01",
+                  "end": "2026-11-01",
+                  "currency": "CNY",
+                  "total_minor": 12000,
+                  "by_category": {
+                    "餐饮": 12000
+                  },
+                  "top_category": "餐饮",
+                  "transactions": [
+                    {
+                      "transaction_id": "txn-003",
+                      "occurred_at": "2026-10-10T12:00:00+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 12000,
+                      "category": "餐饮",
+                      "merchant": "演示餐厅"
+                    }
+                  ],
+                  "anomalies": [],
+                  "filters": {
+                    "category": "餐饮",
+                    "merchant": null,
+                    "amount_gt_minor": 10000
+                  }
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-27d5664ce9914cad802e722e78358c54",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-27d5664ce9914cad802e722e78358c54",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        },
+        {
+          "input": "金额条件撤掉，换成出行那一类",
+          "seconds": 2.78,
+          "events": [
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-910f3e5e9ed04e05a460fdfbb41211fb",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-910f3e5e9ed04e05a460fdfbb41211fb",
+              "mode": "model",
+              "text": "本月（10月1日至10月31日）交通消费合计 **60.00 元**，只有一笔：\n\n- 10月11日 演示交通 60.00 元\n\n已去掉金额筛选，只保留交通类别。"
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-910f3e5e9ed04e05a460fdfbb41211fb",
+              "mode": "model",
+              "type": "evidence",
+              "payload": {
+                "operation": "QUERY_BILLS",
+                "data": {
+                  "start": "2026-10-01",
+                  "end": "2026-11-01",
+                  "currency": "CNY",
+                  "total_minor": 6000,
+                  "by_category": {
+                    "交通": 6000
+                  },
+                  "top_category": "交通",
+                  "transactions": [
+                    {
+                      "transaction_id": "txn-004",
+                      "occurred_at": "2026-10-11T08:00:00+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 6000,
+                      "category": "交通",
+                      "merchant": "演示交通"
+                    }
+                  ],
+                  "anomalies": [],
+                  "filters": {
+                    "category": "交通",
+                    "merchant": null,
+                    "amount_gt_minor": null
+                  }
+                }
+              }
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-910f3e5e9ed04e05a460fdfbb41211fb",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "QUERY_BILLS",
+                "status": "COMPLETED",
+                "data": {
+                  "start": "2026-10-01",
+                  "end": "2026-11-01",
+                  "currency": "CNY",
+                  "total_minor": 6000,
+                  "by_category": {
+                    "交通": 6000
+                  },
+                  "top_category": "交通",
+                  "transactions": [
+                    {
+                      "transaction_id": "txn-004",
+                      "occurred_at": "2026-10-11T08:00:00+08:00",
+                      "kind": "EXPENSE",
+                      "amount_minor": 6000,
+                      "category": "交通",
+                      "merchant": "演示交通"
+                    }
+                  ],
+                  "anomalies": [],
+                  "filters": {
+                    "category": "交通",
+                    "merchant": null,
+                    "amount_gt_minor": null
+                  }
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-910f3e5e9ed04e05a460fdfbb41211fb",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-205d4a734f394db293af301f4c9acbca",
+              "request_id": "req-910f3e5e9ed04e05a460fdfbb41211fb",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ],
+      "result": "PASS",
+      "final_balance_minor": 500000,
+      "restart_accounts": {
+        "accounts": [
+          {
+            "account_ref": "account-001",
+            "display_name": "默认演示账户",
+            "balance_minor": 500000,
+            "currency": "CNY"
+          }
+        ],
+        "current_account_ref": "account-001"
+      },
+      "restart_batches": {
+        "operation": "QUERY_TRANSFER_BATCHES",
+        "status": "COMPLETED",
+        "data": {
+          "receipts": []
+        },
+        "error_code": null
+      }
+    },
+    {
+      "name": "客户创建",
+      "steps": [
+        {
+          "input": "新增一个虚构客户叫小禾，首个账户取名日用账户。",
+          "seconds": 1.01,
+          "events": [
+            {
+              "thread_id": "conv-e9d6840e79f24aebb3ac8edb84eab534",
+              "request_id": "req-4d19e76d3095433585b503011a0c4602",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-e9d6840e79f24aebb3ac8edb84eab534",
+              "request_id": "req-4d19e76d3095433585b503011a0c4602",
+              "mode": "model",
+              "step": "awaiting_confirmation",
+              "status": "AWAITING_CONFIRMATION"
+            },
+            {
+              "thread_id": "conv-e9d6840e79f24aebb3ac8edb84eab534",
+              "request_id": "req-4d19e76d3095433585b503011a0c4602",
+              "mode": "model",
+              "type": "confirm",
+              "payload": {
+                "operation": "CREATE_DEMO_CUSTOMER",
+                "risk_level": "YELLOW",
+                "expires_at": "2026-10-18T12:05:01.050973+08:00",
+                "display_name": "小禾",
+                "account_name": "日用账户",
+                "opening_credit_minor": 100000,
+                "currency": "CNY"
+              }
+            },
+            {
+              "thread_id": "conv-e9d6840e79f24aebb3ac8edb84eab534",
+              "request_id": "req-4d19e76d3095433585b503011a0c4602",
+              "mode": "model",
+              "kind": "CONFIRMATION",
+              "prompt": "请确认本次操作；高风险操作需要独立认证。"
+            },
+            {
+              "thread_id": "conv-e9d6840e79f24aebb3ac8edb84eab534",
+              "request_id": "req-4d19e76d3095433585b503011a0c4602",
+              "mode": "model",
+              "status": "AWAITING_CONFIRMATION"
+            }
+          ]
+        },
+        {
+          "input": "批准所列确认",
+          "events": [
+            {
+              "thread_id": "conv-e9d6840e79f24aebb3ac8edb84eab534",
+              "request_id": "req-4d19e76d3095433585b503011a0c4602",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-e9d6840e79f24aebb3ac8edb84eab534",
+              "request_id": "req-4d19e76d3095433585b503011a0c4602",
+              "mode": "model",
+              "text": "已创建虚构客户“小禾”，并为其开立首个账户“日用账户”，初始余额 1,000.00 元（演示额度）。"
+            },
+            {
+              "thread_id": "conv-e9d6840e79f24aebb3ac8edb84eab534",
+              "request_id": "req-4d19e76d3095433585b503011a0c4602",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "CREATE_DEMO_CUSTOMER",
+                "status": "COMPLETED",
+                "data": {
+                  "customer_id": "user-0e88c7bade654551b21480dc40c70ceb",
+                  "account_id": "account-60b71b9faee04e868bdab57fec9b83bc",
+                  "display_name": "日用账户",
+                  "balance_minor": 100000,
+                  "currency": "CNY",
+                  "funding_source": "DEMO_CREDIT",
+                  "transaction_id": "txn-b3667c3da75348cf9ae36cb6987a8c1e",
+                  "customer_name": "小禾",
+                  "customer_ref": "demo-b00a1b51da494a6784573627a9b4ac14"
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-e9d6840e79f24aebb3ac8edb84eab534",
+              "request_id": "req-4d19e76d3095433585b503011a0c4602",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-e9d6840e79f24aebb3ac8edb84eab534",
+              "request_id": "req-4d19e76d3095433585b503011a0c4602",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        },
+        {
+          "input": "申请一张借记卡，叫小禾日常卡",
+          "seconds": 1.62,
+          "events": [
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-156d64d0da8c4dfcab36bc2a70408642",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-156d64d0da8c4dfcab36bc2a70408642",
+              "mode": "model",
+              "step": "awaiting_confirmation",
+              "status": "AWAITING_CONFIRMATION"
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-156d64d0da8c4dfcab36bc2a70408642",
+              "mode": "model",
+              "type": "confirm",
+              "payload": {
+                "operation": "ISSUE_DEBIT_CARD",
+                "risk_level": "YELLOW",
+                "expires_at": "2026-10-18T12:05:04.681464+08:00",
+                "action_label": "办理借记卡",
+                "display_name": "小禾日常卡"
+              }
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-156d64d0da8c4dfcab36bc2a70408642",
+              "mode": "model",
+              "kind": "CONFIRMATION",
+              "prompt": "请确认本次操作；高风险操作需要独立认证。"
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-156d64d0da8c4dfcab36bc2a70408642",
+              "mode": "model",
+              "status": "AWAITING_CONFIRMATION"
+            }
+          ]
+        },
+        {
+          "input": "批准所列确认",
+          "events": [
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-156d64d0da8c4dfcab36bc2a70408642",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-156d64d0da8c4dfcab36bc2a70408642",
+              "mode": "model",
+              "text": "已为你申请借记卡“小禾日常卡”，目前状态为待激活。需要我帮你激活这张卡吗？"
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-156d64d0da8c4dfcab36bc2a70408642",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "ISSUE_DEBIT_CARD",
+                "status": "COMPLETED",
+                "data": {
+                  "card_id": "card-fcc1776c758641febeaac244d2eba5fb",
+                  "account_id": "account-60b71b9faee04e868bdab57fec9b83bc",
+                  "display_name": "小禾日常卡",
+                  "status": "PENDING_ACTIVATION"
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-156d64d0da8c4dfcab36bc2a70408642",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-156d64d0da8c4dfcab36bc2a70408642",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        },
+        {
+          "input": "把刚才的小禾日常卡激活",
+          "seconds": 1.11,
+          "events": [
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-3b42c540a5b1482c8aec3c66b95de46f",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-3b42c540a5b1482c8aec3c66b95de46f",
+              "mode": "model",
+              "step": "awaiting_confirmation",
+              "status": "AWAITING_CONFIRMATION"
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-3b42c540a5b1482c8aec3c66b95de46f",
+              "mode": "model",
+              "type": "confirm",
+              "payload": {
+                "operation": "ACTIVATE_DEBIT_CARD",
+                "risk_level": "YELLOW",
+                "expires_at": "2026-10-18T12:05:07.008361+08:00",
+                "action_label": "激活借记卡",
+                "display_name": "小禾日常卡"
+              }
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-3b42c540a5b1482c8aec3c66b95de46f",
+              "mode": "model",
+              "kind": "CONFIRMATION",
+              "prompt": "请确认本次操作；高风险操作需要独立认证。"
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-3b42c540a5b1482c8aec3c66b95de46f",
+              "mode": "model",
+              "status": "AWAITING_CONFIRMATION"
+            }
+          ]
+        },
+        {
+          "input": "批准所列确认",
+          "events": [
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-3b42c540a5b1482c8aec3c66b95de46f",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-3b42c540a5b1482c8aec3c66b95de46f",
+              "mode": "model",
+              "text": "“小禾日常卡”已激活，当前状态为正常可用。"
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-3b42c540a5b1482c8aec3c66b95de46f",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "ACTIVATE_DEBIT_CARD",
+                "status": "COMPLETED",
+                "data": {
+                  "card_id": "card-fcc1776c758641febeaac244d2eba5fb",
+                  "display_name": "小禾日常卡",
+                  "status": "ACTIVE"
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-3b42c540a5b1482c8aec3c66b95de46f",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-b85629a26241415086a08a0507d7f5c7",
+              "request_id": "req-3b42c540a5b1482c8aec3c66b95de46f",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ],
+      "result": "PASS",
+      "final_balance_minor": 100000,
+      "restart_accounts": {
+        "accounts": [
+          {
+            "account_ref": "account-001",
+            "display_name": "默认演示账户",
+            "balance_minor": 500000,
+            "currency": "CNY"
+          }
+        ],
+        "current_account_ref": "account-001"
+      },
+      "restart_batches": {
+        "operation": "QUERY_TRANSFER_BATCHES",
+        "status": "COMPLETED",
+        "data": {
+          "receipts": []
+        },
+        "error_code": null
+      }
+    },
+    {
+      "name": "卡生命周期",
+      "steps": [
+        {
+          "input": "帮我办一张叫旅行卡的借记卡",
+          "seconds": 0.91,
+          "events": [
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-61dbba2bee0e4bddb34ad4868d93add5",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-61dbba2bee0e4bddb34ad4868d93add5",
+              "mode": "model",
+              "step": "awaiting_confirmation",
+              "status": "AWAITING_CONFIRMATION"
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-61dbba2bee0e4bddb34ad4868d93add5",
+              "mode": "model",
+              "type": "confirm",
+              "payload": {
+                "operation": "ISSUE_DEBIT_CARD",
+                "risk_level": "YELLOW",
+                "expires_at": "2026-10-18T12:05:00.957068+08:00",
+                "action_label": "办理借记卡",
+                "display_name": "旅行卡"
+              }
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-61dbba2bee0e4bddb34ad4868d93add5",
+              "mode": "model",
+              "kind": "CONFIRMATION",
+              "prompt": "请确认本次操作；高风险操作需要独立认证。"
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-61dbba2bee0e4bddb34ad4868d93add5",
+              "mode": "model",
+              "status": "AWAITING_CONFIRMATION"
+            }
+          ]
+        },
+        {
+          "input": "批准所列确认",
+          "events": [
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-61dbba2bee0e4bddb34ad4868d93add5",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-61dbba2bee0e4bddb34ad4868d93add5",
+              "mode": "model",
+              "text": "已为你办理借记卡“旅行卡”，目前状态为待激活。需要我帮你激活这张卡吗？"
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-61dbba2bee0e4bddb34ad4868d93add5",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "ISSUE_DEBIT_CARD",
+                "status": "COMPLETED",
+                "data": {
+                  "card_id": "card-7cf8a76719b94572bab375560d7d8a9f",
+                  "account_id": "account-001",
+                  "display_name": "旅行卡",
+                  "status": "PENDING_ACTIVATION"
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-61dbba2bee0e4bddb34ad4868d93add5",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-61dbba2bee0e4bddb34ad4868d93add5",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        },
+        {
+          "input": "用旅行卡在演示书店花12元，归到购物",
+          "seconds": 1.25,
+          "events": [
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-672fc7bdbea64a9cbf0d7473515046c7",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-672fc7bdbea64a9cbf0d7473515046c7",
+              "mode": "model",
+              "step": "awaiting_confirmation",
+              "status": "AWAITING_CONFIRMATION"
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-672fc7bdbea64a9cbf0d7473515046c7",
+              "mode": "model",
+              "type": "confirm",
+              "payload": {
+                "operation": "PAY_BY_CARD",
+                "risk_level": "YELLOW",
+                "expires_at": "2026-10-18T12:05:03.556763+08:00",
+                "action_label": "模拟消费",
+                "display_name": "旅行卡",
+                "amount_minor": 1200,
+                "merchant": "演示书店",
+                "category": "购物",
+                "currency": "CNY"
+              }
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-672fc7bdbea64a9cbf0d7473515046c7",
+              "mode": "model",
+              "kind": "CONFIRMATION",
+              "prompt": "请确认本次操作；高风险操作需要独立认证。"
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-672fc7bdbea64a9cbf0d7473515046c7",
+              "mode": "model",
+              "status": "AWAITING_CONFIRMATION"
+            }
+          ]
+        },
+        {
+          "input": "批准所列确认",
+          "events": [
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-672fc7bdbea64a9cbf0d7473515046c7",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-672fc7bdbea64a9cbf0d7473515046c7",
+              "mode": "model",
+              "text": "本次操作未完成，已停止后续步骤。已完成部分见实际回执。"
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-672fc7bdbea64a9cbf0d7473515046c7",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "PAY_BY_CARD",
+                "status": "REJECTED",
+                "data": null,
+                "error_code": "CARD_NOT_ACTIVE"
+              }
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-672fc7bdbea64a9cbf0d7473515046c7",
+              "mode": "model",
+              "step": "finished",
+              "status": "REJECTED"
+            },
+            {
+              "thread_id": "conv-a571aea0397149cb83211eb6e0300341",
+              "request_id": "req-672fc7bdbea64a9cbf0d7473515046c7",
+              "mode": "model",
+              "status": "REJECTED"
+            }
+          ]
+        },
+        {
+          "input": "现在开通旅行卡，让它可以使用",
+          "seconds": 2.95,
+          "events": [
+            {
+              "thread_id": "conv-c03ce10550854f6b9c6ab15e50bda5b5",
+              "request_id": "req-e0f6ddc9765d4778882add551de5ba00",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-c03ce10550854f6b9c6ab15e50bda5b5",
+              "request_id": "req-e0f6ddc9765d4778882add551de5ba00",
+              "mode": "model",
+              "step": "awaiting_confirmation",
+              "status": "AWAITING_CONFIRMATION"
+            },
+            {
+              "thread_id": "conv-c03ce10550854f6b9c6ab15e50bda5b5",
+              "request_id": "req-e0f6ddc9765d4778882add551de5ba00",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "QUERY_CARDS",
+                "status": "COMPLETED",
+                "data": {
+                  "cards": [
+                    {
+                      "card_id": "card-001",
+                      "display_name": "日常消费卡",
+                      "status": "ACTIVE"
+                    },
+                    {
+                      "card_id": "card-002",
+                      "display_name": "备用卡",
+                      "status": "FROZEN"
+                    },
+                    {
+                      "card_id": "card-7cf8a76719b94572bab375560d7d8a9f",
+                      "display_name": "旅行卡",
+                      "status": "PENDING_ACTIVATION"
+                    }
+                  ]
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-c03ce10550854f6b9c6ab15e50bda5b5",
+              "request_id": "req-e0f6ddc9765d4778882add551de5ba00",
+              "mode": "model",
+              "type": "confirm",
+              "payload": {
+                "operation": "ACTIVATE_DEBIT_CARD",
+                "risk_level": "YELLOW",
+                "expires_at": "2026-10-18T12:05:06.526364+08:00",
+                "action_label": "激活借记卡",
+                "display_name": "旅行卡"
+              }
+            },
+            {
+              "thread_id": "conv-c03ce10550854f6b9c6ab15e50bda5b5",
+              "request_id": "req-e0f6ddc9765d4778882add551de5ba00",
+              "mode": "model",
+              "kind": "CONFIRMATION",
+              "prompt": "请确认本次操作；高风险操作需要独立认证。"
+            },
+            {
+              "thread_id": "conv-c03ce10550854f6b9c6ab15e50bda5b5",
+              "request_id": "req-e0f6ddc9765d4778882add551de5ba00",
+              "mode": "model",
+              "status": "AWAITING_CONFIRMATION"
+            }
+          ]
+        },
+        {
+          "input": "批准所列确认",
+          "events": [
+            {
+              "thread_id": "conv-c03ce10550854f6b9c6ab15e50bda5b5",
+              "request_id": "req-e0f6ddc9765d4778882add551de5ba00",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-c03ce10550854f6b9c6ab15e50bda5b5",
+              "request_id": "req-e0f6ddc9765d4778882add551de5ba00",
+              "mode": "model",
+              "text": "已找到您的“旅行卡”，当前状态为待激活。我已提交激活申请，请确认后即可使用。"
+            },
+            {
+              "thread_id": "conv-c03ce10550854f6b9c6ab15e50bda5b5",
+              "request_id": "req-e0f6ddc9765d4778882add551de5ba00",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "QUERY_CARDS",
+                "status": "COMPLETED",
+                "data": {
+                  "cards": [
+                    {
+                      "card_id": "card-001",
+                      "display_name": "日常消费卡",
+                      "status": "ACTIVE"
+                    },
+                    {
+                      "card_id": "card-002",
+                      "display_name": "备用卡",
+                      "status": "FROZEN"
+                    },
+                    {
+                      "card_id": "card-7cf8a76719b94572bab375560d7d8a9f",
+                      "display_name": "旅行卡",
+                      "status": "PENDING_ACTIVATION"
+                    }
+                  ]
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-c03ce10550854f6b9c6ab15e50bda5b5",
+              "request_id": "req-e0f6ddc9765d4778882add551de5ba00",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "ACTIVATE_DEBIT_CARD",
+                "status": "COMPLETED",
+                "data": {
+                  "card_id": "card-7cf8a76719b94572bab375560d7d8a9f",
+                  "display_name": "旅行卡",
+                  "status": "ACTIVE"
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-c03ce10550854f6b9c6ab15e50bda5b5",
+              "request_id": "req-e0f6ddc9765d4778882add551de5ba00",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-c03ce10550854f6b9c6ab15e50bda5b5",
+              "request_id": "req-e0f6ddc9765d4778882add551de5ba00",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        },
+        {
+          "input": "把旅行卡临时冻结",
+          "seconds": 1.14,
+          "events": [
+            {
+              "thread_id": "conv-41d5ffc983d74d66883ecfb04ae314f4",
+              "request_id": "req-256cd08cd20d442cb63951000138ef4c",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-41d5ffc983d74d66883ecfb04ae314f4",
+              "request_id": "req-256cd08cd20d442cb63951000138ef4c",
+              "mode": "model",
+              "step": "awaiting_confirmation",
+              "status": "AWAITING_CONFIRMATION"
+            },
+            {
+              "thread_id": "conv-41d5ffc983d74d66883ecfb04ae314f4",
+              "request_id": "req-256cd08cd20d442cb63951000138ef4c",
+              "mode": "model",
+              "type": "confirm",
+              "payload": {
+                "operation": "FREEZE_CARD",
+                "risk_level": "YELLOW",
+                "expires_at": "2026-10-18T12:05:09.311245+08:00",
+                "display_name": "旅行卡",
+                "current_status": "ACTIVE",
+                "target_status": "FROZEN"
+              }
+            },
+            {
+              "thread_id": "conv-41d5ffc983d74d66883ecfb04ae314f4",
+              "request_id": "req-256cd08cd20d442cb63951000138ef4c",
+              "mode": "model",
+              "kind": "CONFIRMATION",
+              "prompt": "请确认本次操作；高风险操作需要独立认证。"
+            },
+            {
+              "thread_id": "conv-41d5ffc983d74d66883ecfb04ae314f4",
+              "request_id": "req-256cd08cd20d442cb63951000138ef4c",
+              "mode": "model",
+              "status": "AWAITING_CONFIRMATION"
+            }
+          ]
+        },
+        {
+          "input": "批准所列确认",
+          "events": [
+            {
+              "thread_id": "conv-41d5ffc983d74d66883ecfb04ae314f4",
+              "request_id": "req-256cd08cd20d442cb63951000138ef4c",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-41d5ffc983d74d66883ecfb04ae314f4",
+              "request_id": "req-256cd08cd20d442cb63951000138ef4c",
+              "mode": "model",
+              "text": "旅行卡已冻结，当前状态为“已冻结”（此前为正常状态）。需要解冻时告诉我即可。"
+            },
+            {
+              "thread_id": "conv-41d5ffc983d74d66883ecfb04ae314f4",
+              "request_id": "req-256cd08cd20d442cb63951000138ef4c",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "FREEZE_CARD",
+                "status": "COMPLETED",
+                "data": {
+                  "card_id": "card-7cf8a76719b94572bab375560d7d8a9f",
+                  "display_name": "旅行卡",
+                  "status": "FROZEN",
+                  "previous_status": "ACTIVE",
+                  "changed": true
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-41d5ffc983d74d66883ecfb04ae314f4",
+              "request_id": "req-256cd08cd20d442cb63951000138ef4c",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-41d5ffc983d74d66883ecfb04ae314f4",
+              "request_id": "req-256cd08cd20d442cb63951000138ef4c",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        },
+        {
+          "input": "旅行卡在演示书店支付12元，算购物",
+          "seconds": 1.33,
+          "events": [
+            {
+              "thread_id": "conv-3c8572cabdb24e8186958df3d60b0b17",
+              "request_id": "req-71e98189f7df4c99820c668e89f419be",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-3c8572cabdb24e8186958df3d60b0b17",
+              "request_id": "req-71e98189f7df4c99820c668e89f419be",
+              "mode": "model",
+              "step": "awaiting_confirmation",
+              "status": "AWAITING_CONFIRMATION"
+            },
+            {
+              "thread_id": "conv-3c8572cabdb24e8186958df3d60b0b17",
+              "request_id": "req-71e98189f7df4c99820c668e89f419be",
+              "mode": "model",
+              "type": "confirm",
+              "payload": {
+                "operation": "PAY_BY_CARD",
+                "risk_level": "YELLOW",
+                "expires_at": "2026-10-18T12:05:11.926904+08:00",
+                "action_label": "模拟消费",
+                "display_name": "旅行卡",
+                "amount_minor": 1200,
+                "merchant": "演示书店",
+                "category": "购物",
+                "currency": "CNY"
+              }
+            },
+            {
+              "thread_id": "conv-3c8572cabdb24e8186958df3d60b0b17",
+              "request_id": "req-71e98189f7df4c99820c668e89f419be",
+              "mode": "model",
+              "kind": "CONFIRMATION",
+              "prompt": "请确认本次操作；高风险操作需要独立认证。"
+            },
+            {
+              "thread_id": "conv-3c8572cabdb24e8186958df3d60b0b17",
+              "request_id": "req-71e98189f7df4c99820c668e89f419be",
+              "mode": "model",
+              "status": "AWAITING_CONFIRMATION"
+            }
+          ]
+        },
+        {
+          "input": "批准所列确认",
+          "events": [
+            {
+              "thread_id": "conv-3c8572cabdb24e8186958df3d60b0b17",
+              "request_id": "req-71e98189f7df4c99820c668e89f419be",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-3c8572cabdb24e8186958df3d60b0b17",
+              "request_id": "req-71e98189f7df4c99820c668e89f419be",
+              "mode": "model",
+              "text": "本次操作未完成，已停止后续步骤。已完成部分见实际回执。"
+            },
+            {
+              "thread_id": "conv-3c8572cabdb24e8186958df3d60b0b17",
+              "request_id": "req-71e98189f7df4c99820c668e89f419be",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "PAY_BY_CARD",
+                "status": "REJECTED",
+                "data": null,
+                "error_code": "CARD_NOT_ACTIVE"
+              }
+            },
+            {
+              "thread_id": "conv-3c8572cabdb24e8186958df3d60b0b17",
+              "request_id": "req-71e98189f7df4c99820c668e89f419be",
+              "mode": "model",
+              "step": "finished",
+              "status": "REJECTED"
+            },
+            {
+              "thread_id": "conv-3c8572cabdb24e8186958df3d60b0b17",
+              "request_id": "req-71e98189f7df4c99820c668e89f419be",
+              "mode": "model",
+              "status": "REJECTED"
+            }
+          ]
+        },
+        {
+          "input": "恢复旅行卡使用",
+          "seconds": 3.45,
+          "events": [
+            {
+              "thread_id": "conv-a9f6161f6afe4e2f98c5af22161ab863",
+              "request_id": "req-4eb631eda17644758ddc9f37ab052d9c",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-a9f6161f6afe4e2f98c5af22161ab863",
+              "request_id": "req-4eb631eda17644758ddc9f37ab052d9c",
+              "mode": "model",
+              "step": "awaiting_confirmation",
+              "status": "AWAITING_CONFIRMATION"
+            },
+            {
+              "thread_id": "conv-a9f6161f6afe4e2f98c5af22161ab863",
+              "request_id": "req-4eb631eda17644758ddc9f37ab052d9c",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "QUERY_CARDS",
+                "status": "COMPLETED",
+                "data": {
+                  "cards": [
+                    {
+                      "card_id": "card-001",
+                      "display_name": "日常消费卡",
+                      "status": "ACTIVE"
+                    },
+                    {
+                      "card_id": "card-002",
+                      "display_name": "备用卡",
+                      "status": "FROZEN"
+                    },
+                    {
+                      "card_id": "card-7cf8a76719b94572bab375560d7d8a9f",
+                      "display_name": "旅行卡",
+                      "status": "FROZEN"
+                    }
+                  ]
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-a9f6161f6afe4e2f98c5af22161ab863",
+              "request_id": "req-4eb631eda17644758ddc9f37ab052d9c",
+              "mode": "model",
+              "type": "confirm",
+              "payload": {
+                "operation": "UNFREEZE_CARD",
+                "risk_level": "YELLOW",
+                "expires_at": "2026-10-18T12:05:15.394528+08:00",
+                "display_name": "旅行卡",
+                "current_status": "FROZEN",
+                "target_status": "ACTIVE"
+              }
+            },
+            {
+              "thread_id": "conv-a9f6161f6afe4e2f98c5af22161ab863",
+              "request_id": "req-4eb631eda17644758ddc9f37ab052d9c",
+              "mode": "model",
+              "kind": "CONFIRMATION",
+              "prompt": "请确认本次操作；高风险操作需要独立认证。"
+            },
+            {
+              "thread_id": "conv-a9f6161f6afe4e2f98c5af22161ab863",
+              "request_id": "req-4eb631eda17644758ddc9f37ab052d9c",
+              "mode": "model",
+              "status": "AWAITING_CONFIRMATION"
+            }
+          ]
+        },
+        {
+          "input": "批准所列确认",
+          "events": [
+            {
+              "thread_id": "conv-a9f6161f6afe4e2f98c5af22161ab863",
+              "request_id": "req-4eb631eda17644758ddc9f37ab052d9c",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-a9f6161f6afe4e2f98c5af22161ab863",
+              "request_id": "req-4eb631eda17644758ddc9f37ab052d9c",
+              "mode": "model",
+              "text": "旅行卡原本是冻结状态，现已解冻并恢复为正常可用状态。"
+            },
+            {
+              "thread_id": "conv-a9f6161f6afe4e2f98c5af22161ab863",
+              "request_id": "req-4eb631eda17644758ddc9f37ab052d9c",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "QUERY_CARDS",
+                "status": "COMPLETED",
+                "data": {
+                  "cards": [
+                    {
+                      "card_id": "card-001",
+                      "display_name": "日常消费卡",
+                      "status": "ACTIVE"
+                    },
+                    {
+                      "card_id": "card-002",
+                      "display_name": "备用卡",
+                      "status": "FROZEN"
+                    },
+                    {
+                      "card_id": "card-7cf8a76719b94572bab375560d7d8a9f",
+                      "display_name": "旅行卡",
+                      "status": "FROZEN"
+                    }
+                  ]
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-a9f6161f6afe4e2f98c5af22161ab863",
+              "request_id": "req-4eb631eda17644758ddc9f37ab052d9c",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "UNFREEZE_CARD",
+                "status": "COMPLETED",
+                "data": {
+                  "card_id": "card-7cf8a76719b94572bab375560d7d8a9f",
+                  "display_name": "旅行卡",
+                  "status": "ACTIVE",
+                  "previous_status": "FROZEN",
+                  "changed": true
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-a9f6161f6afe4e2f98c5af22161ab863",
+              "request_id": "req-4eb631eda17644758ddc9f37ab052d9c",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-a9f6161f6afe4e2f98c5af22161ab863",
+              "request_id": "req-4eb631eda17644758ddc9f37ab052d9c",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        },
+        {
+          "input": "用旅行卡给演示书店付十二块，分类购物",
+          "seconds": 1.86,
+          "events": [
+            {
+              "thread_id": "conv-11e0b8b95cfb41c0a3f3687febe1d5da",
+              "request_id": "req-6384f49369214e1e8ebe91e3f8f05206",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-11e0b8b95cfb41c0a3f3687febe1d5da",
+              "request_id": "req-6384f49369214e1e8ebe91e3f8f05206",
+              "mode": "model",
+              "step": "awaiting_confirmation",
+              "status": "AWAITING_CONFIRMATION"
+            },
+            {
+              "thread_id": "conv-11e0b8b95cfb41c0a3f3687febe1d5da",
+              "request_id": "req-6384f49369214e1e8ebe91e3f8f05206",
+              "mode": "model",
+              "type": "confirm",
+              "payload": {
+                "operation": "PAY_BY_CARD",
+                "risk_level": "YELLOW",
+                "expires_at": "2026-10-18T12:05:19.322573+08:00",
+                "action_label": "模拟消费",
+                "display_name": "旅行卡",
+                "amount_minor": 1200,
+                "merchant": "演示书店",
+                "category": "购物",
+                "currency": "CNY"
+              }
+            },
+            {
+              "thread_id": "conv-11e0b8b95cfb41c0a3f3687febe1d5da",
+              "request_id": "req-6384f49369214e1e8ebe91e3f8f05206",
+              "mode": "model",
+              "kind": "CONFIRMATION",
+              "prompt": "请确认本次操作；高风险操作需要独立认证。"
+            },
+            {
+              "thread_id": "conv-11e0b8b95cfb41c0a3f3687febe1d5da",
+              "request_id": "req-6384f49369214e1e8ebe91e3f8f05206",
+              "mode": "model",
+              "status": "AWAITING_CONFIRMATION"
+            }
+          ]
+        },
+        {
+          "input": "批准所列确认",
+          "events": [
+            {
+              "thread_id": "conv-11e0b8b95cfb41c0a3f3687febe1d5da",
+              "request_id": "req-6384f49369214e1e8ebe91e3f8f05206",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-11e0b8b95cfb41c0a3f3687febe1d5da",
+              "request_id": "req-6384f49369214e1e8ebe91e3f8f05206",
+              "mode": "model",
+              "text": "已用旅行卡向演示书店支付 12.00 元，分类为购物，交易已完成。卡内剩余余额 4,988.00 元。"
+            },
+            {
+              "thread_id": "conv-11e0b8b95cfb41c0a3f3687febe1d5da",
+              "request_id": "req-6384f49369214e1e8ebe91e3f8f05206",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "PAY_BY_CARD",
+                "status": "COMPLETED",
+                "data": {
+                  "transaction_id": "txn-be711a9422e644fcb45fc04b2cc6a61b",
+                  "card_id": "card-7cf8a76719b94572bab375560d7d8a9f",
+                  "amount_minor": 1200,
+                  "currency": "CNY",
+                  "merchant": "演示书店",
+                  "remaining_balance_minor": 498800
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-11e0b8b95cfb41c0a3f3687febe1d5da",
+              "request_id": "req-6384f49369214e1e8ebe91e3f8f05206",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-11e0b8b95cfb41c0a3f3687febe1d5da",
+              "request_id": "req-6384f49369214e1e8ebe91e3f8f05206",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ],
+      "result": "PASS",
+      "final_balance_minor": 498800,
+      "restart_accounts": {
+        "accounts": [
+          {
+            "account_ref": "account-001",
+            "display_name": "默认演示账户",
+            "balance_minor": 498800,
+            "currency": "CNY"
+          }
+        ],
+        "current_account_ref": "account-001"
+      },
+      "restart_batches": {
+        "operation": "QUERY_TRANSFER_BATCHES",
+        "status": "COMPLETED",
+        "data": {
+          "receipts": []
+        },
+        "error_code": null
+      }
+    },
+    {
+      "name": "双边多步骤",
+      "steps": [
+        {
+          "input": "看看我还有多少钱，如果够，就给张伟汇三十七块五毛，最后列出这笔流水。",
+          "seconds": 2.49,
+          "events": [
+            {
+              "thread_id": "conv-c5415b99805e49c7a4b7a34701ca7572",
+              "request_id": "req-95d051c06de34ab6a3cee34135ef0e91",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-c5415b99805e49c7a4b7a34701ca7572",
+              "request_id": "req-95d051c06de34ab6a3cee34135ef0e91",
+              "mode": "model",
+              "step": "awaiting_confirmation",
+              "status": "AWAITING_CONFIRMATION"
+            },
+            {
+              "thread_id": "conv-c5415b99805e49c7a4b7a34701ca7572",
+              "request_id": "req-95d051c06de34ab6a3cee34135ef0e91",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "GET_BALANCE",
+                "status": "COMPLETED",
+                "data": {
+                  "balance_minor": 500000,
+                  "currency": "CNY"
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-c5415b99805e49c7a4b7a34701ca7572",
+              "request_id": "req-95d051c06de34ab6a3cee34135ef0e91",
+              "mode": "model",
+              "type": "confirm",
+              "payload": {
+                "operation": "TRANSFER",
+                "risk_level": "YELLOW",
+                "expires_at": "2026-10-18T12:05:02.522704+08:00",
+                "recipient": "张伟",
+                "amount_minor": 3750,
+                "currency": "CNY"
+              }
+            },
+            {
+              "thread_id": "conv-c5415b99805e49c7a4b7a34701ca7572",
+              "request_id": "req-95d051c06de34ab6a3cee34135ef0e91",
+              "mode": "model",
+              "kind": "CONFIRMATION",
+              "prompt": "请确认本次操作；高风险操作需要独立认证。"
+            },
+            {
+              "thread_id": "conv-c5415b99805e49c7a4b7a34701ca7572",
+              "request_id": "req-95d051c06de34ab6a3cee34135ef0e91",
+              "mode": "model",
+              "status": "AWAITING_CONFIRMATION"
+            }
+          ]
+        },
+        {
+          "input": "批准所列确认",
+          "events": [
+            {
+              "thread_id": "conv-c5415b99805e49c7a4b7a34701ca7572",
+              "request_id": "req-95d051c06de34ab6a3cee34135ef0e91",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-c5415b99805e49c7a4b7a34701ca7572",
+              "request_id": "req-95d051c06de34ab6a3cee34135ef0e91",
+              "mode": "model",
+              "text": "你当前余额为 5,000.00 元，足够支付这笔转账。\n\n已向张伟转账 37.50 元，转账后余额为 4,962.50 元。\n\n这笔流水如下：\n- 时间：2026-10-18 12:00\n- 类型：转出（转账）\n- 收款人：张伟\n- 金额：37.50 元\n- 流水号：txn-4aa2ac16b8234055bee2759e230d55d0\n- 关联流水号：txn-9b0a453c8220405ba8a93924ac7a24f5"
+            },
+            {
+              "thread_id": "conv-c5415b99805e49c7a4b7a34701ca7572",
+              "request_id": "req-95d051c06de34ab6a3cee34135ef0e91",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "GET_BALANCE",
+                "status": "COMPLETED",
+                "data": {
+                  "balance_minor": 500000,
+                  "currency": "CNY"
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-c5415b99805e49c7a4b7a34701ca7572",
+              "request_id": "req-95d051c06de34ab6a3cee34135ef0e91",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "TRANSFER",
+                "status": "COMPLETED",
+                "data": {
+                  "transaction_id": "txn-4aa2ac16b8234055bee2759e230d55d0",
+                  "transfer_id": "transfer-72c03003f69f477abe4c860ff4de7159",
+                  "incoming_transaction_id": "txn-9b0a453c8220405ba8a93924ac7a24f5",
+                  "recipient": "张伟",
+                  "amount_minor": 3750,
+                  "currency": "CNY",
+                  "remaining_balance_minor": 496250
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-c5415b99805e49c7a4b7a34701ca7572",
+              "request_id": "req-95d051c06de34ab6a3cee34135ef0e91",
+              "mode": "model",
+              "type": "evidence",
+              "payload": {
+                "operation": "QUERY_BILLS",
+                "data": {
+                  "start": "2026-10-18",
+                  "end": "2026-10-19",
+                  "currency": "CNY",
+                  "total_minor": 0,
+                  "by_category": {},
+                  "top_category": null,
+                  "transactions": [
+                    {
+                      "transaction_id": "txn-4aa2ac16b8234055bee2759e230d55d0",
+                      "occurred_at": "2026-10-18T12:00:02.543596+08:00",
+                      "kind": "TRANSFER_OUT",
+                      "amount_minor": 3750,
+                      "category": "转账",
+                      "merchant": null,
+                      "transfer_id": "transfer-72c03003f69f477abe4c860ff4de7159",
+                      "related_transaction_id": "txn-9b0a453c8220405ba8a93924ac7a24f5"
+                    }
+                  ],
+                  "anomalies": []
+                }
+              }
+            },
+            {
+              "thread_id": "conv-c5415b99805e49c7a4b7a34701ca7572",
+              "request_id": "req-95d051c06de34ab6a3cee34135ef0e91",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "QUERY_BILLS",
+                "status": "COMPLETED",
+                "data": {
+                  "start": "2026-10-18",
+                  "end": "2026-10-19",
+                  "currency": "CNY",
+                  "total_minor": 0,
+                  "by_category": {},
+                  "top_category": null,
+                  "transactions": [
+                    {
+                      "transaction_id": "txn-4aa2ac16b8234055bee2759e230d55d0",
+                      "occurred_at": "2026-10-18T12:00:02.543596+08:00",
+                      "kind": "TRANSFER_OUT",
+                      "amount_minor": 3750,
+                      "category": "转账",
+                      "merchant": null,
+                      "transfer_id": "transfer-72c03003f69f477abe4c860ff4de7159",
+                      "related_transaction_id": "txn-9b0a453c8220405ba8a93924ac7a24f5"
+                    }
+                  ],
+                  "anomalies": []
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-c5415b99805e49c7a4b7a34701ca7572",
+              "request_id": "req-95d051c06de34ab6a3cee34135ef0e91",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-c5415b99805e49c7a4b7a34701ca7572",
+              "request_id": "req-95d051c06de34ab6a3cee34135ef0e91",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ],
+      "result": "PASS",
+      "both_sides_minor": [
+        496250,
+        43750
+      ],
+      "final_balance_minor": 43750,
+      "restart_accounts": {
+        "accounts": [
+          {
+            "account_ref": "account-001",
+            "display_name": "默认演示账户",
+            "balance_minor": 496250,
+            "currency": "CNY"
+          }
+        ],
+        "current_account_ref": "account-001"
+      },
+      "restart_batches": {
+        "operation": "QUERY_TRANSFER_BATCHES",
+        "status": "COMPLETED",
+        "data": {
+          "receipts": []
+        },
+        "error_code": null
+      }
+    },
+    {
+      "name": "修改取消最新请求",
+      "steps": [
+        {
+          "input": "向张伟汇四十六元",
+          "seconds": 1.56,
+          "events": [
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-b5147ae7e057425ba6b4897380dd0d63",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-b5147ae7e057425ba6b4897380dd0d63",
+              "mode": "model",
+              "step": "awaiting_confirmation",
+              "status": "AWAITING_CONFIRMATION"
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-b5147ae7e057425ba6b4897380dd0d63",
+              "mode": "model",
+              "type": "confirm",
+              "payload": {
+                "operation": "TRANSFER",
+                "risk_level": "YELLOW",
+                "expires_at": "2026-10-18T12:05:01.584961+08:00",
+                "recipient": "张伟",
+                "amount_minor": 4600,
+                "currency": "CNY"
+              }
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-b5147ae7e057425ba6b4897380dd0d63",
+              "mode": "model",
+              "kind": "CONFIRMATION",
+              "prompt": "请确认本次操作；高风险操作需要独立认证。"
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-b5147ae7e057425ba6b4897380dd0d63",
+              "mode": "model",
+              "status": "AWAITING_CONFIRMATION"
+            }
+          ]
+        },
+        {
+          "input": "数额换成二十九块，收款人不变",
+          "seconds": 1.12,
+          "events": [
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-9d97664c7ea14dc2a17803eef4f08254",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-9d97664c7ea14dc2a17803eef4f08254",
+              "mode": "model",
+              "step": "awaiting_confirmation",
+              "status": "AWAITING_CONFIRMATION"
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-9d97664c7ea14dc2a17803eef4f08254",
+              "mode": "model",
+              "type": "confirm",
+              "payload": {
+                "operation": "TRANSFER",
+                "risk_level": "YELLOW",
+                "expires_at": "2026-10-18T12:05:02.702203+08:00",
+                "recipient": "张伟",
+                "amount_minor": 2900,
+                "currency": "CNY"
+              }
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-9d97664c7ea14dc2a17803eef4f08254",
+              "mode": "model",
+              "kind": "CONFIRMATION",
+              "prompt": "请确认本次操作；高风险操作需要独立认证。"
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-9d97664c7ea14dc2a17803eef4f08254",
+              "mode": "model",
+              "status": "AWAITING_CONFIRMATION"
+            }
+          ]
+        },
+        {
+          "input": "先别付，我要知道现在余额",
+          "seconds": 3.0,
+          "events": [
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-88c282f91cf94d9584e450c7400e9487",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-88c282f91cf94d9584e450c7400e9487",
+              "mode": "model",
+              "text": "已停止转账操作，没有付款。\n\n当前账户余额为 5,000.00 元（人民币）。\n\n需要的话，我可以再帮你重新准备向张伟转账 29 元的请求。"
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-88c282f91cf94d9584e450c7400e9487",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "GET_BALANCE",
+                "status": "COMPLETED",
+                "data": {
+                  "balance_minor": 500000,
+                  "currency": "CNY"
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-88c282f91cf94d9584e450c7400e9487",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-88c282f91cf94d9584e450c7400e9487",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        },
+        {
+          "input": "这一笔彻底作罢",
+          "seconds": 0.94,
+          "events": [
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-0113bcad51a04e38b6f47cda8c3dee8b",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-0113bcad51a04e38b6f47cda8c3dee8b",
+              "mode": "model",
+              "text": "已取消尚未执行的任务；已完成的操作不会撤回，见实际回执。"
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-0113bcad51a04e38b6f47cda8c3dee8b",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "GET_BALANCE",
+                "status": "COMPLETED",
+                "data": {
+                  "balance_minor": 500000,
+                  "currency": "CNY"
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-0113bcad51a04e38b6f47cda8c3dee8b",
+              "mode": "model",
+              "step": "finished",
+              "status": "REJECTED"
+            },
+            {
+              "thread_id": "conv-25923a90917a45e69b447685fe067b1d",
+              "request_id": "req-0113bcad51a04e38b6f47cda8c3dee8b",
+              "mode": "model",
+              "status": "REJECTED"
+            }
+          ]
+        }
+      ],
+      "result": "PASS",
+      "final_balance_minor": 500000,
+      "restart_accounts": {
+        "accounts": [
+          {
+            "account_ref": "account-001",
+            "display_name": "默认演示账户",
+            "balance_minor": 500000,
+            "currency": "CNY"
+          }
+        ],
+        "current_account_ref": "account-001"
+      },
+      "restart_batches": {
+        "operation": "QUERY_TRANSFER_BATCHES",
+        "status": "COMPLETED",
+        "data": {
+          "receipts": []
+        },
+        "error_code": null
+      }
+    },
+    {
+      "name": "批量",
+      "steps": [
+        {
+          "input": "张伟收十八块，李娜收二十三块五，请合成一批让我核对，完成后查回执。",
+          "seconds": 1.12,
+          "events": [
+            {
+              "thread_id": "conv-ec7da13f92774a04b297b0a132f76067",
+              "request_id": "req-7ca2ba5104c744f6907896f2e4d215ef",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-ec7da13f92774a04b297b0a132f76067",
+              "request_id": "req-7ca2ba5104c744f6907896f2e4d215ef",
+              "mode": "model",
+              "step": "awaiting_confirmation",
+              "status": "AWAITING_CONFIRMATION"
+            },
+            {
+              "thread_id": "conv-ec7da13f92774a04b297b0a132f76067",
+              "request_id": "req-7ca2ba5104c744f6907896f2e4d215ef",
+              "mode": "model",
+              "type": "confirm",
+              "payload": {
+                "operation": "BATCH_TRANSFER",
+                "risk_level": "YELLOW",
+                "expires_at": "2026-10-18T12:05:01.164618+08:00",
+                "items": [
+                  {
+                    "recipient": "张伟",
+                    "amount_minor": 1800,
+                    "currency": "CNY"
+                  },
+                  {
+                    "recipient": "李娜",
+                    "amount_minor": 2350,
+                    "currency": "CNY"
+                  }
+                ],
+                "total_minor": 4150,
+                "currency": "CNY",
+                "atomic": true
+              }
+            },
+            {
+              "thread_id": "conv-ec7da13f92774a04b297b0a132f76067",
+              "request_id": "req-7ca2ba5104c744f6907896f2e4d215ef",
+              "mode": "model",
+              "kind": "CONFIRMATION",
+              "prompt": "请确认本次操作；高风险操作需要独立认证。"
+            },
+            {
+              "thread_id": "conv-ec7da13f92774a04b297b0a132f76067",
+              "request_id": "req-7ca2ba5104c744f6907896f2e4d215ef",
+              "mode": "model",
+              "status": "AWAITING_CONFIRMATION"
+            }
+          ]
+        },
+        {
+          "input": "批准所列确认",
+          "events": [
+            {
+              "thread_id": "conv-ec7da13f92774a04b297b0a132f76067",
+              "request_id": "req-7ca2ba5104c744f6907896f2e4d215ef",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-ec7da13f92774a04b297b0a132f76067",
+              "request_id": "req-7ca2ba5104c744f6907896f2e4d215ef",
+              "mode": "model",
+              "text": "批量转账已整批完成，回执如下：\n\n- 批次号：batch-846ebc01f37a4dafaa8af230aec25cd2\n- 时间：2026-10-18 12:00\n- 张伟 18.00 元 — 已完成\n- 李娜 23.50 元 — 已完成\n- 合计 41.50 元，整批提交成功（全有或全无）\n- 转账后余额：4,958.50 元\n\n需要我再查这两笔的流水明细吗？"
+            },
+            {
+              "thread_id": "conv-ec7da13f92774a04b297b0a132f76067",
+              "request_id": "req-7ca2ba5104c744f6907896f2e4d215ef",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "BATCH_TRANSFER",
+                "status": "COMPLETED",
+                "data": {
+                  "batch_id": "batch-846ebc01f37a4dafaa8af230aec25cd2",
+                  "occurred_at": "2026-10-18T12:00:01.193239+08:00",
+                  "atomic": true,
+                  "total_minor": 4150,
+                  "currency": "CNY",
+                  "starting_balance_minor": 500000,
+                  "committed": true,
+                  "items": [
+                    {
+                      "transaction_id": "txn-0444d62839284a1ab95a24ca1851259d",
+                      "transfer_id": "transfer-11cacd0d116e4be888b252b0d466e70c",
+                      "incoming_transaction_id": "txn-a4aa2edd6ad9444796fb3650a9bca100",
+                      "recipient": "张伟",
+                      "amount_minor": 1800,
+                      "currency": "CNY",
+                      "remaining_balance_minor": 498200,
+                      "status": "COMPLETED"
+                    },
+                    {
+                      "transaction_id": "txn-3f4df43431e841feaaa338b66e6878a8",
+                      "transfer_id": "transfer-0aaf20e7d2044313a9e3a0dc6e3d9962",
+                      "incoming_transaction_id": "txn-dc99ed96666b415999a558a2d6ad2ad8",
+                      "recipient": "李娜",
+                      "amount_minor": 2350,
+                      "currency": "CNY",
+                      "remaining_balance_minor": 495850,
+                      "status": "COMPLETED"
+                    }
+                  ],
+                  "remaining_balance_minor": 495850
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-ec7da13f92774a04b297b0a132f76067",
+              "request_id": "req-7ca2ba5104c744f6907896f2e4d215ef",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "QUERY_TRANSFER_BATCHES",
+                "status": "COMPLETED",
+                "data": {
+                  "receipts": [
+                    {
+                      "operation": "BATCH_TRANSFER",
+                      "status": "COMPLETED",
+                      "data": {
+                        "batch_id": "batch-846ebc01f37a4dafaa8af230aec25cd2",
+                        "occurred_at": "2026-10-18T12:00:01.193239+08:00",
+                        "atomic": true,
+                        "total_minor": 4150,
+                        "currency": "CNY",
+                        "starting_balance_minor": 500000,
+                        "committed": true,
+                        "items": [
+                          {
+                            "transaction_id": "txn-0444d62839284a1ab95a24ca1851259d",
+                            "transfer_id": "transfer-11cacd0d116e4be888b252b0d466e70c",
+                            "incoming_transaction_id": "txn-a4aa2edd6ad9444796fb3650a9bca100",
+                            "recipient": "张伟",
+                            "amount_minor": 1800,
+                            "currency": "CNY",
+                            "remaining_balance_minor": 498200,
+                            "status": "COMPLETED"
+                          },
+                          {
+                            "transaction_id": "txn-3f4df43431e841feaaa338b66e6878a8",
+                            "transfer_id": "transfer-0aaf20e7d2044313a9e3a0dc6e3d9962",
+                            "incoming_transaction_id": "txn-dc99ed96666b415999a558a2d6ad2ad8",
+                            "recipient": "李娜",
+                            "amount_minor": 2350,
+                            "currency": "CNY",
+                            "remaining_balance_minor": 495850,
+                            "status": "COMPLETED"
+                          }
+                        ],
+                        "remaining_balance_minor": 495850
+                      },
+                      "error_code": null
+                    }
+                  ]
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-ec7da13f92774a04b297b0a132f76067",
+              "request_id": "req-7ca2ba5104c744f6907896f2e4d215ef",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-ec7da13f92774a04b297b0a132f76067",
+              "request_id": "req-7ca2ba5104c744f6907896f2e4d215ef",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        }
+      ],
+      "result": "PASS",
+      "batch_receipts": {
+        "operation": "QUERY_TRANSFER_BATCHES",
+        "status": "COMPLETED",
+        "data": {
+          "receipts": [
+            {
+              "operation": "BATCH_TRANSFER",
+              "status": "COMPLETED",
+              "data": {
+                "batch_id": "batch-846ebc01f37a4dafaa8af230aec25cd2",
+                "occurred_at": "2026-10-18T12:00:01.193239+08:00",
+                "atomic": true,
+                "total_minor": 4150,
+                "currency": "CNY",
+                "starting_balance_minor": 500000,
+                "committed": true,
+                "items": [
+                  {
+                    "transaction_id": "txn-0444d62839284a1ab95a24ca1851259d",
+                    "transfer_id": "transfer-11cacd0d116e4be888b252b0d466e70c",
+                    "incoming_transaction_id": "txn-a4aa2edd6ad9444796fb3650a9bca100",
+                    "recipient": "张伟",
+                    "amount_minor": 1800,
+                    "currency": "CNY",
+                    "remaining_balance_minor": 498200,
+                    "status": "COMPLETED"
+                  },
+                  {
+                    "transaction_id": "txn-3f4df43431e841feaaa338b66e6878a8",
+                    "transfer_id": "transfer-0aaf20e7d2044313a9e3a0dc6e3d9962",
+                    "incoming_transaction_id": "txn-dc99ed96666b415999a558a2d6ad2ad8",
+                    "recipient": "李娜",
+                    "amount_minor": 2350,
+                    "currency": "CNY",
+                    "remaining_balance_minor": 495850,
+                    "status": "COMPLETED"
+                  }
+                ],
+                "remaining_balance_minor": 495850
+              },
+              "error_code": null
+            }
+          ]
+        },
+        "error_code": null
+      },
+      "final_balance_minor": 495850,
+      "restart_accounts": {
+        "accounts": [
+          {
+            "account_ref": "account-001",
+            "display_name": "默认演示账户",
+            "balance_minor": 495850,
+            "currency": "CNY"
+          }
+        ],
+        "current_account_ref": "account-001"
+      },
+      "restart_batches": {
+        "operation": "QUERY_TRANSFER_BATCHES",
+        "status": "COMPLETED",
+        "data": {
+          "receipts": [
+            {
+              "operation": "BATCH_TRANSFER",
+              "status": "COMPLETED",
+              "data": {
+                "batch_id": "batch-846ebc01f37a4dafaa8af230aec25cd2",
+                "occurred_at": "2026-10-18T12:00:01.193239+08:00",
+                "atomic": true,
+                "total_minor": 4150,
+                "currency": "CNY",
+                "starting_balance_minor": 500000,
+                "committed": true,
+                "items": [
+                  {
+                    "transaction_id": "txn-0444d62839284a1ab95a24ca1851259d",
+                    "transfer_id": "transfer-11cacd0d116e4be888b252b0d466e70c",
+                    "incoming_transaction_id": "txn-a4aa2edd6ad9444796fb3650a9bca100",
+                    "recipient": "张伟",
+                    "amount_minor": 1800,
+                    "currency": "CNY",
+                    "remaining_balance_minor": 498200,
+                    "status": "COMPLETED"
+                  },
+                  {
+                    "transaction_id": "txn-3f4df43431e841feaaa338b66e6878a8",
+                    "transfer_id": "transfer-0aaf20e7d2044313a9e3a0dc6e3d9962",
+                    "incoming_transaction_id": "txn-dc99ed96666b415999a558a2d6ad2ad8",
+                    "recipient": "李娜",
+                    "amount_minor": 2350,
+                    "currency": "CNY",
+                    "remaining_balance_minor": 495850,
+                    "status": "COMPLETED"
+                  }
+                ],
+                "remaining_balance_minor": 495850
+              },
+              "error_code": null
+            }
+          ]
+        },
+        "error_code": null
+      }
+    },
+    {
+      "name": "对象解析",
+      "steps": [
+        {
+          "input": "把我的借记卡列一下",
+          "seconds": 3.38,
+          "events": [
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-bdc43ecaf2a949d19b2900ef1a57fd6c",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-bdc43ecaf2a949d19b2900ef1a57fd6c",
+              "mode": "model",
+              "text": "您名下有两张借记卡：\n\n1. **日常消费卡** — 状态正常（可用）\n2. **备用卡** — 已冻结\n\n需要我帮您解冻备用卡，或查看某张卡的限额吗？"
+            },
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-bdc43ecaf2a949d19b2900ef1a57fd6c",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "QUERY_CARDS",
+                "status": "COMPLETED",
+                "data": {
+                  "cards": [
+                    {
+                      "card_id": "card-001",
+                      "display_name": "日常消费卡",
+                      "status": "ACTIVE"
+                    },
+                    {
+                      "card_id": "card-002",
+                      "display_name": "备用卡",
+                      "status": "FROZEN"
+                    }
+                  ]
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-bdc43ecaf2a949d19b2900ef1a57fd6c",
+              "mode": "model",
+              "step": "finished",
+              "status": "COMPLETED"
+            },
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-bdc43ecaf2a949d19b2900ef1a57fd6c",
+              "mode": "model",
+              "status": "COMPLETED"
+            }
+          ]
+        },
+        {
+          "input": "把第一张临时冻结",
+          "seconds": 2.81,
+          "events": [
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-3f1e9f61fec24c1c8f12354b5222e097",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-3f1e9f61fec24c1c8f12354b5222e097",
+              "mode": "model",
+              "step": "awaiting_confirmation",
+              "status": "AWAITING_CONFIRMATION"
+            },
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-3f1e9f61fec24c1c8f12354b5222e097",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "QUERY_CARDS",
+                "status": "COMPLETED",
+                "data": {
+                  "cards": [
+                    {
+                      "card_id": "card-001",
+                      "display_name": "日常消费卡",
+                      "status": "ACTIVE"
+                    },
+                    {
+                      "card_id": "card-002",
+                      "display_name": "备用卡",
+                      "status": "FROZEN"
+                    }
+                  ]
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-3f1e9f61fec24c1c8f12354b5222e097",
+              "mode": "model",
+              "type": "confirm",
+              "payload": {
+                "operation": "FREEZE_CARD",
+                "risk_level": "YELLOW",
+                "expires_at": "2026-10-18T12:05:06.219926+08:00",
+                "display_name": "日常消费卡",
+                "current_status": "ACTIVE",
+                "target_status": "FROZEN"
+              }
+            },
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-3f1e9f61fec24c1c8f12354b5222e097",
+              "mode": "model",
+              "kind": "CONFIRMATION",
+              "prompt": "请确认本次操作；高风险操作需要独立认证。"
+            },
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-3f1e9f61fec24c1c8f12354b5222e097",
+              "mode": "model",
+              "status": "AWAITING_CONFIRMATION"
+            }
+          ]
+        },
+        {
+          "input": "取消刚才的冻结",
+          "seconds": 1.52,
+          "events": [
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-097723f07e894d7980bafb04072ac4bc",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-097723f07e894d7980bafb04072ac4bc",
+              "mode": "model",
+              "text": "已取消尚未执行的任务；已完成的操作不会撤回，见实际回执。"
+            },
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-097723f07e894d7980bafb04072ac4bc",
+              "mode": "model",
+              "type": "result",
+              "payload": {
+                "operation": "QUERY_CARDS",
+                "status": "COMPLETED",
+                "data": {
+                  "cards": [
+                    {
+                      "card_id": "card-001",
+                      "display_name": "日常消费卡",
+                      "status": "ACTIVE"
+                    },
+                    {
+                      "card_id": "card-002",
+                      "display_name": "备用卡",
+                      "status": "FROZEN"
+                    }
+                  ]
+                },
+                "error_code": null
+              }
+            },
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-097723f07e894d7980bafb04072ac4bc",
+              "mode": "model",
+              "step": "finished",
+              "status": "REJECTED"
+            },
+            {
+              "thread_id": "conv-4b62b41bbe9f472c8fcd74647cb434a3",
+              "request_id": "req-097723f07e894d7980bafb04072ac4bc",
+              "mode": "model",
+              "status": "REJECTED"
+            }
+          ]
+        }
+      ],
+      "result": "PASS",
+      "resolved_confirmation": {
+        "operation": "FREEZE_CARD",
+        "risk_level": "YELLOW",
+        "expires_at": "2026-10-18T12:05:06.219926+08:00",
+        "display_name": "日常消费卡",
+        "current_status": "ACTIVE",
+        "target_status": "FROZEN"
+      },
+      "final_balance_minor": 500000,
+      "restart_accounts": {
+        "accounts": [
+          {
+            "account_ref": "account-001",
+            "display_name": "默认演示账户",
+            "balance_minor": 500000,
+            "currency": "CNY"
+          }
+        ],
+        "current_account_ref": "account-001"
+      },
+      "restart_batches": {
+        "operation": "QUERY_TRANSFER_BATCHES",
+        "status": "COMPLETED",
+        "data": {
+          "receipts": []
+        },
+        "error_code": null
+      }
+    },
+    {
+      "name": "理财推荐",
+      "steps": [
+        {
+          "input": "我能拿出两千元，三个月后要用，不愿承受本金损失，有什么理财适合我？",
+          "seconds": 1.36,
+          "events": [
+            {
+              "thread_id": "conv-eb5c2b43eebc404f9b4436e334e225a4",
+              "request_id": "req-c599bec1a67b4a369379ce2942ed1b13",
+              "mode": "model",
+              "step": "started",
+              "status": "PROCESSING"
+            },
+            {
+              "thread_id": "conv-eb5c2b43eebc404f9b4436e334e225a4",
+              "request_id": "req-c599bec1a67b4a369379ce2942ed1b13",
+              "mode": "model",
+              "text": "我目前只能帮你查询账户余额、消费和流水，以及办理转账、开卡、卡片限额等银行业务，没有理财产品的查询或购买功能，所以无法推荐具体产品。需要我先帮你查一下当前账户余额，看看这2000元是否可随时动用吗？"
+            },
+            {
+              "thread_id": "conv-eb5c2b43eebc404f9b4436e334e225a4",
+              "request_id": "req-c599bec1a67b4a369379ce2942ed1b13",
+              "mode": "model",
+              "step": "finished",
+              "status": "NEEDS_CLARIFICATION"
+            },
+            {
+              "thread_id": "conv-eb5c2b43eebc404f9b4436e334e225a4",
+              "request_id": "req-c599bec1a67b4a369379ce2942ed1b13",
+              "mode": "model",
+              "status": "NEEDS_CLARIFICATION"
+            }
+          ]
+        }
+      ],
+      "result": "UNIMPLEMENTED",
+      "reason": "No investment profile/catalog/recommendation backend or registered tool; text is not a product recommendation receipt.",
+      "final_balance_minor": 500000,
+      "restart_accounts": {
+        "accounts": [
+          {
+            "account_ref": "account-001",
+            "display_name": "默认演示账户",
+            "balance_minor": 500000,
+            "currency": "CNY"
+          }
+        ],
+        "current_account_ref": "account-001"
+      },
+      "restart_batches": {
+        "operation": "QUERY_TRANSFER_BATCHES",
+        "status": "COMPLETED",
+        "data": {
+          "receipts": []
+        },
+        "error_code": null
+      }
+    }
+  ]
+}

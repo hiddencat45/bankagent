@@ -1,0 +1,123 @@
+{
+  "mode": "real child-process HTTP / deterministic forms / no window or live model",
+  "steps": [
+    {
+      "action": "OPEN_ACCOUNT",
+      "fields": {
+        "display_name": "旅程账户"
+      },
+      "result": {
+        "operation": "OPEN_ACCOUNT",
+        "status": "COMPLETED",
+        "data": {
+          "customer_id": "user-001",
+          "account_id": "account-9c7802ec9bd5407389ee6d245fc5f19c",
+          "display_name": "旅程账户",
+          "balance_minor": 100000,
+          "currency": "CNY",
+          "funding_source": "DEMO_CREDIT",
+          "transaction_id": "txn-7c3d3dd59fdf453b9e98a171f114ff84"
+        },
+        "error_code": null
+      }
+    },
+    {
+      "action": "ISSUE_DEBIT_CARD",
+      "fields": {
+        "display_name": "旅程卡"
+      },
+      "result": {
+        "operation": "ISSUE_DEBIT_CARD",
+        "status": "COMPLETED",
+        "data": {
+          "card_id": "card-30109f3a965b40aa908b03e07a89d128",
+          "account_id": "account-9c7802ec9bd5407389ee6d245fc5f19c",
+          "display_name": "旅程卡",
+          "status": "PENDING_ACTIVATION"
+        },
+        "error_code": null
+      }
+    },
+    {
+      "action": "PAY_BY_CARD",
+      "fields": {
+        "card_name": "旅程卡",
+        "merchant": "演示书店",
+        "amount": "12",
+        "category": "购物"
+      },
+      "result": {
+        "operation": "PAY_BY_CARD",
+        "status": "REJECTED",
+        "data": null,
+        "error_code": "CARD_NOT_ACTIVE"
+      }
+    },
+    {
+      "action": "ACTIVATE_DEBIT_CARD",
+      "fields": {
+        "card_name": "旅程卡"
+      },
+      "result": {
+        "operation": "ACTIVATE_DEBIT_CARD",
+        "status": "COMPLETED",
+        "data": {
+          "card_id": "card-30109f3a965b40aa908b03e07a89d128",
+          "display_name": "旅程卡",
+          "status": "ACTIVE"
+        },
+        "error_code": null
+      }
+    },
+    {
+      "action": "PAY_BY_CARD",
+      "fields": {
+        "card_name": "旅程卡",
+        "merchant": "演示书店",
+        "amount": "12",
+        "category": "购物"
+      },
+      "result": {
+        "operation": "PAY_BY_CARD",
+        "status": "COMPLETED",
+        "data": {
+          "transaction_id": "txn-33da3a7674f946c8867f4282599d9e9e",
+          "card_id": "card-30109f3a965b40aa908b03e07a89d128",
+          "amount_minor": 1200,
+          "currency": "CNY",
+          "merchant": "演示书店",
+          "remaining_balance_minor": 98800
+        },
+        "error_code": null
+      }
+    },
+    {
+      "action": "TRANSFER",
+      "fields": {
+        "recipient_name": "张伟",
+        "amount": "37.50"
+      },
+      "result": {
+        "operation": "TRANSFER",
+        "status": "COMPLETED",
+        "data": {
+          "transaction_id": "txn-f4c0bdadf35c48018165866b4ee60c23",
+          "transfer_id": "transfer-def0bcfa3a5d4aa89a6eb6b359f976af",
+          "incoming_transaction_id": "txn-c83c8336254249b3bf1fff406ea2c0d7",
+          "recipient": "张伟",
+          "amount_minor": 3750,
+          "currency": "CNY",
+          "remaining_balance_minor": 95050
+        },
+        "error_code": null
+      }
+    }
+  ],
+  "sender_bills": "消费合计：¥ 12.00\n查询期间：2026-10-01 至 2026-11-01（不含结束日）\n2026-10-18T12:00:00.826264+08:00  收入  模拟银行演示资金  ¥ 1,000.00\n2026-10-18T12:00:01.062448+08:00  消费  演示书店  ¥ 12.00\n2026-10-18T12:00:01.103555+08:00  转出  转账  ¥ 37.50\n流水：txn-f4c0bdadf35c48018165866b4ee60c23\n转账编号：transfer-def0bcfa3a5d4aa89a6eb6b359f976af\n关联流水：txn-c83c8336254249b3bf1fff406ea2c0d7",
+  "receiver_bills": "消费合计：¥ 0.00\n查询期间：2026-10-01 至 2026-11-01（不含结束日）\n2026-10-01T09:00:00+08:00  收入  演示雇主  ¥ 400.00\n2026-10-18T12:00:01.103555+08:00  转入  转账  ¥ 37.50\n流水：txn-c83c8336254249b3bf1fff406ea2c0d7\n转账编号：transfer-def0bcfa3a5d4aa89a6eb6b359f976af\n关联流水：txn-f4c0bdadf35c48018165866b4ee60c23",
+  "restart_balances_minor": [
+    95050,
+    43750
+  ],
+  "result": "PASS"
+}
