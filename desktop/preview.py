@@ -4,11 +4,12 @@ from decimal import Decimal
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox, QStackedWidget, QScrollArea, QLineEdit, QComboBox, QListWidget,
-    QTableWidget, QTableWidgetItem, QHeaderView, QPlainTextEdit, QSizePolicy, QMenu)
+    QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QMenu)
 from desktop.window import BankWindow
 from desktop.client import money, LedgerUnavailable
 from desktop.bills import BillsPage
 from desktop.orb import AssistantOrb
+from desktop.chat import ChatView
 
 STYLE = '''
 QWidget {font-family:"Microsoft YaHei";font-size:14px;color:#233631;background:#f4f6f5;}
@@ -196,11 +197,7 @@ class PreviewWindow(BankWindow):
         ai.addLayout(tools)
         self.ai_context = text('当前账户正在读取…', 'muted')
         ai.addWidget(self.ai_context)
-        ai.addWidget(text('与左侧业务共享当前客户、账户和账本。', 'muted'))
-        self.conversation = QPlainTextEdit()
-        self.conversation.setReadOnly(True)
-        self.conversation.setMinimumHeight(140)
-        self.conversation.setPlaceholderText('可问余额、查询交易，或描述要办理的业务。写操作仍会显示确认卡。')
+        self.conversation = ChatView()
         ai.addWidget(self.conversation, 1)
         shortcuts = QHBoxLayout()
         for button in self.buttons[:2]:
@@ -295,7 +292,7 @@ class PreviewWindow(BankWindow):
         root = self.centralWidget()
         self.orb.move(root.width()-82, root.height()-72)
         width = min(620 if self.ai_expand.isChecked() else 390, root.width()-40)
-        height = min(580, root.height()-105)
+        height = min(660, root.height()-105)
         self.assistant_box.setGeometry(root.width()-width-22, root.height()-height-86, width, height)
         self.assistant_box.raise_(); self.orb.raise_()
 
@@ -552,7 +549,7 @@ class PreviewWindow(BankWindow):
     def send(self, text=None):
         value = text if text is not None else self.input.text()
         if value.strip() and not self.busy and (not self.blocked or self.can_interrupt_chat()):
-            self.conversation.appendPlainText('你：' + value.strip())
+            self.conversation.add_message('user', value.strip())
             self._prepared_from_form = False
         super().send(text)
 
@@ -588,7 +585,7 @@ class PreviewWindow(BankWindow):
             self.conversation.clear()
             self.result_box.hide()
         elif kind == 'batch_receipts':
-            self.conversation.appendPlainText(result)
+            self.conversation.add_message('assistant', result)
             self.toggle_assistant(True)
         elif kind == 'accounts':
             actor = (result.get('current_customer_ref'), result['current_account_ref'])
@@ -656,12 +653,12 @@ class PreviewWindow(BankWindow):
             else:
                 self.result_text.setText(result)
             self.result_box.show()
+            self.conversation.add_message('assistant', self.result_text.text(), error=True)
         elif isinstance(result, list):
+            self.conversation.add_turn(result, self.summarize, pending=self.pending is not None)
             summaries = []
             write_statuses = []
             for event, data in result:
-                if event in {'message', 'error'}:
-                    self.conversation.appendPlainText('有度：' + data.get('text', data.get('message', '')))
                 if event == 'card' and data.get('type') == 'result':
                     receipt = data['payload']
                     if receipt['operation'] in {'TRANSFER', 'BATCH_TRANSFER', 'PAY_BY_CARD'}:
@@ -678,11 +675,12 @@ class PreviewWindow(BankWindow):
                 self.completed_form = True
             if summaries:
                 partial = 'COMPLETED' in write_statuses and any(s != 'COMPLETED' for s in write_statuses)
-                if write_statuses or not self.result_box.isVisible():
+                if any(event == 'card' and data.get('type') == 'result'
+                       and data['payload']['operation'] not in {'GET_BALANCE', 'QUERY_BILLS', 'QUERY_CARD_LIMITS'}
+                       for event, data in result):
                     self.result_box.setTitle('部分完成 · 已完成付款不会撤回' if partial else '本次办理结果')
                     self.result_text.setText('\n\n'.join(summaries))
                     self.result_box.show()
-                self.conversation.appendPlainText('实际结果：\n' + '\n'.join(summaries))
             if self.pending:
                 self.toggle_assistant(False)
                 self.status.setText('办理结果待核对 · 请重试原决定，不要另建付款' if self.decision is not None else '等待确认 · 尚未执行付款或业务变更')
