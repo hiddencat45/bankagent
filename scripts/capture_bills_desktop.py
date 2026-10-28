@@ -32,12 +32,18 @@ def main():
                 time.sleep(.01)
             raise AssertionError(window.status.text())
         def capture(name):
+            # Allow queued account refresh and native layout/scroll ranges to settle.
+            for _ in range(12):
+                app.processEvents();time.sleep(.02)
+            wait(lambda:not window.busy)
             app.processEvents();window.grab().save(str(output/name))
         try:
             window=PreviewWindow(service.start());window.show()
             wait(lambda:not window.busy and window.snapshot is not None)
             window.show_page(2); capture('ledger.png')
-            window.orb.click();capture('assistant.png')
+            window.orb.click()
+            window.send('查询余额');wait(lambda:not window.busy and '5,000.00' in window.conversation.toPlainText())
+            capture('assistant.png')
             window.input.setText('本月账单');window.submit.click();wait(lambda:not window.busy)
             window.ai_close.click()
             window.business_form('转账')
@@ -50,7 +56,7 @@ def main():
             report={'platform':app.platformName(),'visible':args.visible,'logical_size':[window.width(),window.height()],
                 'scale':window.devicePixelRatioF(),'model':'offline rules','service':'real HTTP / isolated SQLite',
                 'balance_after_minor':496000,'filtered_transfer':window.bills_page.rows,
-                'steps':['open ledger','toggle translucent orb','assistant queries current-month bills',
+                'steps':['open ledger','toggle translucent orb','assistant queries balance: bubble and receipt card', 'assistant queries current-month bills',
                     'form transfer 40, approve','ledger refresh, search 张伟, exactly one outgoing 4000 minor']}
             (output/'record.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
             print(json.dumps({k:v for k,v in report.items() if k!='filtered_transfer'},ensure_ascii=False))
