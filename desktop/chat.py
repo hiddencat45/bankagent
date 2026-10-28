@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QPainter, QColor
 from PySide6.QtWidgets import (QScrollArea, QWidget, QVBoxLayout, QHBoxLayout,
                               QLabel, QPushButton, QSizePolicy, QLayout)
 from desktop.client import money
@@ -52,7 +52,7 @@ class ChatView(QScrollArea):
             label.setObjectName(name)
         return label
 
-    def bubble(self, role, style):
+    def bubble(self, role, style, display_name=None):
         self.placeholder.hide()
         row = QWidget()
         row.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
@@ -65,7 +65,10 @@ class ChatView(QScrollArea):
         body = QVBoxLayout(bubble)
         body.setContentsMargins(12, 10, 12, 10)
         body.setSpacing(7)
-        body.addWidget(self.label('你' if role == 'user' else '有度', 'speaker'))
+        speaker = self.label((display_name or '你') if role == 'user' else '有度', 'speaker')
+        if role == 'user':
+            speaker.setAlignment(Qt.AlignmentFlag.AlignRight)
+        body.addWidget(speaker)
         if role == 'user':
             line.addStretch(1)
         else:
@@ -75,7 +78,26 @@ class ChatView(QScrollArea):
                 28, 28, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
             line.addWidget(avatar, 0, Qt.AlignmentFlag.AlignTop)
         line.addWidget(bubble)
-        if role != 'user':
+        if role == 'user':
+            avatar = QLabel()
+            avatar.setObjectName('userAvatar')
+            avatar.setAccessibleName('用户头像')
+            avatar.setFixedSize(28, 28)
+            icon = QPixmap(56, 56)
+            icon.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(icon)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor('#d2e7dc'))
+            painter.drawEllipse(0, 0, 56, 56)
+            painter.setBrush(QColor('#39715c'))
+            painter.drawEllipse(20, 11, 16, 16)
+            painter.drawRoundedRect(13, 30, 30, 18, 9, 9)
+            painter.end()
+            icon.setDevicePixelRatio(2)
+            avatar.setPixmap(icon)
+            line.addWidget(avatar, 0, Qt.AlignmentFlag.AlignTop)
+        else:
             line.addStretch(1)
         self.stack.insertWidget(self.stack.count() - 1, row)
         self.rows.append((row, bubble))
@@ -91,11 +113,11 @@ class ChatView(QScrollArea):
         super().resizeEvent(event)
         self.fit_bubbles()
 
-    def add_message(self, role, value, error=False):
+    def add_message(self, role, value, error=False, display_name=None):
         if not value:
             return
         body = self.bubble(role, 'errorBubble' if error else
-                           'userBubble' if role == 'user' else 'assistantBubble')
+                           'userBubble' if role == 'user' else 'assistantBubble', display_name)
         body.addWidget(self.label(value))
         self.transcript.append(('你：' if role == 'user' else '有度：') + value)
 
