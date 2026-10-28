@@ -122,7 +122,14 @@ def test_desktop_entry_reopens_same_ledger(tmp_path, monkeypatch):
         assert not window.windowIcon().isNull()
         assert window.windowIcon().pixmap(32, 32).width() == 32
         assert str(original) in window.statusBar().currentMessage()
+        assert receipt(window.client.query('查询余额'))['data']['balance_minor'] == 44000
+        assert window.client.overview()['current_customer_ref'] == 'zhang-wei'
+        # Reconnect must restore the chosen startup identity, not the bootstrap customer.
+        window.client.switch_customer('primary')
         assert receipt(window.client.query('查询余额'))['data']['balance_minor'] == 496000
+        window.client.connect()
+        assert window.client.overview()['current_customer_ref'] == 'zhang-wei'
+        assert receipt(window.client.query('查询余额'))['data']['balance_minor'] == 44000
         window.close()
         window.deleteLater()
         app.processEvents()

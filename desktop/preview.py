@@ -68,8 +68,8 @@ def box(title):
 
 
 class PreviewWindow(BankWindow):
-    def __init__(self, url):
-        super().__init__(url)
+    def __init__(self, url, startup_customer=None):
+        super().__init__(url, startup_customer=startup_customer)
         # Preserve the existing controller/widgets across the business views.
         self.legacy_root = self.takeCentralWidget()
         self.legacy_root.setParent(self)
@@ -256,7 +256,7 @@ class PreviewWindow(BankWindow):
     def show_connection_menu(self):
         menu = QMenu(self)
         menu.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        action = menu.addAction('重新连接默认演示客户')
+        action = menu.addAction('重新连接张伟' if self.client.startup_customer == 'zhang-wei' else '重新连接启动客户')
         action.setEnabled(self.reconnect.isEnabled())
         action.triggered.connect(self.reconnect.click)
         menu.popup(self.more_actions.mapToGlobal(self.more_actions.rect().bottomLeft()))
