@@ -26,6 +26,19 @@ def test_preview_transfer_back_edit_cancel_and_shared_account(tmp_path, monkeypa
         window = PreviewWindow(service.start())
         wait(lambda: not window.busy and window.snapshot is not None)
         assert window.balance_value.text() == '¥ 5,000.00'
+        original_customer = window.snapshot['current_customer_ref']
+        original_account = window.snapshot['current_account_ref']
+        other_account = next(a['account_ref'] for a in window.snapshot['accounts'] if a['account_ref'] != original_account)
+        window.choose_context('account', other_account)
+        wait(lambda: not window.busy and window.snapshot and window.snapshot['current_account_ref'] == other_account)
+        assert window.balance_value.text() == '¥ 0.00'
+        assert window.context_account.text() in window.ai_context.text()
+        window.choose_context('account', original_account)
+        wait(lambda: not window.busy and window.snapshot and window.snapshot['current_account_ref'] == original_account)
+        assert window.context_account.text() == '默认演示账户'
+        assert '默认演示客户' in window.customer_picker.text()
+        window.choose_context('customer', 'not-a-server-reference')
+        assert not window.busy
         assert window.card_list.count() == 1
         window.card_list.setCurrentRow(0)
         assert '日常消费卡' in window.card_note.text() and '已激活' in window.card_note.text()
@@ -45,6 +58,9 @@ def test_preview_transfer_back_edit_cancel_and_shared_account(tmp_path, monkeypa
         wait(lambda: not window.busy and window.pending is not None)
         old = dict(window.pending)
         assert not window.amount.isEnabled() and not window.switch_account.isEnabled()
+        assert not window.account_picker.isEnabled() and not window.customer_picker.isEnabled()
+        window.choose_context('customer', 'zhang-wei')
+        assert window.pending == old and not window.busy
         assert '40.00' in window.confirm_text.text()
         window.edit.click()
         wait(lambda: not window.busy and window.pending is None and window.amount.isEnabled())
@@ -76,11 +92,17 @@ def test_preview_transfer_back_edit_cancel_and_shared_account(tmp_path, monkeypa
         wait(lambda: not window.busy and '4,970.00' in window.conversation.toPlainText())
         assert 'txn-' not in window.conversation.toPlainText()
         assert any(window.transactions.item(i, 1).text().startswith('转出') for i in range(window.transactions.rowCount()))
-        window.customers.setCurrentIndex(window.customers.findData('zhang-wei'))
-        window.switch_customer.click()
+        window.choose_context('customer', 'zhang-wei')
         wait(lambda: not window.busy and window.snapshot and window.snapshot['current_customer_ref'] == 'zhang-wei')
         assert window.balance_value.text() == '¥ 430.00' and window.amount.text() == ''
         assert window.recipient.count() == 0 and not window.prepare_transfer.isEnabled()
+        assert '张伟' in window.customer_picker.text() and '张伟' in window.context_heading.text()
+        assert window.context_account.text() in window.ai_context.text()
+        assert window.context_account.text() in window.payer.text()
+        window.choose_context('customer', original_customer)
+        wait(lambda: not window.busy and window.snapshot and window.snapshot['current_customer_ref'] == original_customer)
+        assert window.balance_value.text() == '¥ 4,970.00'
+        assert '默认演示客户' in window.context_heading.text()
     finally:
         if window:
             window.close()
