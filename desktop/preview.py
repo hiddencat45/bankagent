@@ -34,6 +34,19 @@ QListWidget::item {padding:12px;border-bottom:1px solid #edf0ee;}
 QListWidget::item:selected {background:#dbece3;color:#204b3c;}
 QHeaderView::section {background:#f4f7f5;color:#61756b;border:0;padding:8px;}
 QScrollArea {border:0;} QStatusBar {color:#63766e;}
+QWidget#accountCard {background:#194f42;border-radius:10px;}
+QWidget#accountCard QLabel {background:transparent;color:#ffffff;}
+QWidget#accountCard QLabel#accountCaption {color:#bdd8cd;font-size:12px;}
+QWidget#accountCard QLabel#accountName {font-size:16px;font-weight:600;}
+QPushButton#accountPicker {background:transparent;color:white;border:0;border-top:1px solid #467568;border-radius:0;text-align:left;padding:12px 0 0 0;}
+QPushButton#accountPicker:hover {color:#bcebd7;}
+QPushButton#accountPicker:disabled {color:#93afa4;}
+QPushButton#customerPicker {text-align:left;border:0;border-radius:8px;padding:14px 10px;background:#f7faf8;}
+QPushButton#quietAction {background:transparent;border:0;padding:8px;}
+QPushButton#quietAction:hover {background:#e0eae4;}
+QMenu {background:white;border:1px solid #cbd9d1;padding:6px;}
+QMenu::item {padding:10px 18px;} QMenu::item:selected {background:#dbece3;}
+QMenu::item:disabled {color:#89968f;}
 '''
 
 
@@ -75,7 +88,7 @@ class PreviewWindow(BankWindow):
         outer.setSpacing(0)
         rail = QWidget()
         rail.setObjectName('rail')
-        rail.setFixedWidth(174)
+        rail.setFixedWidth(214)
         nav = QVBoxLayout(rail)
         nav.setContentsMargins(18, 26, 18, 20)
         nav.setSpacing(12)
@@ -92,25 +105,46 @@ class PreviewWindow(BankWindow):
         self.business_menu.clicked.connect(self.show_business_menu)
         nav.insertWidget(3, self.business_menu)
         nav.addStretch()
-        nav.addWidget(text('演示身份', 'muted'))
-        nav.addWidget(self.customers)
-        nav.addWidget(self.switch_customer)
-        nav.addWidget(self.reconnect)
-        nav.addWidget(text('仅使用虚构演示数据\n其他业务页尚未改版', 'muted'))
+        account_card = QWidget()
+        account_card.setObjectName('accountCard')
+        card_layout = QVBoxLayout(account_card)
+        card_layout.setContentsMargins(16, 18, 16, 14)
+        card_layout.setSpacing(10)
+        card_layout.addWidget(text('当前账户', 'accountCaption'))
+        self.context_account = text('正在读取…', 'accountName')
+        card_layout.addWidget(self.context_account)
+        card_layout.addWidget(text('人民币 · 模拟账户', 'accountCaption'))
+        self.account_picker = QPushButton('切换账户    ›')
+        self.account_picker.setObjectName('accountPicker')
+        self.account_picker.clicked.connect(lambda: self.show_context_menu('account'))
+        card_layout.addWidget(self.account_picker)
+        nav.addWidget(account_card)
+        self.customer_picker = QPushButton('演示客户正在读取…')
+        self.customer_picker.setObjectName('customerPicker')
+        self.customer_picker.setAccessibleName('切换演示客户')
+        self.customer_picker.clicked.connect(lambda: self.show_context_menu('customer'))
+        nav.addWidget(self.customer_picker)
+        nav.addWidget(text('本地模拟环境 · 虚构数据', 'muted'))
         outer.addWidget(rail)
         body = QWidget()
         layout = QVBoxLayout(body)
         layout.setContentsMargins(24, 18, 24, 78)
         layout.setSpacing(14)
         identity = QHBoxLayout()
-        labels = QVBoxLayout()
-        labels.addWidget(self.current_customer)
-        labels.addWidget(self.current_account)
-        identity.addLayout(labels, 1)
-        self.accounts.setFixedWidth(190)
-        identity.addWidget(self.accounts)
-        identity.addWidget(self.switch_account)
+        self.context_heading = text('正在读取当前客户与账户…')
+        identity.addWidget(self.context_heading, 1)
+        self.connection_state = text('尚未连接', 'muted')
+        identity.addWidget(self.connection_state)
+        self.refresh_accounts.setText('↻  刷新')
+        self.refresh_accounts.setObjectName('quietAction')
+        self.refresh_accounts.setToolTip('刷新当前账户、卡与账单')
         identity.addWidget(self.refresh_accounts)
+        self.more_actions = QPushButton('···')
+        self.more_actions.setObjectName('quietAction')
+        self.more_actions.setAccessibleName('更多操作')
+        self.more_actions.setToolTip('更多操作：重新连接')
+        self.more_actions.clicked.connect(self.show_connection_menu)
+        identity.addWidget(self.more_actions)
         layout.addLayout(identity)
         self.status.setObjectName('status')
         self.status.setWordWrap(True)
@@ -193,6 +227,64 @@ class PreviewWindow(BankWindow):
         self.setStyleSheet(STYLE + '\nQGroupBox#floatingAssistant {background: #fafffd; border: 1px solid #a8cfc2; border-radius:16px;} QLabel#ledgerTotal {background:white;padding:18px;border:1px solid #dbe3de;border-radius:8px;font-size:20px;}')
         self.show_page(0)
         self.controls()
+
+    def show_context_menu(self, kind):
+        combo, control, anchor = ((self.accounts, self.switch_account, self.account_picker)
+                                  if kind == 'account' else
+                                  (self.customers, self.switch_customer, self.customer_picker))
+        if not control.isEnabled():
+            return
+        menu = QMenu(self)
+        menu.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        for index in range(combo.count()):
+            reference = combo.itemData(index)
+            action = menu.addAction(combo.itemText(index))
+            action.setCheckable(True)
+            action.setChecked(index == combo.currentIndex())
+            action.setEnabled(index != combo.currentIndex())
+            action.triggered.connect(lambda checked=False, ref=reference:
+                                     self.choose_context(kind, ref))
+        menu.popup(anchor.mapToGlobal(anchor.rect().topRight()))
+
+    def choose_context(self, kind, reference):
+        # Only references from the current server-provided list are selectable.
+        combo, control = ((self.accounts, self.switch_account) if kind == 'account'
+                          else (self.customers, self.switch_customer))
+        index = combo.findData(reference)
+        if not control.isEnabled() or index < 0 or index == combo.currentIndex():
+            return
+        combo.setCurrentIndex(index)
+        control.click()
+
+    def show_connection_menu(self):
+        menu = QMenu(self)
+        menu.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        action = menu.addAction('重新连接默认演示客户')
+        action.setEnabled(self.reconnect.isEnabled())
+        action.triggered.connect(self.reconnect.click)
+        menu.popup(self.more_actions.mapToGlobal(self.more_actions.rect().bottomLeft()))
+
+    def update_context(self):
+        self.account_picker.setEnabled(self.switch_account.isEnabled())
+        self.customer_picker.setEnabled(self.switch_customer.isEnabled())
+        self.more_actions.setEnabled(self.reconnect.isEnabled())
+        self.connection_state.setText('处理中…' if self.busy else
+                                      '需核对结果' if self.uncertain else
+                                      '连接或请求异常' if self.blocked else
+                                      '● 会话已连接' if self.client.token else '尚未连接')
+        if self.snapshot:
+            account = next(a for a in self.snapshot['accounts']
+                           if a['account_ref'] == self.snapshot['current_account_ref'])
+            customer = self.current_customer.text().removeprefix('当前演示客户：')
+            self.context_account.setText(account['display_name'])
+            self.context_heading.setText(customer + '  /  ' + account['display_name'])
+            self.customer_picker.setText(customer + '\n演示客户    ›')
+            self.customer_picker.setToolTip('当前演示客户：' + customer + '；点击切换')
+        else:
+            state = '正在读取…' if self.client.token else '尚未确认'
+            self.context_account.setText(state)
+            self.context_heading.setText('当前客户与账户' + state)
+            self.customer_picker.setText('演示客户' + state)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -377,6 +469,7 @@ class PreviewWindow(BankWindow):
         self.bills_page.reset.setEnabled(bool(self.client.token) and not self.busy)
         self.bills_page.start.setEnabled(not self.busy)
         self.bills_page.end.setEnabled(not self.busy)
+        self.update_context()
         self.fit_page()
         self.status.setProperty('state', 'pending' if self.pending else 'error' if self.blocked or self.uncertain else 'normal')
         self.status.style().unpolish(self.status)
