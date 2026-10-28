@@ -291,7 +291,7 @@ class PreviewWindow(BankWindow):
         if not hasattr(self, 'orb'): return
         root = self.centralWidget()
         self.orb.move(root.width()-82, root.height()-72)
-        width = min(620 if self.ai_expand.isChecked() else 390, root.width()-40)
+        width = min(720 if self.ai_expand.isChecked() else 520, root.width()-40)
         height = min(660, root.height()-105)
         self.assistant_box.setGeometry(root.width()-width-22, root.height()-height-86, width, height)
         self.assistant_box.raise_(); self.orb.raise_()
@@ -549,7 +549,8 @@ class PreviewWindow(BankWindow):
     def send(self, text=None):
         value = text if text is not None else self.input.text()
         if value.strip() and not self.busy and (not self.blocked or self.can_interrupt_chat()):
-            self.conversation.add_message('user', value.strip())
+            self.conversation.add_message('user', value.strip(),
+                                          display_name=self.current_customer.text().removeprefix('当前演示客户：'))
             self._prepared_from_form = False
         super().send(text)
 
