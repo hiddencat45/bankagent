@@ -12,9 +12,10 @@ class Delivery(QObject):
 
 
 class BankWindow(QMainWindow):
-    def __init__(self, url):
+    def __init__(self, url, startup_customer=None):
         super().__init__()
         self.client = QueryClient(url)
+        self.client.startup_customer = startup_customer
         self.thread = None
         self.busy = False
         self.blocked = False
@@ -428,7 +429,7 @@ class BankWindow(QMainWindow):
             self.current_customer.setText('当前演示客户：未确认')
             self.current_account.setText('当前账户：未确认')
             self.blocked = True
-            self.status.setText('客户切换未确认，请重新连接默认演示客户；不会自动重试切换。')
+            self.status.setText('客户切换未确认，请重新连接启动客户；不会自动重试切换。')
         elif kind in {'error', 'decision_error'}:
             self.history.appendPlainText('有度：' + result)
             self.status.setText('请求失败')

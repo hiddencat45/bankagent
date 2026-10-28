@@ -19,8 +19,9 @@ class VerificationRejected(Exception):
 
 
 class QueryClient:
-    def __init__(self, url):
+    def __init__(self, url, startup_customer=None):
         self.url = url
+        self.startup_customer = startup_customer
         self.token = None
         self.opener = build_opener(ProxyHandler({}))
 
@@ -38,6 +39,13 @@ class QueryClient:
                 or not session['token'].strip() or session.get('mode') not in {'model', 'offline'}):
             raise ValueError('invalid session')
         self.token = session['token']
+        if self.startup_customer:
+            try:
+                return self.switch_customer(self.startup_customer)
+            except Exception:
+                # Never fall back to the bootstrap customer's usable session.
+                self.token = None
+                raise
         return session['mode']
 
     def query(self, message, thread=None):

@@ -5,6 +5,20 @@ from test_desktop import offline_env
 from test_desktop_transfer import receipt
 
 
+def test_startup_customer_failure_never_keeps_bootstrap_session(monkeypatch):
+    import io
+    from desktop.client import QueryClient
+    client = QueryClient('http://unused', startup_customer='zhang-wei')
+    monkeypatch.setattr(client, 'post', lambda *args: io.BytesIO(b'{"token":"bootstrap-only","mode":"offline"}'))
+    def unavailable(reference):
+        assert reference == 'zhang-wei'
+        raise TimeoutError('selection response lost')
+    monkeypatch.setattr(client, 'switch_customer', unavailable)
+    with pytest.raises(TimeoutError):
+        client.connect()
+    assert client.token is None
+
+
 def test_native_customer_switch_receiving_bill_and_return(tmp_path, monkeypatch):
     monkeypatch.setenv('QT_QPA_PLATFORM', 'offscreen')
     pytest.importorskip('PySide6.QtWidgets')

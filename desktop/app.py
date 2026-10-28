@@ -164,9 +164,9 @@ def main():
         url = service.start()
         if not args.legacy:
             from desktop.preview import PreviewWindow
-            window = PreviewWindow(url)
+            window = PreviewWindow(url, startup_customer='zhang-wei')
         else:
-            window = BankWindow(url)
+            window = BankWindow(url, startup_customer='zhang-wei')
         window.statusBar().showMessage('当前账本：' + str(service.database_path))
         window.statusBar().setToolTip('当前账本：' + str(service.database_path))
         window.show()
