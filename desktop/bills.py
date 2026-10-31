@@ -121,7 +121,24 @@ class BillsPage(QWidget):
     def turn(self,offset):
         self.page+=offset; self.render()
 
+    def focus_receipt(self, data):
+        ids = {data.get('transaction_id')}
+        ids.update(row.get('transaction_id') for row in data.get('items', []))
+        for index, row in enumerate(self.rows):
+            if row['transaction_id'] in ids or (data.get('batch_id') and row.get('batch_id') == data['batch_id']):
+                self.page = index // 20; self.render()
+                self.table.selectRow(index % 20)
+                self.table.scrollToItem(self.table.item(index % 20, 0))
+                return
+        self.note.setText('当前日期范围中未找到该笔交易，请调整日期后查询；回执仍保留在助手中。')
+
     def render(self):
+        # Qt defers deletion of replaced cell widgets; hide them before repopulating.
+        for index in range(self.table.rowCount()):
+            previous = self.table.cellWidget(index, 6)
+            if previous:
+                previous.hide()
+        self.table.setRowCount(0)
         rows=self.rows[self.page*20:(self.page+1)*20]; self.table.setRowCount(len(rows))
         for index,row in enumerate(rows):
             positive=row['kind'] in {'INCOME','TRANSFER_IN'}
