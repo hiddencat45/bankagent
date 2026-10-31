@@ -248,6 +248,8 @@ class PreviewWindow(BankWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.position_assistant()
+        # The central widget's layout can settle after QMainWindow.resizeEvent.
+        QTimer.singleShot(0, self.position_assistant)
 
     def position_assistant(self):
         if not hasattr(self, 'orb'): return
@@ -257,6 +259,8 @@ class PreviewWindow(BankWindow):
         self.assistant_box.setGeometry(inset, inset, root.width()-2*inset, root.height()-2*inset)
         self.assistant_box.raise_()
         self.orb.setVisible(not self.assistant_box.isVisible())
+        if not self.assistant_box.isVisible():
+            self.orb.raise_()
 
     def toggle_assistant(self, shown):
         self.orb.blockSignals(True); self.orb.setChecked(shown); self.orb.blockSignals(False)

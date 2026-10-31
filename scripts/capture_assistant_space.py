@@ -51,7 +51,11 @@ def run(output, visible=False, scale=None, width=1280, height=850):
             window = PreviewWindow(service.start(), startup_customer='zhang-wei')
             window.resize(width, height); window.show()
             wait(lambda: not window.busy and window.snapshot is not None)
-            window.orb.click(); settle()
+            root = window.centralWidget()
+            assert root.rect().contains(window.orb.geometry())
+            assert root.childAt(window.orb.geometry().center()) is window.orb
+            capture('overview')
+            QTest.mouseClick(window.orb, Qt.MouseButton.LeftButton); settle()
             assert window.assistant_box.welcome.isVisible() and not window.orb.isVisible()
             window.assistant_box.shortcut_buttons[1].click()
             assert window.input.text() == '我想转账' and not window.busy and not window.pending
