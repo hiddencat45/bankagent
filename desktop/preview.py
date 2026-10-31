@@ -4,14 +4,16 @@ from decimal import Decimal
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox, QStackedWidget, QScrollArea, QLineEdit, QComboBox, QListWidget,
-    QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QMenu)
+    QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QMenu, QGridLayout)
 from desktop.window import BankWindow
 from desktop.client import money, LedgerUnavailable
 from desktop.bills import BillsPage
 from desktop.orb import AssistantOrb
 from desktop.chat import ChatView
+from desktop.assistant_space import AssistantSpace, MessageInput
+from desktop.icons import icon
 
-from desktop.theme import STYLE
+from desktop.theme import STYLE, load_chinese_font
 
 
 
@@ -33,6 +35,7 @@ def box(title):
 
 class PreviewWindow(BankWindow):
     def __init__(self, url, startup_customer=None):
+        load_chinese_font()
         super().__init__(url, startup_customer=startup_customer)
         # Preserve the existing controller/widgets across the business views.
         self.legacy_root = self.takeCentralWidget()
@@ -100,7 +103,8 @@ class PreviewWindow(BankWindow):
         identity.addWidget(self.context_heading, 1)
         self.connection_state = text('尚未连接', 'muted')
         identity.addWidget(self.connection_state)
-        self.refresh_accounts.setText('↻  刷新')
+        self.refresh_accounts.setText('刷新')
+        self.refresh_accounts.setIcon(icon('refresh'))
         self.refresh_accounts.setObjectName('quietAction')
         self.refresh_accounts.setToolTip('刷新当前账户、卡与账单')
         identity.addWidget(self.refresh_accounts)
@@ -119,6 +123,7 @@ class PreviewWindow(BankWindow):
         columns.setSpacing(20)
         main = QWidget()
         main_layout = QVBoxLayout(main)
+        self.main_layout = main_layout
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(14)
         self.pages = QStackedWidget()
@@ -129,9 +134,18 @@ class PreviewWindow(BankWindow):
         self.pages.addWidget(self.bills_page)
         main_layout.addWidget(self.pages)
         self.confirmation.setTitle('请核对 · 确认前不会扣款')
+        self.confirm_text.setObjectName('confirmationSummary')
+        old_actions = self.confirmation.layout().takeAt(1).layout()
+        confirm_actions = QGridLayout()
+        for index, button in enumerate((self.approve, self.verify, self.reject, self.edit, self.retry)):
+            old_actions.removeWidget(button)
+            confirm_actions.addWidget(button, index // 3, index % 3)
+        self.confirmation.layout().addLayout(confirm_actions)
         self.approve.setObjectName('primary')
         self.approve.setText('确认转账 / 办理')
         self.edit.setText('返回修改')
+        self.edit.clicked.disconnect()
+        self.edit.clicked.connect(self.edit_current_operation)
         main_layout.addWidget(self.confirmation)
         self.result_box, result_layout = box('本次办理结果')
         self.result_text = text('尚未提交业务。')
@@ -148,44 +162,28 @@ class PreviewWindow(BankWindow):
         scroll.setWidget(main)
         self.main_scroll = scroll
         columns.addWidget(scroll, 1)
-        assistant, ai = box('AI 助手')
-        self.assistant_box = assistant
-        assistant.setParent(root)
-        assistant.setObjectName('floatingAssistant')
-        tools = QHBoxLayout()
-        self.ai_expand, self.ai_close = QPushButton('放大'), QPushButton('收起')
+        self.ai_expand, self.ai_close = QPushButton('铺满窗口'), QPushButton('返回业务  ×')
         self.ai_expand.setCheckable(True)
         self.ai_expand.toggled.connect(self.position_assistant)
         self.ai_close.clicked.connect(lambda: self.toggle_assistant(False))
-        tools.addWidget(self.new); tools.addStretch(); tools.addWidget(self.ai_expand); tools.addWidget(self.ai_close)
-        ai.addLayout(tools)
         self.ai_context = text('当前账户正在读取…', 'muted')
-        ai.addWidget(self.ai_context)
+        self.ai_context.hide()
         self.conversation = ChatView()
-        ai.addWidget(self.conversation, 1)
-        shortcuts = QHBoxLayout()
-        for button in self.buttons[:2]:
-            shortcuts.addWidget(button)
-        ai.addLayout(shortcuts)
-        self.input.setPlaceholderText('例如：转完后查看余额')
-        ai.addWidget(self.input)
+        self.conversation.receipt_opened.connect(self.open_receipt)
+        self.input.hide()
+        self.input = MessageInput()
+        self.input.returnPressed.connect(lambda: self.send())
         self.submit.setObjectName('primary')
-        ai.addWidget(self.submit)
-        diagnostics = QGroupBox('展开操作详情')
-        diagnostics.setCheckable(True)
-        diagnostics.setChecked(False)
-        detail_layout = QVBoxLayout(diagnostics)
-        self.history.setMaximumHeight(120)
-        detail_layout.addWidget(self.history)
-        self.history.hide()
-        diagnostics.toggled.connect(self.history.setVisible)
-        ai.addWidget(diagnostics)
-        assistant.hide()
+        self.assistant_box = AssistantSpace(self)
         self.orb = AssistantOrb(root)
         self.orb.toggled.connect(self.toggle_assistant)
         layout.addLayout(columns, 1)
         outer.addWidget(body, 1)
         self.setStyleSheet(STYLE + '\nQGroupBox#floatingAssistant {background: #fafffd; border: 1px solid #a8cfc2; border-radius:16px;} QLabel#ledgerTotal {background:white;padding:18px;border:1px solid #dbe3de;border-radius:8px;font-size:20px;}')
+        for button, kind, label in ((self.overview_nav, 'overview', '账户概览'), (self.transfer_nav, 'transfer', '转账'),
+                              (self.ledger_nav, 'ledger', '交易记录'), (self.business_menu, 'card', '账户与卡')):
+            button.setObjectName('navigation'); button.setText(label)
+            button.setIcon(icon(kind))
         self.show_page(0)
         self.controls()
 
@@ -238,7 +236,7 @@ class PreviewWindow(BankWindow):
                            if a['account_ref'] == self.snapshot['current_account_ref'])
             customer = self.current_customer.text().removeprefix('当前演示客户：')
             self.context_account.setText(account['display_name'])
-            self.context_heading.setText(customer + '  /  ' + account['display_name'])
+            self.context_heading.setText('本地模拟银行')
             self.customer_picker.setText(customer + '\n演示客户    ›')
             self.customer_picker.setToolTip('当前演示客户：' + customer + '；点击切换')
         else:
@@ -255,15 +253,68 @@ class PreviewWindow(BankWindow):
         if not hasattr(self, 'orb'): return
         root = self.centralWidget()
         self.orb.move(root.width()-82, root.height()-72)
-        width = min(720 if self.ai_expand.isChecked() else 520, root.width()-40)
-        height = min(660, root.height()-105)
-        self.assistant_box.setGeometry(root.width()-width-22, root.height()-height-86, width, height)
-        self.assistant_box.raise_(); self.orb.raise_()
+        inset = 0 if self.ai_expand.isChecked() else 12
+        self.assistant_box.setGeometry(inset, inset, root.width()-2*inset, root.height()-2*inset)
+        self.assistant_box.raise_()
+        self.orb.setVisible(not self.assistant_box.isVisible())
 
     def toggle_assistant(self, shown):
         self.orb.blockSignals(True); self.orb.setChecked(shown); self.orb.blockSignals(False)
-        self.assistant_box.setVisible(shown); self.position_assistant()
+        if shown and self.assistant_box.confirm_scroll.widget() is None:
+            self.main_layout.removeWidget(self.confirmation)
+            self.assistant_box.confirm_scroll.setWidget(self.confirmation)
+        elif not shown and self.assistant_box.confirm_scroll.widget() is not None:
+            self.assistant_box.confirm_scroll.takeWidget()
+            self.main_layout.insertWidget(1, self.confirmation)
+        self.assistant_box.setVisible(shown)
+        self.confirmation.setVisible(self.pending is not None)
+        self.assistant_box.sync()
+        self.position_assistant()
         if shown: self.input.setFocus()
+
+    def new_chat(self):
+        if self.busy or self.pending or self.uncertain:
+            return
+        super().new_chat()
+        if hasattr(self, 'conversation'):
+            self.conversation.clear(); self.input.clear(); self.assistant_box.sync()
+
+    def edit_current_operation(self):
+        if self.busy or not self.pending or self.decision is not None or self.uncertain:
+            return
+        if not self.form_active and self.pending.get('recipient') and self.pending.get('amount_minor'):
+            self.form_active = True
+            self.last_form = ('转账', {'recipient_name': self.pending['recipient'],
+                                      'amount': money(self.pending['amount_minor']).replace(',', '')})
+            self._prepared_from_form = True
+        self.toggle_assistant(False)
+        self.edit_form()
+
+    def open_receipt(self, receipt):
+        if self.busy:
+            self.assistant_box.feedback.setText('正在更新账户，请稍候再查看交易。')
+            return
+        self.toggle_assistant(False)
+        if receipt['operation'] in {'QUERY_BILLS', 'TRANSFER', 'BATCH_TRANSFER', 'PAY_BY_CARD'}:
+            self.show_page(2)
+            data = receipt.get('data') or {}
+            if receipt['operation'] == 'QUERY_BILLS':
+                self.bills_page.search.clear(); self.bills_page.category.setCurrentIndex(0)
+                self.bills_page.select_tab(False)
+                self.bills_page.set_data(data, default=True)
+            elif self.bills_page.data:
+                self.bills_page.select_tab(False)
+                self.bills_page.search.clear(); self.bills_page.category.setCurrentIndex(0)
+                self.bills_page.focus_receipt(data)
+        else:
+            self.show_page(0)
+            name = (receipt.get('data') or {}).get('display_name')
+            if name and self.snapshot:
+                for index, row in enumerate(self.snapshot['objects']['cards']):
+                    if row['display_name'] == name:
+                        self.card_list.setCurrentRow(index)
+                        break
+            self.main_scroll.ensureWidgetVisible(self.card_list)
 
     def show_business_menu(self):
         menu = QMenu(self)
@@ -317,6 +368,9 @@ class PreviewWindow(BankWindow):
         self.card_limits = QPushButton('查看所选卡限额')
         self.card_limits.clicked.connect(self.read_card_limits)
         card_info.addWidget(self.card_limits)
+        self.card_action = QPushButton('选择卡片后办理')
+        self.card_action.clicked.connect(self.card_status_form)
+        card_info.addWidget(self.card_action)
         card_row.addLayout(card_info, 1)
         card_layout.addLayout(card_row)
         layout.addWidget(cards)
@@ -420,7 +474,10 @@ class PreviewWindow(BankWindow):
         selected_card = self.card_list.currentRow()
         unique_card = self.snapshot and selected_card >= 0 and sum(r['display_name'] == self.snapshot['objects']['cards'][selected_card]['display_name'] for r in self.snapshot['objects']['cards']) == 1
         self.card_limits.setEnabled(editable and bool(unique_card))
+        self.card_action.setEnabled(editable and bool(unique_card))
         self.new.setEnabled(not self.busy and self.pending is None and not self.uncertain)
+        if self.pending and self.pending.get('recipient') and self.pending.get('amount_minor'):
+            self.edit.setEnabled(not self.busy and not self.uncertain and self.decision is None)
         self.reconnect.setEnabled(not self.busy and self.pending is None and not self.uncertain)
         self.confirmation.setTitle('核对原操作 · 不要重新提交同一笔付款' if self.decision is not None else '请核对 · 确认前不会扣款')
         self.transfer_form.setVisible(not self.completed_form and not (self.pending and self._prepared_from_form))
@@ -431,6 +488,8 @@ class PreviewWindow(BankWindow):
         self.bills_page.start.setEnabled(not self.busy)
         self.bills_page.end.setEnabled(not self.busy)
         self.update_context()
+        if hasattr(self, "assistant_box"):
+            self.assistant_box.sync()
         self.fit_page()
         self.status.setProperty('state', 'pending' if self.pending else 'error' if self.blocked or self.uncertain else 'normal')
         self.status.style().unpolish(self.status)
@@ -498,10 +557,18 @@ class PreviewWindow(BankWindow):
         row = self.snapshot['objects']['cards'][self.card_list.currentRow()]
         status = {'ACTIVE': '已激活', 'FROZEN': '已冻结', 'PENDING_ACTIVATION': '待激活'}[row['status']]
         self.card_note.setText(f"已选择：{row['display_name']} · {status}" + ('\n' + self.card_details[row['display_name']] if row['display_name'] in self.card_details else ''))
+        self.card_action.setText({'ACTIVE': '冻结此卡', 'FROZEN': '解冻此卡', 'PENDING_ACTIVATION': '激活此卡'}[row['status']])
         duplicates = sum(r['display_name'] == row['display_name'] for r in self.snapshot['objects']['cards'])
         if duplicates > 1:
             self.card_note.setText('存在同名卡，当前名称接口不能唯一选择，暂不办理。')
         self.controls()
+
+    def card_status_form(self):
+        if not self.card_action.isEnabled() or not self.snapshot or self.card_list.currentRow() < 0:
+            return
+        card = self.snapshot['objects']['cards'][self.card_list.currentRow()]
+        self.business_form({'ACTIVE': '冻结', 'FROZEN': '解冻', 'PENDING_ACTIVATION': '激活'}[card['status']],
+                           {'card_name': card['display_name']})
 
     def read_card_limits(self):
         if self.busy or self.pending or self.uncertain or not self.snapshot or self.card_list.currentRow() < 0:
@@ -540,7 +607,7 @@ class PreviewWindow(BankWindow):
             self.actor = None
             self.completed_form = False
             self.card_details.clear()
-            self.assistant_box.setTitle('AI 助手 · ' + self.mode)
+            self.assistant_box.sync()
             self.amount.clear()
             self.recipient.clear()
             self.card_list.clear()
@@ -566,7 +633,7 @@ class PreviewWindow(BankWindow):
                 self.bills_page.clear(result['bill_error'])
             else:
                 self.bills_page.set_data(result.get('bill_ledger', result['ledger']), default=changed)
-            self.status.setText('账户与流水已更新 · 与助手共享同一账本')
+            self.status.setText('账户已更新')
             for index, account in enumerate(result['accounts']):
                 self.accounts.setItemText(index, account['display_name'])
             current = next(a for a in result['accounts'] if a['account_ref'] == actor[1])
@@ -647,11 +714,13 @@ class PreviewWindow(BankWindow):
                     self.result_text.setText('\n\n'.join(summaries))
                     self.result_box.show()
             if self.pending:
-                self.toggle_assistant(False)
+                if self.decision is None:
+                    self.confirm_text.setText('付款账户：' + self.context_account.text() + '\n' + self.pending['summary'])
                 self.status.setText('办理结果待核对 · 请重试原决定，不要另建付款' if self.decision is not None else '等待确认 · 尚未执行付款或业务变更')
                 if self.decision is None:
                     self.result_box.hide()
-                QTimer.singleShot(0, lambda: self.main_scroll.ensureWidgetVisible(self.confirmation))
+                if not self.assistant_box.isVisible():
+                    QTimer.singleShot(0, lambda: self.main_scroll.ensureWidgetVisible(self.confirmation))
                 if self._prepared_from_form and self.decision is None:
                     guidance = ('当日累计转出（含本笔）超过1,000元。请点“前往模拟认证”，核对后继续原转账；也可取消。' if self.pending['risk_level'] == 'RED'
                                 else '请核对收款人和金额，确认后才会扣款。')
@@ -679,6 +748,9 @@ class PreviewWindow(BankWindow):
             return f"已查询 {len(data['transactions'])} 笔流水；消费合计 ¥ {money(data['total_minor'])}。"
         if operation == 'QUERY_CARD_LIMITS':
             return f"单笔限额 ¥ {money(data['single_limit_minor'])} · 每日限额 ¥ {money(data['daily_limit_minor'])}"
+        if operation in {'ACTIVATE_DEBIT_CARD', 'ISSUE_DEBIT_CARD', 'FREEZE_CARD', 'UNFREEZE_CARD'}:
+            state = {'ACTIVE': '已激活', 'FROZEN': '已冻结', 'PENDING_ACTIVATION': '待激活'}.get(data.get('status'), '已办理')
+            return (data.get('display_name') or '借记卡') + ' · ' + state
         if operation == 'BATCH_TRANSFER':
             return '整批转账成功\n' + '\n'.join(f"{row['recipient']} ¥ {money(row['amount_minor'])} · 成功" for row in data['items'])
         return '业务已完成；详细回执可展开查看。'

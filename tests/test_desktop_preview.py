@@ -96,13 +96,13 @@ def test_preview_transfer_back_edit_cancel_and_shared_account(tmp_path, monkeypa
         wait(lambda: not window.busy and window.snapshot and window.snapshot['current_customer_ref'] == 'zhang-wei')
         assert window.balance_value.text() == '¥ 430.00' and window.amount.text() == ''
         assert window.recipient.count() == 0 and not window.prepare_transfer.isEnabled()
-        assert '张伟' in window.customer_picker.text() and '张伟' in window.context_heading.text()
+        assert '张伟' in window.customer_picker.text() and '张伟' in window.ai_context.text()
         assert window.context_account.text() in window.ai_context.text()
         assert window.context_account.text() in window.payer.text()
         window.choose_context('customer', original_customer)
         wait(lambda: not window.busy and window.snapshot and window.snapshot['current_customer_ref'] == original_customer)
         assert window.balance_value.text() == '¥ 4,970.00'
-        assert '默认演示客户' in window.context_heading.text()
+        assert '默认演示客户' in window.ai_context.text()
     finally:
         if window:
             window.close()

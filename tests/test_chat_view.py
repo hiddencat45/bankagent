@@ -1,8 +1,8 @@
-"""Presentation must not lose failure/clarification information while folding duplicates."""
+"""Explanations, evidence and failures remain visible in the conversation space."""
 import pytest
 
 
-def test_chat_cards_deduplicate_and_preserve_full_reply(monkeypatch):
+def test_chat_explanation_visible_with_supporting_receipt(monkeypatch):
     monkeypatch.setenv('QT_QPA_PLATFORM', 'offscreen')
     pytest.importorskip('PySide6.QtWidgets')
     from PySide6.QtWidgets import QApplication, QPushButton, QLabel
@@ -20,16 +20,13 @@ def test_chat_cards_deduplicate_and_preserve_full_reply(monkeypatch):
         chat.add_message('user', '现在余额多少')
         chat.add_turn(events, PreviewWindow.summarize)
         app.processEvents()
-        assert chat.toPlainText().count('2,960.00') == 1
+        assert reply in chat.toPlainText()
         assert chat.rows[0][1].objectName() == 'userBubble'
-        assert chat.rows[1][1].objectName() == 'receiptCard'
-        button = chat.findChild(QPushButton, 'replyDetails')
+        assert chat.rows[1][1].objectName() == 'assistantBubble'
+        assert chat.rows[2][1].objectName() == 'receiptCard'
+        assert chat.findChild(QPushButton, 'replyDetails') is None
         detail = next(l for l in chat.findChildren(QLabel) if l.text() == reply)
-        assert detail.isHidden()
-        button.click()
         assert not detail.isHidden()
-        button.click()
-        assert detail.isHidden()
         # Changing viewport width keeps content within the viewport; plain text is not HTML.
         chat.add_message('user', '<b>不要解释成HTML</b>' + '长消息' * 60)
         chat.resize(290, 400)
