@@ -4,7 +4,7 @@ from decimal import Decimal
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox, QStackedWidget, QScrollArea, QLineEdit, QComboBox, QListWidget,
-    QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QMenu, QGridLayout, QApplication, QInputDialog)
+    QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QMenu, QApplication, QInputDialog)
 from desktop.window import BankWindow
 from desktop.client import money, LedgerUnavailable
 from desktop.bills import BillsPage
@@ -133,14 +133,22 @@ class PreviewWindow(BankWindow):
         self.bills_page.requested.connect(self.load_ledger)
         self.pages.addWidget(self.bills_page)
         main_layout.addWidget(self.pages)
-        self.confirmation.setTitle('请核对 · 确认前不会扣款')
+        self.confirmation.setTitle('')
+        self.confirmation.setObjectName('operationConfirmation')
         self.confirm_text.setObjectName('confirmationSummary')
         old_actions = self.confirmation.layout().takeAt(1).layout()
-        confirm_actions = QGridLayout()
-        for index, button in enumerate((self.approve, self.verify, self.reject, self.edit, self.retry)):
+        confirm_actions = QHBoxLayout()
+        confirm_actions.addStretch()
+        for button in (self.edit, self.reject, self.retry, self.verify, self.approve):
             old_actions.removeWidget(button)
-            confirm_actions.addWidget(button, index // 3, index % 3)
+            button.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+            confirm_actions.addWidget(button)
         self.confirmation.layout().addLayout(confirm_actions)
+        self.confirmation_heading = text('确认本次办理 · 确认前不会扣款', 'confirmationHeading')
+        self.confirmation.layout().insertWidget(0, self.confirmation_heading)
+        self.confirmation.layout().setContentsMargins(20,16,20,16)
+        self.confirmation.layout().setSpacing(10)
+        self.confirm_text.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self.approve.setObjectName('primary')
         self.approve.setText('确认转账 / 办理')
         self.edit.setText('返回修改')
@@ -508,7 +516,7 @@ class PreviewWindow(BankWindow):
         if self.pending and self.pending.get('recipient') and self.pending.get('amount_minor'):
             self.edit.setEnabled(not self.busy and not self.uncertain and self.decision is None)
         self.reconnect.setEnabled(not self.busy and self.pending is None and not self.uncertain)
-        self.confirmation.setTitle('核对原操作 · 不要重新提交同一笔付款' if self.decision is not None else '请核对 · 确认前不会扣款')
+        self.confirmation_heading.setText('核对原操作 · 不要重新提交同一笔付款' if self.decision is not None else '确认本次办理 · 确认前不会扣款')
         self.transfer_form.setVisible(not self.completed_form and not (self.pending and self._prepared_from_form))
         self.another_transfer.setVisible(self.completed_form)
         self.another_transfer.setEnabled(not self.busy and not self.pending and not self.uncertain)

@@ -72,6 +72,10 @@ def test_native_registration_onboarding_and_logout(tmp_path, monkeypatch):
         window.client.switch_account(source)
         bank.send(f'给{number}转30元')
         wait(lambda:not bank.busy and bank.pending is not None)
+        if os.environ.get('YOUDU_CAPTURE_LOGIN'):
+            bank.toggle_assistant(True); app.processEvents()
+            capture('transfer-confirmation',bank)
+            bank.toggle_assistant(False)
         pin=f'{secrets.randbelow(1000000):06d}'
         def fill(values):
             dialog=next((w for w in app.topLevelWidgets() if isinstance(w,QDialog) and w.isVisible()),None)

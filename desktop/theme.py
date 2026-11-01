@@ -48,7 +48,11 @@ QFrame#composer QPlainTextEdit {border:0;padding:10px;font-size:16px;background:
 QFrame#assistantSpace QPushButton#suggestion {background:#e3eee4;border:0;border-radius:16px;padding:10px 20px;}
 QFrame#assistantSpace QPushButton#primary {background:#24674e;color:white;padding:10px 28px;}
 QFrame#assistantSpace QGroupBox {background:#ffffff;border:1px solid #d3e2d6;}
-QLabel#confirmationSummary {font-size:18px;font-weight:600;padding:6px;}
+QLabel#confirmationSummary {font-size:15px;font-weight:400;padding:8px 2px;}
+QGroupBox#operationConfirmation {background:white;border:1px solid #d2e3d8;border-radius:12px;padding:0;margin-top:0;}
+QLabel#confirmationHeading {font-size:14px;font-weight:600;color:#195440;}
+QGroupBox#operationConfirmation::title {color:#195440;font-size:13px;font-weight:600;}
+QGroupBox#operationConfirmation QPushButton {padding:10px 14px;}
 QFrame#assistantSpace QPlainTextEdit {background:white;}
 QProgressBar {background:#e3ece5;border:0;border-radius:2px;}
 QProgressBar::chunk {background:#6b9d7d;border-radius:2px;}
