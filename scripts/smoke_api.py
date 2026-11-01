@@ -1,5 +1,6 @@
 """启动隔离的真实 HTTP 服务，验证转账闭环后自动停止；不输出会话令牌。"""
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -18,7 +19,9 @@ def main():
         sys.executable, '-m', 'uvicorn', 'bankagent.api.server:create_demo_app', '--factory',
         '--app-dir', 'src', '--host', '127.0.0.1', '--port', str(port),
         '--no-access-log', '--log-level', 'error',
-    ], cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    ], cwd=root, env={k:v for k,v in os.environ.items() if not k.startswith('BANKAGENT_MODEL_')
+        and k not in {'BANKAGENT_DB_PATH', 'BANKAGENT_LOCAL_LOGIN', 'BANKAGENT_DEMO_ALLOW_LAN'}},
+       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         with httpx.Client(base_url=f'http://127.0.0.1:{port}', timeout=10, trust_env=False) as client:
             deadline = time.monotonic() + 20
