@@ -1,0 +1,11 @@
+{
+  "status": "PASSED",
+  "platform": "windows",
+  "scale": 1.25,
+  "profile_action": "opens questionnaire, no implicit save",
+  "browse_action": "opens catalog without questionnaire",
+  "model": "offline rules; recommendation via structured read-only form",
+  "recommendation_action": "saved-profile button returns backend screening in chat; page and draft preserved; no orders or cash changes",
+  "ledger": "temporary SQLite",
+  "balance": 500000
+}

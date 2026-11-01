@@ -349,6 +349,12 @@ class PreviewWindow(BankWindow):
         if self.busy or (self.pending and destination == 'profile'):
             self.assistant_box.feedback.setText('请先完成或取消当前操作，再继续。')
             return
+        if destination == 'recommend':
+            if self.blocked or self.pending or self.uncertain or not self.client.token:
+                self.assistant_box.feedback.setText('请先完成当前操作并确认连接，再查询匹配产品。')
+                return
+            self.prepare_wealth_form('RECOMMEND_WEALTH', {})
+            return
         self.toggle_assistant(False)
         page = self.wealth_page
         if destination != 'profile':
@@ -626,7 +632,14 @@ class PreviewWindow(BankWindow):
         self.last_form = None
         self._prepared_from_form = False
         self.completed_form = False
-        self.toggle_assistant(False)
+        recommend = action == 'RECOMMEND_WEALTH'
+        self.toggle_assistant(recommend)
+        if recommend:
+            bar = self.conversation.verticalScrollBar()
+            bar.setValue(bar.maximum())
+            self.conversation.follow_tail = True
+            self.conversation.add_message('user', '根据我已保存的需求，查看匹配的理财产品',
+                display_name=self.current_customer.text().removeprefix('当前演示客户：'))
         self.run('query', lambda: self.client.form(action, fields))
 
     def validate_transfer(self):

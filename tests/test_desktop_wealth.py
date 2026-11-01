@@ -9,7 +9,7 @@ from test_wealth import FIELDS
 
 def test_wealth_controls_purchase_redeem_and_restart_view(tmp_path,monkeypatch):
     monkeypatch.setenv('QT_QPA_PLATFORM','offscreen')
-    from PySide6.QtWidgets import QApplication,QLineEdit
+    from PySide6.QtWidgets import QApplication,QLineEdit,QPushButton,QLabel
     from desktop.preview import PreviewWindow
     qt=QApplication.instance() or QApplication([])
     service=LocalService(env={**offline_env(),'BANKAGENT_DB_PATH':str(tmp_path/'wealth.sqlite3')})
@@ -47,6 +47,35 @@ def test_wealth_controls_purchase_redeem_and_restart_view(tmp_path,monkeypatch):
         page.questionnaire.next.click();assert page.save.isVisible()
         page.save.click();settle('仅模拟需求筛选')
         wait(lambda:page.data['profile_valid'])
+        # The saved-profile CTA must execute read-only screening in chat, not navigate.
+        w.show_page(0);w.toggle_assistant(True)
+        link=next(b for b in w.conversation.findChildren(QPushButton) if b.text()=='查看匹配产品 →')
+        calls=[];original=w.client.form
+        def tracked(action,fields):
+            calls.append((action,fields));return original(action,fields)
+        monkeypatch.setattr(w.client,'form',tracked)
+        w.conversation.verticalScrollBar().setValue(0)
+        link.click();link.click()  # A second click while busy must not send another request.
+        wait(lambda:not w.busy and any('款产品符合' in l.text() for l in w.conversation.findChildren(QLabel)))
+        wait(lambda:w.conversation.verticalScrollBar().value()==w.conversation.verticalScrollBar().maximum())
+        assert calls==[('RECOMMEND_WEALTH',{})]
+        assert w.assistant_box.isVisible() and w.pages.currentIndex()==0
+        assert page.data['orders']==[] and page.data['available_minor']==500000 and w.pending is None
+        assert any('通过初筛' in l.text() for l in w.conversation.findChildren(QLabel))
+        # A historical CTA cannot overwrite a new pending confirmation.
+        wait(lambda:not w.busy)  # Read receipt queues an account refresh after layout.
+        w.prepare_wealth_form('SAVE_WEALTH_PROFILE',FIELDS)
+        wait(lambda:not w.busy and w.pending is not None)
+        pending=dict(w.pending);before=len(calls)
+        w.toggle_assistant(True);link.click()
+        assert w.pending==pending and len(calls)==before and not w.busy
+        w.decide('reject');wait(lambda:not w.busy and w.pending is None)
+        w.show_page(3);w.toggle_assistant(False);page.compare.click()
+        assert w.assistant_box.isVisible()
+        wait(lambda:not w.busy)
+        assert calls[-1]==('RECOMMEND_WEALTH',{}) and w.pending is None
+        monkeypatch.setattr(w.client,'form',original)
+        w.show_page(3);w.toggle_assistant(False)
         page.tabs.setCurrentIndex(0);page.products.selectRow(0);page.buy_amount.setText('100')
         page.buy.click();settle('申购金额：100.00元')
         wait(lambda:page.orders.rowCount()==1)

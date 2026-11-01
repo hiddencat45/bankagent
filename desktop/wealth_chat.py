@@ -1,4 +1,4 @@
-"""Present trusted wealth receipts; actions only navigate, never execute trades."""
+"""Present trusted receipts; actions navigate or request read-only screening."""
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QPushButton
 from desktop.client import money
@@ -89,7 +89,7 @@ def render(chat, receipt):
     elif operation == 'SAVE_WEALTH_PROFILE':
         text('你的理财需求已保存', 'wealthChatTitle')
         text('现在可以比较产品的匹配理由。保存问卷不会购买任何产品。')
-        action('查看匹配产品 →', 'products', primary=True)
+        action('查看匹配产品 →', 'recommend', primary=True)
         text('仅模拟需求筛选，有效期至 ' + data['profile']['expires_on'], 'wealthChatCaption')
     else:
         text('演示日期已更新', 'wealthChatTitle')
