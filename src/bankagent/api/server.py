@@ -95,7 +95,11 @@ class Service:
                 if state.get('operation_hash') != expected:
                     raise ApiError('CHALLENGE_STATE_MISMATCH', '操作参数已变化，请重新发起。', 409)
                 authenticated = False
-                if record['risk_level'] == 'RED' and req.resume.decision == 'approve' and record['decision'] == 'PENDING':
+                local_payment = (hasattr(self, 'credentials') and record['operation'] in {'TRANSFER', 'BATCH_TRANSFER'})
+                if local_payment and req.resume.decision == 'approve' and record['decision'] == 'PENDING':
+                    self.credentials.verify_payment(session.user_id, req.resume.otp)
+                    authenticated = True
+                if not local_payment and record['risk_level'] == 'RED' and req.resume.decision == 'approve' and record['decision'] == 'PENDING':
                     try:
                         if self.demo_verification_enabled:
                             entry = self.demo_verifications.get(cid)
@@ -253,12 +257,17 @@ class Service:
 
 
 def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=None,
-               registry=None, allow_lan=False, phraser=None, query_model=None, database_path=None):
+               registry=None, allow_lan=False, phraser=None, query_model=None, database_path=None, local_login=False):
+    if local_login and (demo or not database_path or allow_lan):
+        raise ValueError('Local login requires a persistent local non-demo service')
     service = Service(clock=clock, authenticate=authenticate,
                       candidate_model=candidate_model, registry=registry, phraser=phraser, query_model=query_model,
                       database_path=database_path, allow_demo_customers=demo and not allow_lan)
     app = FastAPI(title='有度 · 本地银行 Demo')
     app.state.service = service
+    if local_login:
+        from bankagent.api.login import install_login
+        install_login(app, service, database_path)
 
     @app.exception_handler(ApiError)
     async def api_error(request, exc):
