@@ -53,12 +53,20 @@ def test_ledger_filters_orb_transfer_refresh_identity_and_failure(tmp_path,monke
         assert expense==window.snapshot['ledger']['total_minor']
         bills.search.setText('不存在的商户'); assert bills.rows==[] and '没有交易' in bills.note.text()
         bills.search.clear(); bills.all_tab.click()
+        bills.month.setCurrentIndex(1); wait(lambda:not window.busy)
+        assert not bills.rows and bills.detail_amount.text()=='—'
+        bills.reset.click(); wait(lambda:not window.busy)
+        assert len(bills.rows)==len(original) and bills.month.currentIndex()==0
+        bills.table.setCurrentCell(0,0)
+        assert bills.rows[0]['transaction_id'] in bills.refs.toPlainText()
+        assert '0.00' in bills.totals[1].text()
+        assert format(expense/100,',.2f') in bills.totals[2].text()
         window.business_form('转账'); window.recipient.setCurrentIndex(window.recipient.findData('张伟')); window.amount.setText('40')
         window.prepare_transfer.click(); wait(lambda:not window.busy and window.pending is not None)
         window.approve.click(); wait(lambda:not window.busy and window.pending is None and any(r['kind']=='TRANSFER_OUT' for r in bills.rows))
         bills.search.setText('张伟'); assert len(bills.rows)==1 and bills.rows[0]['amount_minor']==4000
         bills.focus_receipt({'transaction_id':bills.rows[0]['transaction_id']})
-        assert '40.00' in bills.detail_body.text() and '张伟' in bills.detail_body.text()
+        assert '40.00' in bills.detail_amount.text() and '张伟' in bills.detail_values['对方 / 商户'].text()
         assert '40.00' in bills.totals[1].text() and '0.00' in bills.totals[2].text()
         bills.search.clear(); assert len(bills.rows)==len(original)+1
         window.send('本月账单'); wait(lambda:not window.busy)

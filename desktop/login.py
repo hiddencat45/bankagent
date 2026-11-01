@@ -260,6 +260,7 @@ class AuthenticatedWindow(PreviewWindow):
         super().controls()
         self.switch_customer.setEnabled(False); self.create_customer.setEnabled(False)
         if hasattr(self, 'customer_picker'):
+            self.more_actions.setToolTip('安全分级、手机验证器与退出登录')
             self.customer_picker.setEnabled(False)
             self.customer_picker.setText(self.current_customer.text().removeprefix('当前演示客户：') + '\n本地登录客户')
             self.customer_picker.setToolTip('如需更换客户，请从右上菜单退出登录。')

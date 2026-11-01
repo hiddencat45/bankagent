@@ -8,7 +8,14 @@ def icon(kind, size=24, color='#42755b'):
     painter = QPainter(pixmap); painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.scale(size/12, size/12)
     painter.setPen(QPen(QColor(color), 1.5)); painter.setBrush(Qt.BrushStyle.NoBrush)
-    if kind == 'card':
+    if kind == 'check':
+        painter.drawLine(4,12,10,18); painter.drawLine(10,18,21,6)
+    elif kind in {'incoming','outgoing'}:
+        painter.drawLine(12,4,12,20)
+        y=20 if kind=='incoming' else 4
+        end=14 if kind=='incoming' else 10
+        painter.drawLine(6,end,12,y); painter.drawLine(18,end,12,y)
+    elif kind == 'card':
         painter.drawRoundedRect(3, 5, 18, 14, 3, 3); painter.drawLine(4, 10, 20, 10)
         painter.drawLine(7, 15, 11, 15)
     elif kind == 'overview':
