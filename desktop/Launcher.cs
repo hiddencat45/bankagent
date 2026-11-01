@@ -24,13 +24,28 @@ internal static class Launcher
         }
         try
         {
-            Process.Start(new ProcessStartInfo {
+            var start = new ProcessStartInfo {
                 FileName = python,
                 Arguments = "\"" + app + "\"",
                 WorkingDirectory = root,
                 UseShellExecute = false,
                 CreateNoWindow = true
-            });
+            };
+            // Optional per-install binding overrides inherited/registry ledger settings.
+            // Never silently create a replacement when an explicitly bound file is missing.
+            string binding = Path.Combine(root, "Youdu.ledger-path");
+            if (File.Exists(binding))
+            {
+                string ledger = File.ReadAllText(binding).Trim();
+                if (!Path.IsPathRooted(ledger) || !File.Exists(ledger))
+                {
+                    MessageBox.Show("已绑定的账本不存在或路径无效。请检查 Youdu.ledger-path，恢复原文件后重试。\n不会改用其他账本或创建空账本。",
+                        "有度 · 账本不可用", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return 1;
+                }
+                start.EnvironmentVariables["BANKAGENT_DB_PATH"] = Path.GetFullPath(ledger);
+            }
+            Process.Start(start);
             return 0;
         }
         catch
