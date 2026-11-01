@@ -20,7 +20,7 @@ def main():
     from desktop.app import LocalService
     app=QApplication.instance() or QApplication([])
     output=Path(args.output);output.mkdir(parents=True,exist_ok=True)
-    env={k:v for k,v in os.environ.items() if not k.startswith('BANKAGENT_MODEL_') and k!='BANKAGENT_DB_PATH'}
+    env={k:v for k,v in os.environ.items() if not k.startswith('BANKAGENT_')}
     with TemporaryDirectory() as tmp:
         service=LocalService(env={**env,'BANKAGENT_DB_PATH':str(Path(tmp)/'bank.sqlite3')})
         window=None
@@ -41,6 +41,9 @@ def main():
             window=PreviewWindow(service.start());window.show()
             wait(lambda:not window.busy and window.snapshot is not None)
             window.show_page(2); capture('ledger.png')
+            window.bills_page.details(0); capture('ledger-detail.png')
+            window.resize(1040,720); capture('ledger-compact.png')
+            window.resize(1280,850)
             window.orb.click()
             window.send('查询余额');wait(lambda:not window.busy and '5,000.00' in window.conversation.toPlainText())
             capture('assistant.png')

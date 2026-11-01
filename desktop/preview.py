@@ -179,11 +179,11 @@ class PreviewWindow(BankWindow):
         self.orb.toggled.connect(self.toggle_assistant)
         layout.addLayout(columns, 1)
         outer.addWidget(body, 1)
-        self.setStyleSheet(STYLE + '\nQGroupBox#floatingAssistant {background: #fafffd; border: 1px solid #a8cfc2; border-radius:16px;} QLabel#ledgerTotal {background:white;padding:18px;border:1px solid #dbe3de;border-radius:8px;font-size:20px;}')
+        self.setStyleSheet(STYLE)
         for button, kind, label in ((self.overview_nav, 'overview', '账户概览'), (self.transfer_nav, 'transfer', '转账'),
                               (self.ledger_nav, 'ledger', '交易记录'), (self.business_menu, 'card', '账户与卡')):
             button.setObjectName('navigation'); button.setText(label)
-            button.setIcon(icon(kind))
+            button.setIcon(icon(kind, color='#c5dbd1'))
         self.show_page(0)
         self.controls()
 

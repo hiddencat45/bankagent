@@ -40,7 +40,7 @@ QPushButton#navigation {text-align:left;background:transparent;padding:14px 12px
 QPushButton#navigation:checked {background:#d9e8de;color:#174c38;font-weight:600;}
 QPushButton#navigation:hover {background:#e0ebe3;}
 QFrame#assistantSpace {border:1px solid #d7e5d9;border-radius:18px;
- background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 rgba(238,245,233,235),stop:0.55 rgba(247,250,247,225),stop:1 rgba(230,241,236,240));}
+ background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 rgba(232,242,236,248),stop:0.55 rgba(250,252,250,246),stop:1 rgba(227,239,232,248));}
 QFrame#assistantSpace QWidget {background:transparent;}
 QFrame#assistantSpace QLabel#welcomeTitle {font-size:32px;font-weight:600;color:#214f3b;padding:12px;}
 QFrame#composer {background:#ffffff;border:1px solid #dce7de;border-radius:16px;}
@@ -55,6 +55,41 @@ QProgressBar::chunk {background:#6b9d7d;border-radius:2px;}
 QScrollBar:vertical {background:transparent;width:8px;}
 QScrollBar::handle:vertical {background:#c4d3c9;min-height:24px;border-radius:4px;}
 QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical {height:0;}
+/* Forest workspace: one palette shared by business views and native dialogs. */
+QWidget {font-family:"Microsoft YaHei";color:#213d35;background:#f5f7f5;}
+QWidget#rail {background:#103e33;}
+QWidget#rail QLabel {color:#eaf4ee;}
+QWidget#rail QLabel#muted {color:#adcbc0;}
+QWidget#rail QPushButton#navigation {color:#c5dbd1;padding:16px 12px;}
+QWidget#rail QPushButton#navigation:checked {background:#2a604e;color:white;}
+QWidget#rail QPushButton#navigation:hover {background:#235442;}
+QWidget#accountCard {background:#1b4c3f;border:1px solid #386554;border-radius:12px;}
+QPushButton#customerPicker {background:#1b4c3f;color:#eff7f2;}
+QLabel#title {font-size:26px;font-weight:700;color:#163d31;}
+QLabel#sectionTitle {font-size:18px;font-weight:600;color:#163d31;}
+QLineEdit,QComboBox,QDateEdit {background:white;border:1px solid #d5e0d9;border-radius:8px;padding:9px;min-height:22px;selection-background-color:#28624e;}
+QLineEdit:focus,QComboBox:focus,QDateEdit:focus {border:1px solid #28765b;}
+QPushButton {padding:11px 16px;}
+QPushButton#primary {background:#195440;color:white;}
+QPushButton#primary:hover {background:#246c53;}
+QTableWidget {border:1px solid #e0e8e2;border-radius:10px;padding:8px;selection-background-color:#e4f0e9;selection-color:#173e30;}
+QTableWidget::item {border-bottom:1px solid #edf1ee;padding:8px;}
+QTableWidget QWidget,QFrame#transactionInspector QScrollArea,QFrame#transactionInspector QScrollArea QWidget {background:white;}
+QTableWidget::item:selected {background:#e3efe7;color:#164f3c;}
+QHeaderView::section {background:#f5f8f5;padding:12px 8px;color:#718379;font-size:12px;}
+QFrame#ledgerSummary {background:#174f3d;border-radius:12px;}
+QLabel#ledgerTotal {background:transparent;color:#ffffff;padding:4px 12px;font-size:20px;}
+QLabel#status[state="normal"] {background:transparent;color:#718379;padding:0;font-size:12px;}
+QComboBox::drop-down,QDateEdit::drop-down {border:0;width:22px;}
+QFrame#transactionInspector {background:white;border:1px solid #e0e8e2;border-radius:12px;}
+QFrame#transactionInspector QLabel {background:transparent;}
+QDialog,QMessageBox,QInputDialog {background:#f5f8f5;}
+QDialog QLabel {background:transparent;}
+QDialog QLineEdit {background:white;padding:12px;}
+QDialog QPushButton:default {background:#195440;color:white;}
+QDialog QDialogButtonBox {background:transparent;}
+QLabel#dialogHeading {font-size:22px;font-weight:600;color:#174f3d;padding-bottom:12px;}
+QLabel#dialogSummary {background:white;border:1px solid #dce6df;border-radius:10px;padding:18px;}
 '''
 
 

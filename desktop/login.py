@@ -287,8 +287,11 @@ class AuthenticatedWindow(PreviewWindow):
 
     def payment_dialog(self, configured):
         dialog = QDialog(self); dialog.setWindowTitle('交易密码认证' if configured else '首次设置交易密码')
-        dialog.resize(460, 360); layout = QVBoxLayout(dialog)
+        dialog.resize(500, 380); layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(28,28,28,24); layout.setSpacing(16)
+        heading=QLabel(dialog.windowTitle()); heading.setObjectName('dialogHeading'); layout.addWidget(heading)
         summary = QLabel(self.confirm_text.text()); summary.setWordWrap(True); summary.setTextFormat(Qt.TextFormat.PlainText)
+        summary.setObjectName('dialogSummary')
         layout.addWidget(summary)
         entries = []
         for name in (['交易密码'] if configured else ['登录密码','6位数字交易密码','再次输入交易密码']):
@@ -297,6 +300,7 @@ class AuthenticatedWindow(PreviewWindow):
             layout.addWidget(entry); entries.append(entry)
         buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Ok|QDialogButtonBox.StandardButton.Cancel)
         buttons.button(QDialogButtonBox.StandardButton.Ok).setText('验证并转账' if configured else '设置交易密码')
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setObjectName('primary')
         buttons.button(QDialogButtonBox.StandardButton.Cancel).setText('返回核对')
         buttons.accepted.connect(dialog.accept); buttons.rejected.connect(dialog.reject); layout.addWidget(buttons)
         accepted=dialog.exec()==QDialog.DialogCode.Accepted

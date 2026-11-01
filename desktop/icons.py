@@ -3,11 +3,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QPixmap, QPainter, QPen, QColor, QPainterPath
 
 
-def icon(kind, size=24):
+def icon(kind, size=24, color='#42755b'):
     pixmap = QPixmap(size*2, size*2); pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap); painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.scale(size/12, size/12)
-    painter.setPen(QPen(QColor('#42755b'), 1.5)); painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.setPen(QPen(QColor(color), 1.5)); painter.setBrush(Qt.BrushStyle.NoBrush)
     if kind == 'card':
         painter.drawRoundedRect(3, 5, 18, 14, 3, 3); painter.drawLine(4, 10, 20, 10)
         painter.drawLine(7, 15, 11, 15)
