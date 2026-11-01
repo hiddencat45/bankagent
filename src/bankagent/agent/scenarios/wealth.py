@@ -2,7 +2,7 @@
 import re
 from datetime import date, timedelta
 from bankagent.banking import bank_backend as bank
-from bankagent.banking.wealth import PRODUCTS, OPERATIONS, STATES, ERRORS, NOTICE, PROFILE_FIELDS, validate_profile, business_day
+from bankagent.banking.wealth import PRODUCTS, OPERATIONS, STATES, ERRORS, NOTICE, PROFILE_FIELDS, validate_profile, business_day, anchored_answers
 from bankagent.agent.scenarios.transfer import _to_minor, _money
 
 SCENARIO='wealth'
@@ -12,10 +12,13 @@ def declaration(keywords,slots,required,operation,write=False):
 
 PROFILE_SLOTS={k:rf'{label}[:：]\s*([^，,；;\s]+)' for k,label in dict(budget='预算',free_cash='闲钱',horizon_days='期限',
     purpose='用途',liquidity='到账',loss='亏损',income='收入',debt='负债',experience='经验',priority='偏好').items()}
+PROFILE_REQUIRED=list(PROFILE_SLOTS)
+PROFILE_SLOTS.update({k:rf'{label}[:：]\s*([^，,；;\s]+)' for k,label in
+    dict(need_on='用钱日期',early_redemption='提前赎回',reserve='备用金',impact='生活影响',loss_acceptance='亏损确认').items()})
 INTENTS={
     'WEALTH_QUERY':declaration(['查看理财','查询理财','理财产品有哪些'],{},[],'QUERY_WEALTH'),
     'WEALTH_RECOMMEND':declaration(['推荐理财','理财推荐','比较理财'],{},[],'RECOMMEND_WEALTH'),
-    'WEALTH_PROFILE':declaration(['保存理财问卷'],PROFILE_SLOTS,list(PROFILE_SLOTS),'SAVE_WEALTH_PROFILE',True),
+    'WEALTH_PROFILE':declaration(['保存理财问卷'],PROFILE_SLOTS,PROFILE_REQUIRED,'SAVE_WEALTH_PROFILE',True),
     'WEALTH_BUY':declaration(['模拟申购'],{'product_name':r'模拟申购「([^」]+)」','amount':r'」\s*([0-9]+(?:\.[0-9]+)?)\s*元'},['product_name','amount'],'SUBSCRIBE_WEALTH',True),
     'WEALTH_SELL':declaration(['模拟赎回'],{'product_name':r'模拟赎回「([^」]+)」','units':r'」\s*([0-9]+(?:\.[0-9]+)?)\s*份'},['product_name','units'],'REDEEM_WEALTH',True),
     'WEALTH_CANCEL':declaration(['撤销理财订单'],{'order_id':r'撤销理财订单\s*(W[a-f0-9]{16})'},['order_id'],'CANCEL_WEALTH_ORDER',True),
@@ -27,6 +30,8 @@ CLARIFY_LABELS={'product_name':'产品全名、简称或份额代码','amount':'
     'horizon_days':'最早用钱前的天数','purpose':'用途：闲置资金或必要支出','liquidity':'到账要求：可等待、当天到账或固定日期',
     'loss':'亏损态度：不能亏损、仅低风险或接受波动','income':'收入：稳定或不稳定','debt':'负债：无压力、有还款压力或借款理财',
     'experience':'经验：无经验或有经验','priority':'偏好：风险优先、流动性优先或综合比较'}
+CLARIFY_LABELS.update(need_on='用钱日期：YYYY-MM-DD',early_redemption='提前赎回：可以、不可以或不确定',
+    reserve='备用金：已预留、未预留或不确定',impact='生活影响：会、不会或不确定',loss_acceptance='亏损确认：可以、不可以或不确定')
 TOOL_DESCRIPTIONS={
     'QUERY_WEALTH':'查询当前账户真实的模拟理财产品、问卷、持仓、订单事件、可赎回份额、冻结及待到账资金。产品非实时在售。',
     'RECOMMEND_WEALTH':'根据已确认问卷进行确定性初筛。问卷缺失或过期先补问，不能编造收益或正式评级。这里只是模拟候选。',
@@ -53,7 +58,12 @@ def resolve(candidate_params,context):
             v=c.get(key)
             p[key+'_minor']=0 if v in ('0','0.00') else _to_minor(v)
         if not re.fullmatch(r'[0-9]{1,4}',str(c.get('horizon_days',''))): raise ValueError('days')
-        p['horizon_days']=int(c['horizon_days']); return p
+        p['horizon_days']=int(c['horizon_days'])
+        if p.get('need_on'):
+            p['horizon_days']=(date.fromisoformat(p['need_on'])-date.fromisoformat(_snapshot(context)['day'])).days
+        else:
+            p['need_on']=(date.fromisoformat(_snapshot(context)['day'])+timedelta(days=p['horizon_days'])).isoformat()
+        return p
     if 'product_name' in c:
         matches=[v for v in PRODUCTS if c['product_name'] in (v['code'],v['name'],v['short_name'])]
         if len(matches)!=1: raise ValueError('product')
@@ -111,9 +121,16 @@ def confirmation(*,operation,params,candidate_params,context):
         else:
             lines.append(f"模拟确认日：{confirmed}；模拟到账日：{business_day(confirmed,2)}。需手动演示推进，非银行到账承诺。")
     elif operation=='SAVE_WEALTH_PROFILE':
-        lines += [f"总预算{_money(params['budget_minor'])}元；闲钱{_money(params['free_cash_minor'])}元；期限{params['horizon_days']}天",
-                  '；'.join(f'{CLARIFY_LABELS[k].split("：")[0]}：{params[k]}' for k in ('purpose','liquidity','loss','income','debt','experience','priority')),
-                  '仅模拟需求筛选，不生成银行正式风险等级；问卷将保存。']
+        deadline=params.get('need_on') or (date.fromisoformat(_snapshot(context)['day'])+timedelta(days=params['horizon_days'])).isoformat()
+        lines += [f"计划投入：{_money(params['budget_minor'])}元；已确认可用闲钱：{_money(params['free_cash_minor'])}元",
+                  '用钱日期：'+deadline+'（保存后不随查询后移）',
+                  f"用途：{params['purpose']}；到账要求：{params['liquidity']}",
+                  f"风险偏好：{params['loss']}；经验：{params['experience']}；比较偏好：{params['priority']}",
+                  f"还款与资金来源：{params['debt']}"]
+        if params['income']!='不确定':lines.append('收入：'+params['income'])
+        for k in ('reserve','impact','early_redemption','loss_acceptance'):
+            if k in params:lines.append(CLARIFY_LABELS[k].split('：')[0]+'：'+params[k])
+        lines.append('仅模拟需求筛选，非正式风险测评。保存需求不购买产品。')
     elif 'days' in params:lines += [f"从{params['expected_day']}推进当前账户模拟日期{params['days']}天；可能使持仓达到模拟可赎回日期。"]
     else:lines += [f"订单{params['order_id']}，版本{params['version']}，动作{params.get('event','撤单')}",
                   '下一步会处理该订单并可能推进账户演示日期；不会重复下单。']
@@ -133,12 +150,13 @@ def render(result):
     lines=[f"模拟日期{d['day']}；可用现金{_money(d['available_minor'])}元，申购冻结{_money(d['frozen_minor'])}元，持仓{_money(d['holdings_minor'])}元，待到账{_money(d['waiting_minor'])}元。"]
     if not d['profile_valid']:lines.append('请先填写或更新模拟需求问卷，不能根据流水推断正式风险等级。')
     else:
-        a=d['profile']['answers']
+        a=anchored_answers(d['profile'])
         lines.append(f"已确认需求：总预算{_money(a['budget_minor'])}元，扣除必要支出和备用金后的闲钱{_money(a['free_cash_minor'])}元，期限{a['horizon_days']}天；"+
                      '、'.join(a[k] for k in ('purpose','liquidity','loss','income','debt','experience','priority'))+'。')
+        lines.append('用钱日期：'+a['need_on']+'；按当前模拟日期计算剩余时间。')
     for p in d['products']:
         r=next((r for r in d['recommendations'] if r['product_code']==p['code']),None)
-        lines.append(p['short_name']+'（'+p['code']+'）'+('：'+('模拟候选；真实渠道待核实' if r['eligible'] else '不匹配')+'；'+'；'.join(r['reasons']) if r else '：资料可查看，尚未筛选')+
+        lines.append(p['short_name']+'（'+p['code']+'）'+('：'+r.get('comparison_group', '模拟候选' if r['eligible'] else '不匹配')+'；'+'；'.join(r['reasons']) if r else '：资料可查看，尚未筛选')+
                      f"。管理人R{p['issuer_risk']}，{_money(p['minimum_minor'])}元起，"+(f"最低持有{p['hold_days']}天" if p['hold_days'] else '无封闭期')+'；'+p['fee']+'。')
     if d['profile_valid']:
         lines.append(f"共{len(d['products'])}款真实产品资料，{sum(r['eligible'] for r in d['recommendations'])}款通过模拟初筛。各产品持有期不同，均不保本；过往收益统计口径不同，不做收益排名。")

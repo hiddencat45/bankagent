@@ -145,9 +145,11 @@ def test_questionnaire_hard_filters(changes):
     for product in PRODUCTS:assert not screen(product,{**ANSWERS,**changes},NOW.date())['eligible']
 
 
-def test_profile_not_formal_rating_and_no_escalation_from_inexperience():
+def test_experience_does_not_assign_risk_but_explicit_low_risk_choice_still_filters():
     assert screen(PRODUCTS[0],{**ANSWERS,'experience':'无经验'},NOW.date())['eligible']
-    assert not screen(PRODUCTS[1],{**ANSWERS,'experience':'无经验'},NOW.date())['eligible']
+    r=screen(PRODUCTS[1],{**ANSWERS,'experience':'无经验'},NOW.date())
+    assert r['eligible'] and any('首次' in note for note in r['notes'])
+    assert not screen(PRODUCTS[1],{**ANSWERS,'experience':'有经验','loss':'仅低风险'},NOW.date())['eligible']
 
 
 def test_form_chat_confirm_query_and_restart(tmp_path):

@@ -21,7 +21,7 @@ def chat(monkeypatch):
 def snapshot(valid=False):
     from test_wealth import ANSWERS
     return dict(operation='RECOMMEND_WEALTH', status='COMPLETED', data=dict(
-        products=deepcopy(PRODUCTS), profile={'answers':ANSWERS} if valid else None, profile_valid=valid, recommendations=[],
+        products=deepcopy(PRODUCTS), profile={'answers':ANSWERS,'recorded_at':'2026-11-01T12:00:00+08:00'} if valid else None, profile_valid=valid, recommendations=[],
         orders=[], lots=[], day='2026-11-01', available_minor=370001, frozen_minor=0,
         holdings_minor=0, waiting_minor=0))
 
@@ -29,6 +29,28 @@ def snapshot(valid=False):
 def shown(view):
     from PySide6.QtWidgets import QLabel
     return '\n'.join(w.text() for w in view.findChildren(QLabel) if w.isVisible())
+
+
+def test_interview_shortcuts_send_reply_text_without_saving_and_expire(chat):
+    from PySide6.QtWidgets import QPushButton
+    view,app=chat;replies=[];view.reply_requested.connect(replies.append)
+    view.add_message('assistant','这笔钱是否已经扣除了日常开销、近期还款和应急备用金？');app.processEvents()
+    buttons=view.findChildren(QPushButton,'wealthQuickReply')
+    assert len(buttons)==3
+    buttons[0].click();assert replies==['已经扣除并预留']
+    view.add_message('user',replies[0]);assert all(not b.isEnabled() for b in buttons)
+
+
+def test_review_products_are_not_labeled_as_excluded(chat):
+    from desktop.preview import PreviewWindow
+    from bankagent.banking.wealth import recommend_products
+    from test_wealth import ANSWERS
+    from datetime import date
+    view,app=chat;receipt=snapshot(True)
+    receipt['data']['recommendations']=recommend_products({**ANSWERS,'loss':'仅低风险','liquidity':'固定日期'},date(2026,11,1))
+    view.add_receipt(receipt,PreviewWindow.summarize(receipt));app.processEvents()
+    assert '2 款待补充或核实' in shown(view) and '还需要补充条件' in shown(view)
+    assert '低风险不等于保本' in shown(view) and '不能确认匹配' in shown(view)
 
 
 def test_missing_and_expired_profile_guide_without_recommending_or_writing(chat):
@@ -41,7 +63,7 @@ def test_missing_and_expired_profile_guide_without_recommending_or_writing(chat)
     assert len(view.rows) == 1 and NOTICE not in shown(view)
     assert all(p['code'] not in shown(view) for p in PRODUCTS)
     view.findChild(QPushButton, 'wealthChatPrimary').click()
-    assert actions == [('profile', {})] and receipt == original
+    assert actions == [('interview', {})] and receipt == original
     view.clear()
     view.add_turn([('message', {'text':PreviewWindow.summarize(receipt)}),
                    ('card', {'type':'result', 'payload':receipt})], PreviewWindow.summarize)

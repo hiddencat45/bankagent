@@ -154,6 +154,7 @@ class PreviewWindow(BankWindow):
         self.pages.addWidget(self.bills_page)
         self.wealth_page = WealthPage()
         self.wealth_page.requested.connect(self.prepare_wealth_form)
+        self.wealth_page.interview_requested.connect(self.start_wealth_interview)
         self.wealth_page.refresh_requested.connect(self.load_accounts)
         self.wealth_page.geometry_changed.connect(lambda: QTimer.singleShot(0, self.fit_page))
         self.wealth_page.tabs.currentChanged.connect(lambda: QTimer.singleShot(0, lambda: self.main_scroll.verticalScrollBar().setValue(0)))
@@ -208,6 +209,7 @@ class PreviewWindow(BankWindow):
         self.conversation = ChatView()
         self.conversation.receipt_opened.connect(self.open_receipt)
         self.conversation.wealth_opened.connect(self.open_wealth_receipt)
+        self.conversation.reply_requested.connect(self.send_wealth_reply)
         self.input.hide()
         self.input = MessageInput()
         self.input.returnPressed.connect(lambda: self.send())
@@ -345,7 +347,24 @@ class PreviewWindow(BankWindow):
         self.toggle_assistant(False)
         self.edit_form()
 
+    def send_wealth_reply(self,text):
+        if self.busy or self.blocked or self.pending or self.uncertain:return
+        draft=self.input.text();self.send(text);self.input.setText(draft)
+
+    def start_wealth_interview(self):
+        if self.busy or self.blocked or self.pending or self.uncertain or not self.client.token:
+            self.assistant_box.feedback.setText('请先完成或取消当前操作，再了解理财需求。');return
+        if self.mode!='真实模型':
+            self.wealth_page.feedback.setText('当前为离线规则模式，不能理解自由对话。可用表单填写需求，仍须核对确认。')
+            self.wealth_page.open_profile();return
+        self.toggle_assistant(True)
+        draft=self.input.text()
+        self.send('请通过对话帮我完善理财需求，复用我已确认的答案，只补问缺项；先给我核对摘要，确认后再保存和查看推荐，不要购买。')
+        self.input.setText(draft)
+
     def open_wealth_receipt(self, destination, payload):
+        if destination=='interview':
+            self.start_wealth_interview();return
         if self.busy or (self.pending and destination == 'profile'):
             self.assistant_box.feedback.setText('请先完成或取消当前操作，再继续。')
             return
@@ -601,7 +620,11 @@ class PreviewWindow(BankWindow):
         if self.pending and self.pending.get('recipient') and self.pending.get('amount_minor'):
             self.edit.setEnabled(not self.busy and not self.uncertain and self.decision is None)
         self.reconnect.setEnabled(not self.busy and self.pending is None and not self.uncertain)
-        self.confirmation_heading.setText('核对原操作 · 不要重新提交同一笔付款' if self.decision is not None else '确认本次办理 · 确认前不会扣款')
+        profile_confirmation=bool(self.pending and self.pending.get('operation')=='SAVE_WEALTH_PROFILE')
+        self.confirmation_heading.setText('核对你的理财需求 · 保存不会购买产品' if profile_confirmation else
+            '核对原操作 · 不要重新提交同一笔付款' if self.decision is not None else '确认本次办理 · 确认前不会扣款')
+        if profile_confirmation:self.approve.setText('确认保存需求')
+        else:self.approve.setText('确认转账 / 办理')
         self.transfer_form.setVisible(not self.completed_form and not (self.pending and self._prepared_from_form))
         self.another_transfer.setVisible(self.completed_form)
         self.another_transfer.setEnabled(not self.busy and not self.pending and not self.uncertain)

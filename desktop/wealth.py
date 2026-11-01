@@ -31,6 +31,7 @@ def fill(w,rows):
 
 class WealthPage(QWidget):
     requested=Signal(str,dict)
+    interview_requested=Signal()
     refresh_requested=Signal()
     geometry_changed=Signal()
     def __init__(self):
@@ -51,7 +52,8 @@ class WealthPage(QWidget):
         self.summary=text('正在读取当前账户…','wealthCaption');layout.addWidget(self.summary)
         intro=QFrame();intro.setObjectName('wealthPanel');row=QHBoxLayout(intro);row.setContentsMargins(18,12,18,12)
         self.profile_hint=text('完善需求后，为你解释每款产品为什么匹配或不匹配。','wealthHint');row.addWidget(self.profile_hint,1)
-        self.edit_profile=self.button('完善我的需求',self.open_profile);row.addWidget(self.edit_profile);layout.addWidget(intro)
+        self.start_interview=self.button('和有度聊聊需求',self.interview_requested.emit);row.addWidget(self.start_interview)
+        self.edit_profile=self.button('用表单修改',self.open_profile);row.addWidget(self.edit_profile);layout.addWidget(intro)
         self.tabs=QTabWidget(); layout.addWidget(self.tabs)
         catalog=QWidget(); c=QVBoxLayout(catalog); c.setAlignment(Qt.AlignmentFlag.AlignTop); c.setSpacing(12)
         self.products=ProductCards()
@@ -70,7 +72,8 @@ class WealthPage(QWidget):
         self.questionnaire.submitted.connect(lambda fields:self.requested.emit('SAVE_WEALTH_PROFILE',fields))
         profile=QFrame();profile.setObjectName('wealthPanel');f=QVBoxLayout(profile);f.setAlignment(Qt.AlignmentFlag.AlignTop);f.setContentsMargins(24,24,24,24)
         f.addWidget(text('我的理财需求','wealthName'));self.profile_text=text('尚未填写需求问卷。','wealthHint');f.addWidget(self.profile_text)
-        f.addWidget(self.button('填写或更新需求',self.open_profile));f.addWidget(text('仅模拟需求筛选，不生成银行正式风险等级。修改后需要重新核对确认。','wealthCaption'))
+        f.addWidget(self.button('继续对话完善需求',self.interview_requested.emit))
+        f.addWidget(self.button('用表单查看和修改',self.open_profile));f.addWidget(text('仅模拟需求筛选，不生成银行正式风险等级。修改后需要重新核对确认。','wealthCaption'))
         self.tabs.addTab(profile,'我的需求')
         holdings=QWidget(); h=QVBoxLayout(holdings); h.setAlignment(Qt.AlignmentFlag.AlignTop)
         h.addWidget(label('每笔申购独立计算持有期。份额锁定后不能重复赎回；未解锁部分不会被自动赎回。'))
@@ -101,7 +104,7 @@ class WealthPage(QWidget):
         if not self.isVisible() or not self.available or not self.data or self.data['profile_valid']:return
         key=(self.actor[0] or self.actor[1],(self.data.get('profile') or {}).get('expires_on'))
         if key not in self.onboarded:
-            self.onboarded.add(key);self.open_profile()
+            self.onboarded.add(key);self.interview_requested.emit()
 
     def defer_onboarding(self):
         if self.data and self.actor:
@@ -115,7 +118,7 @@ class WealthPage(QWidget):
 
     def require_profile(self):
         if self.data and self.data['profile_valid']:return True
-        self.open_profile();return False
+        self.interview_requested.emit();return False
 
     def compare_products(self):
         if self.require_profile():self.requested.emit('RECOMMEND_WEALTH',{})
@@ -145,7 +148,7 @@ class WealthPage(QWidget):
             else:w.setCurrentIndex(0)
         self.summary.setText('尚未读取当前账户理财数据。'); self.feedback.setText('请先填写问卷，再比较产品。')
         for value in self.asset_values.values():value.setText('—')
-        self.profile_text.setText('尚未填写需求问卷。');self.profile_hint.setText('完善需求后，再比较产品。');self.edit_profile.setText('完善我的需求')
+        self.profile_text.setText('尚未确认理财需求。');self.profile_hint.setText('和有度聊聊需求，再比较产品。')
 
     def set_data(self,data,actor):
         if actor!=self.actor:self.clear()
@@ -167,13 +170,14 @@ class WealthPage(QWidget):
             for key,w in self.fields.items():
                 value=profile['answers'].get(key)
                 if key in {'budget','free_cash'}:value=money(profile['answers'][key+'_minor']).replace(',','')
-                if isinstance(w,QLineEdit):w.setText(str(value))
+                if key=='need_on':value=data.get('needs_deadline',value)
+                if isinstance(w,QLineEdit):w.setText(str(value) if value is not None else '')
                 else:w.setCurrentIndex(w.findData(value))
             self.profile_stamp=profile['recorded_at']
-        valid=data['profile_valid'];self.edit_profile.setText('更新我的需求' if valid else '完善我的需求')
+        valid=data['profile_valid'];self.edit_profile.setText('用表单修改')
         self.profile_hint.setText('需求已确认 · 可查看每款产品的匹配理由。' if valid else '问卷已过期，请更新需求。' if profile else '还不了解你的需求 · 完成问卷后再进行匹配。')
         if profile:
-            a=profile['answers'];self.profile_text.setText(f"总预算 {money(a['budget_minor'])} 元   ·   闲置资金 {money(a['free_cash_minor'])} 元\n最早 {a['horizon_days']} 天后用钱\n\n"+
+            a=profile['answers'];self.profile_text.setText(f"总预算 {money(a['budget_minor'])} 元   ·   已确认可用闲钱 {money(a['free_cash_minor'])} 元\n用钱日期 {data.get('needs_deadline') or a.get('need_on') or '待确认'}\n\n"+
                 ' / '.join(a[k] for k in ('purpose','liquidity','loss','income','debt','experience','priority'))+f"\n\n有效期至 {profile['expires_on']}"+('（已过期）' if not valid else ''))
         self.feedback.setText('问卷已确认；当前结果仅为模拟筛选，不是正式投资建议。' if data['profile_valid'] else '请填写或更新模拟需求问卷。')
         self.product_detail(); self.order_detail();self.fit_tab()

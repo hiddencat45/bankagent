@@ -8,7 +8,7 @@ from test_wealth import ANSWERS, NOW
 
 
 @pytest.mark.parametrize('changes,expected',[
-    ({'horizon_days':400,'experience':'无经验'},2),
+    ({'horizon_days':400,'experience':'无经验','loss':'仅低风险','loss_acceptance':'可以'},2),
     ({'horizon_days':15},4),
     ({'horizon_days':45},6),
     ({'horizon_days':200},9),

@@ -271,7 +271,7 @@ class AuthenticatedWindow(PreviewWindow):
             self.approve.setText('确认并追加安全验证' if self.pending['risk_level'] == 'RED' else '确认并验证交易密码')
         else:
             self.approve.setVisible(self.pending is not None and self.decision is None)
-            self.approve.setText('确认办理')
+            self.approve.setText('确认保存需求' if self.pending and self.pending.get('operation')=='SAVE_WEALTH_PROFILE' else '确认办理')
 
     def show_connection_menu(self):
         menu = QMenu(self)
