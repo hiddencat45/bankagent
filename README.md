@@ -4,7 +4,7 @@ PySide6 本地银行模拟应用。模型理解请求并提出工具调用；服
 
 ## 当前版本与入口（2026-11-01）
 
-当前交付分支为 `feat/wealth-onboarding-design`，承接 #76–#92 的未合并功能；**main 不包含这些最新能力**。此前 #56、#61–#74 于10月28日合并，仅代表当时版本。本轮不合并 PR、不推 main。
+当前交付分支为 `fix/wealth-chat-cards`，承接 #76–#93 的未合并功能；**main 不包含这些最新能力**。此前 #56、#61–#74 于10月28日合并，仅代表当时版本。本轮不合并 PR、不推 main。
 
 本机继续双击项目根目录 **Youdu.exe**。关闭旧窗口再打开即可加载新界面；原账号、密码和账本绑定不变，不需要重新注册或更换测试入口。
 
@@ -13,6 +13,8 @@ Youdu.exe 是内嵌机器人图标的启动器，调用项目 `.venv`，不是�
 品牌与页头更新：绿色交织标志、精简侧栏底部、右上头像菜单和固定账单卡片选择已接入现有数据；完整账本路径见头像菜单“诊断信息”。实际窗口见[桌面应用](docs/桌面应用.md#品牌与固定页头修正2026-11-01待审)。
 
 理财页面已改为资产概览与产品卡片。首次进入且没有有效问卷时自动弹出两步引导，可稍后填写；浏览无需填问卷，比较与申购要求有效问卷。有效答案自动复用，详情与修改入口常驻。见[界面与首次引导](docs/理财界面与首次引导.md)。
+
+聊天中的理财结果使用原生引导卡、产品匹配卡和订单卡：缺问卷时提供填写入口，不堆叠未筛选产品；匹配理由与订单状态直接来自后端回执。产品费用、代码和官方资料在详情中查看。助手背景不再透出下层数据，气泡随内容收缩。提交包更新仍按用户要求暂停。
 
 ## 当前能力
 
@@ -33,7 +35,7 @@ Youdu.exe 是内嵌机器人图标的启动器，调用项目 `.venv`，不是�
 Windows、Python 3.10、Git；开发门禁另需 Node。PowerShell 在目标目录运行：
 
 ```powershell
-git clone --branch feat/wealth-onboarding-design https://github.com/hiddencat45/bankagent.git
+git clone --branch fix/wealth-chat-cards https://github.com/hiddencat45/bankagent.git
 cd bankagent
 .\scripts\setup-desktop.ps1
 .\Youdu.exe

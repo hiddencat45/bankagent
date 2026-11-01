@@ -1,15 +1,17 @@
 """Native chat bubbles and receipt cards; no business execution or model parsing."""
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QPixmap, QPainter, QColor
 from PySide6.QtWidgets import (QScrollArea, QWidget, QVBoxLayout, QHBoxLayout,
                               QLabel, QPushButton, QSizePolicy, QLayout, QProgressBar)
 from desktop.client import money
 from desktop.icons import icon as native_icon
+from desktop.wealth_chat import STYLE as WEALTH_CHAT_STYLE, render as render_wealth
 
 
 class ChatView(QScrollArea):
     receipt_opened = Signal(dict)
+    wealth_opened = Signal(str, dict)
     def __init__(self):
         super().__init__()
         self.setWidgetResizable(True)
@@ -39,7 +41,7 @@ class ChatView(QScrollArea):
             QLabel#receiptAmount {font-size:24px;font-weight:600;color:#194f42;}
             QPushButton#replyDetails {border:0;background:transparent;text-align:left;
                 color:#60786c;padding:4px 0;font-size:12px;}
-        ''')
+        ''' + WEALTH_CHAT_STYLE)
         self.follow_tail = True
         bar = self.verticalScrollBar()
         bar.valueChanged.connect(lambda value: setattr(self, 'follow_tail', value >= bar.maximum()-24))
@@ -55,7 +57,7 @@ class ChatView(QScrollArea):
         label.setTextFormat(Qt.TextFormat.PlainText)
         label.setWordWrap(True)
         label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+        label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         if name:
             label.setObjectName(name)
         return label
@@ -73,6 +75,7 @@ class ChatView(QScrollArea):
         body = QVBoxLayout(bubble)
         body.setContentsMargins(12, 10, 12, 10)
         body.setSpacing(7)
+        body.setAlignment(Qt.AlignmentFlag.AlignTop)
         speaker = self.label((display_name or '你') if role == 'user' else '有度', 'speaker')
         if role == 'user':
             speaker.setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -84,7 +87,7 @@ class ChatView(QScrollArea):
             avatar.setFixedSize(28, 28)
             avatar.setPixmap(native_icon('brand', 28).pixmap(28, 28))
             line.addWidget(avatar, 0, Qt.AlignmentFlag.AlignTop)
-        line.addWidget(bubble)
+        line.addWidget(bubble, 0, Qt.AlignmentFlag.AlignTop)
         if role == 'user':
             avatar = QLabel()
             avatar.setObjectName('userAvatar')
@@ -108,19 +111,20 @@ class ChatView(QScrollArea):
             line.addStretch(1)
         self.stack.insertWidget(self.stack.count() - 1, row)
         self.rows.append((row, bubble))
-        self.fit_bubbles()
+        QTimer.singleShot(0, self.fit_bubbles)
         return body
 
     def fit_bubbles(self):
         width = max(120, int(self.viewport().width() * .84) - 32)
         for _, bubble in self.rows:
+            bubble.setMinimumHeight(0)
             bubble.setMaximumWidth(width)
             # Wrapped QLabel size hints otherwise collapse a long reply into a narrow column.
             bubble.setMinimumWidth(min(width, 120 if bubble.objectName() == 'userBubble' else
                                        620 if bubble.objectName() == 'assistantBubble' else 480))
             bubble.layout().invalidate()
             bubble.setMinimumHeight(max(bubble.minimumSizeHint().height(),
-                                        bubble.layout().heightForWidth(width)))
+                                        bubble.layout().totalHeightForWidth(bubble.width())))
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -135,6 +139,10 @@ class ChatView(QScrollArea):
         self.transcript.append(('你：' if role == 'user' else '有度：') + value)
 
     def add_receipt(self, receipt, summary):
+        wealth = render_wealth(self, receipt)
+        if wealth is not None:
+            self.transcript.append(summary)
+            return wealth
         body = self.bubble('assistant', 'receiptCard' if receipt['status'] == 'COMPLETED' else 'errorBubble')
         if receipt['operation'] == 'GET_BALANCE' and receipt['status'] == 'COMPLETED':
             body.addWidget(self.label('账户余额'))
@@ -145,7 +153,8 @@ class ChatView(QScrollArea):
         data = receipt.get('data') or {}
         from bankagent.banking.wealth import OPERATIONS
         if receipt['operation'] in OPERATIONS:
-            button = QPushButton('查看理财持仓与订单 →')
+            button = QPushButton('查看理财并核对 →')
+            button.setObjectName('wealthChatLink')
             button.clicked.connect(lambda: self.receipt_opened.emit(receipt))
             body.addWidget(button)
         if receipt['operation'] == 'QUERY_BILLS' and receipt['status'] == 'COMPLETED':
@@ -170,9 +179,22 @@ class ChatView(QScrollArea):
 
     def add_turn(self, events, summarize, pending=False):
         # Explanations stay visible; source receipts follow as supporting evidence.
+        from bankagent.banking.wealth import OPERATIONS
+        wealth_result = any(event == 'card' and data.get('type') == 'result'
+                            and data['payload']['operation'] in OPERATIONS
+                            and data['payload']['status'] == 'COMPLETED' for event, data in events)
+        wealth_summaries = {summarize(data['payload']) for event, data in events
+                           if event == 'card' and data.get('type') == 'result'
+                           and data['payload']['operation'] in OPERATIONS
+                           and data['payload']['status'] == 'COMPLETED'}
         for event, data in events:
             if event in {'message', 'error'}:
                 value = data.get('text', data.get('message', ''))
+                # This fixed transport notice duplicates the structured receipt below.
+                if event == 'message' and wealth_result and (value in wealth_summaries or value == (
+                        '已读取模拟业务结果，具体金额、筛选理由和订单状态见下方服务端回执。'
+                        '理财申请已提交不等于成交或到账；未核实真实渠道的在售和到账信息。')):
+                    continue
                 self.add_message('assistant', value, error=event == 'error')
         for event, data in events:
             if event == 'card' and data.get('type') == 'result':

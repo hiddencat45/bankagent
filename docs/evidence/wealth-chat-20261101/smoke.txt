@@ -1,0 +1,1 @@
+HTTP smoke passed: bills, clarification, confirmation, transfer, replay, balance, reset

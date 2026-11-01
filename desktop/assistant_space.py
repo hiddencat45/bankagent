@@ -96,7 +96,7 @@ class AssistantSpace(QFrame):
         self.confirm_scroll.setVisible(owner.pending is not None and self.isVisible())
         owner.confirm_actions.setVisible(owner.pending is not None)
         owner.conversation.setMinimumHeight(40 if owner.pending else 140)
-        owner.input.setFixedHeight(48 if owner.pending else 92)
+        owner.input.setFixedHeight(48 if owner.pending else 58 if active else 92)
         customer = owner.current_customer.text().removeprefix('当前演示客户：')
         self.context.setText('本地模拟 · ' + owner.mode + '  /  ' + customer + ' · ' + owner.context_account.text())
         self.feedback.setText('正在处理，请稍候…' if owner.busy else
