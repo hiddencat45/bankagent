@@ -103,8 +103,11 @@ class BankBackend(LifecycleMixin):
         return value.astimezone(timezone(timedelta(hours=8)))
 
     def _daily_total(self, account_id, today, *, data=None):
-        return sum(t["amount_minor"] for t in (self._data if data is None else data)["transactions"]
-                   if t["account_id"] == account_id and t["kind"] == "TRANSFER_OUT"
+        data = self._data if data is None else data
+        user = data['accounts'][account_id]['user_id']
+        accounts = {key for key, row in data['accounts'].items() if row['user_id'] == user}
+        return sum(t["amount_minor"] for t in data["transactions"]
+                   if t["account_id"] in accounts and t["kind"] == "TRANSFER_OUT"
                    and datetime.fromisoformat(t["occurred_at"]).date() == today)
 
     def get_balance(self, *, context: TrustedContext) -> BackendResult:

@@ -98,6 +98,9 @@ class Service:
                 local_payment = (hasattr(self, 'credentials') and record['operation'] in {'TRANSFER', 'BATCH_TRANSFER'})
                 if local_payment and req.resume.decision == 'approve' and record['decision'] == 'PENDING':
                     self.credentials.verify_payment(session.user_id, req.resume.otp)
+                    if record['risk_level'] == 'RED':
+                        self.mfa.verify(session.user_id, req.resume.totp, cid, expected,
+                                        (record['expires_at'] - self.clock()).total_seconds())
                     authenticated = True
                 if not local_payment and record['risk_level'] == 'RED' and req.resume.decision == 'approve' and record['decision'] == 'PENDING':
                     try:
