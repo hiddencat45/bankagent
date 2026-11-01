@@ -21,12 +21,26 @@ DISCLOSURES = {
         source='https://www.bocommwm.com/BankCommSite/shtml/jylc/cn/2503328/2503403/list.shtml?channelId=2503328&c_fundcode=5811225439',
         note='采用官网微众银行代销份额详情的成立以来年化值。同期单位净值 1.02723；'
              '未使用业绩比较基准或现金管理类字段作为收益率。'),
+    '5811323020': dict(value='1.0265', start='2026-10-25', end='2026-10-31', metric='七日年化收益率',
+        issuer='交银理财', source='https://www.bocommwm.com/BankCommSite/shtml/jylc/cn/2503328/2503403/list.shtml?channelId=2503328&c_fundcode=5811323020', note='按精确销售代码核对官网披露；微众渠道条款见下方产品合同。不同统计口径不直接比较。'),
+    '5811225192': dict(value='3.3969', start='2025-04-29', end='2026-10-28', metric='成立以来年化收益率',
+        issuer='交银理财', source='https://www.bocommwm.com/BankCommSite/shtml/jylc/cn/2503328/2503403/list.shtml?channelId=2503328&c_fundcode=5811225192', note='按精确销售代码核对官网披露；微众渠道条款见下方产品合同。不同统计口径不直接比较。'),
+    '5811223114': dict(value='2.2254', start='2023-11-23', end='2026-10-28', metric='成立以来年化收益率',
+        issuer='交银理财', source='https://www.bocommwm.com/BankCommSite/shtml/jylc/cn/2503328/2503403/list.shtml?channelId=2503328&c_fundcode=5811223114', note='按精确销售代码核对官网披露；微众渠道条款见下方产品合同。不同统计口径不直接比较。'),
+    '5811225237': dict(value='2.5237', start='2025-05-22', end='2026-10-28', metric='成立以来年化收益率',
+        issuer='交银理财', source='https://www.bocommwm.com/BankCommSite/shtml/jylc/cn/2503328/2503403/list.shtml?channelId=2503328&c_fundcode=5811225237', note='按精确销售代码核对官网披露；微众渠道条款见下方产品合同。不同统计口径不直接比较。'),
+    '5811223020': dict(value='3.0258', start='2023-04-04', end='2026-10-28', metric='成立以来年化收益率',
+        issuer='交银理财', source='https://www.bocommwm.com/BankCommSite/shtml/jylc/cn/2503328/2503403/list.shtml?channelId=2503328&c_fundcode=5811223020', note='按精确销售代码核对官网披露；微众渠道条款见下方产品合同。不同统计口径不直接比较。'),
+    '5811223109': dict(value='3.0749', start='2023-11-15', end='2026-10-28', metric='成立以来年化收益率',
+        issuer='交银理财', source='https://www.bocommwm.com/BankCommSite/shtml/jylc/cn/2503328/2503403/list.shtml?channelId=2503328&c_fundcode=5811223109', note='按精确销售代码核对官网披露；微众渠道条款见下方产品合同。不同统计口径不直接比较。'),
+    '5811225212': dict(value='3.0394', start='2025-05-15', end='2026-10-28', metric='成立以来年化收益率',
+        issuer='交银理财', source='https://www.bocommwm.com/BankCommSite/shtml/jylc/cn/2503328/2503403/list.shtml?channelId=2503328&c_fundcode=5811225212', note='按精确销售代码核对官网披露；微众渠道条款见下方产品合同。不同统计口径不直接比较。'),
 }
 
 
 def disclosure(code):
     """Unknown share classes never inherit another share class's performance."""
     result = deepcopy(DISCLOSURES.get(code, {}))
-    result.update(metric='成立以来年化收益率' if result else '收益率待核实',
+    result.update(metric=result.get('metric', '成立以来年化收益率' if result else '收益率待核实'),
                   checked='2026-11-01')
     return result

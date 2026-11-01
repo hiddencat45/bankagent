@@ -98,7 +98,7 @@ def run(output,visible=False,live_model=False):
             page.tabs.setCurrentIndex(0);capture('products')
             if live_model:
                 w.toggle_assistant(True)
-                for prompt in ['我刚填好了问卷，请比较这三款产品，告诉我哪些符合需求。',
+                for prompt in ['我刚填好了问卷，请比较产品库，告诉我哪些符合需求。',
                                '请帮我准备申购1000元北银7天27号A，先让我确认。']:
                     w.send(prompt);wait(lambda:not w.busy);idle()
                     report['cases'].append(dict(input=prompt,pending=bool(w.pending),reply=w.conversation.toPlainText()[-7000:]))

@@ -1,7 +1,7 @@
 """Native wealth cards and a nonblocking, explicitly confirmed onboarding form."""
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QWidget,QFrame,QLabel,QPushButton,QVBoxLayout,QHBoxLayout,
-    QDialog,QLineEdit,QComboBox,QFormLayout,QStackedWidget,QScrollArea,QSizePolicy)
+    QDialog,QLineEdit,QComboBox,QFormLayout,QStackedWidget,QScrollArea,QSizePolicy,QGridLayout)
 from desktop.client import money
 from desktop.theme import STYLE
 from desktop.wealth_disclosures import disclosure
@@ -36,23 +36,44 @@ def text(value,name=''):
 
 class ProductCards(QWidget):
     itemSelectionChanged=Signal()
+    geometryChanged=Signal()
     def __init__(self):
-        super().__init__();self.row=-1;self.cards=[];self.select_buttons=[]
+        super().__init__();self.row=-1;self.cards=[];self.select_buttons=[];self.page=0
         self.setSizePolicy(QSizePolicy.Policy.Preferred,QSizePolicy.Policy.Fixed)
-        self.box=QHBoxLayout(self);self.box.setContentsMargins(0,0,0,0);self.box.setSpacing(14)
+        outer=QVBoxLayout(self);outer.setContentsMargins(0,0,0,0);outer.setSpacing(12)
+        pager=QHBoxLayout();self.count=text('','wealthHint');pager.addWidget(self.count);pager.addStretch()
+        self.previous=QPushButton('上一页');self.next=QPushButton('下一页')
+        self.previous.clicked.connect(lambda:self.show_page(self.page-1));self.next.clicked.connect(lambda:self.show_page(self.page+1))
+        pager.addWidget(self.previous);pager.addWidget(self.next);outer.addLayout(pager)
+        self.box=QGridLayout();self.box.setContentsMargins(0,0,0,0);self.box.setSpacing(14);outer.addLayout(self.box)
+        for col in range(3):self.box.setColumnStretch(col,1)
 
     def rowCount(self):return len(self.cards)
     def currentRow(self):return self.row
     def setRowCount(self,count):
         assert count==0
         while self.box.count():
-            w=self.box.takeAt(0).widget();w.hide();w.deleteLater()
+            self.box.takeAt(0)
+        for w in self.cards:w.hide();w.deleteLater()
         self.cards=[];self.select_buttons=[];self.row=-1
+        self.show_page(0)
+
+    def show_page(self,page):
+        total=max(1,(len(self.cards)+5)//6);self.page=max(0,min(page,total-1))
+        while self.box.count():self.box.takeAt(0).widget().hide()
+        visible=self.cards[self.page*6:self.page*6+6]
+        columns=2 if 1<len(visible)<=4 else 3
+        for col in range(3):self.box.setColumnStretch(col,1 if col<columns else 0)
+        for i,card in enumerate(visible):
+            self.box.addWidget(card,i//columns,i%columns);card.show()
+        self.count.setText(f'{len(self.cards)} 款产品 · 第 {self.page+1}/{total} 页')
+        self.previous.setEnabled(self.page>0);self.next.setEnabled(self.page<total-1)
+        self.updateGeometry();self.geometryChanged.emit()
 
     def populate(self,products,recommendations):
         selected=max(0,self.row);self.setRowCount(0)
         for i,p in enumerate(products):
-            card=QFrame();card.setObjectName('wealthProduct');box=QVBoxLayout(card)
+            card=QFrame(self);card.hide();card.setObjectName('wealthProduct');box=QVBoxLayout(card)
             box.setContentsMargins(16,16,16,16);box.setSpacing(8)
             head=QHBoxLayout();head.addWidget(text(p['issuer'],'wealthCaption'));head.addStretch()
             head.addWidget(text(f"R{p['issuer_risk']}",'wealthTag'));box.addLayout(head)
@@ -74,12 +95,14 @@ class ProductCards(QWidget):
             button=QPushButton('选择产品');button.setCheckable(True)
             button.clicked.connect(lambda checked=False,row=i:self.selectRow(row))
             button.setAccessibleName('选择'+p['short_name']);box.addWidget(button)
-            self.cards.append(card);self.select_buttons.append(button);self.box.addWidget(card,1)
+            self.cards.append(card);self.select_buttons.append(button)
+        self.show_page(selected//6)
         self.selectRow(min(selected,len(self.cards)-1))
 
     def selectRow(self,row):
         if not 0<=row<len(self.cards):return
         self.row=row
+        if row//6!=self.page:self.show_page(row//6)
         for i,(card,button) in enumerate(zip(self.cards,self.select_buttons)):
             card.setProperty('selected',i==row);card.style().unpolish(card);card.style().polish(card)
             button.setChecked(i==row);button.setText('已选择' if i==row else '选择产品')

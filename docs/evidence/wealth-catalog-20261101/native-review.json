@@ -1,0 +1,17 @@
+{
+  "status": "PASSED",
+  "platform": "windows",
+  "scale": 1.25,
+  "ledger": "temporary SQLite",
+  "model": "offline rules",
+  "sizes": [
+    "1280x850",
+    "1040x720"
+  ],
+  "checks": [
+    "catalog without onboarding",
+    "10 exact share disclosures and 2 pages",
+    "cash and 365-day selection/detail dialogs",
+    "compact label geometry"
+  ]
+}
