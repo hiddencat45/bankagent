@@ -1,0 +1,132 @@
+{
+  "transport": "real TCP HTTP",
+  "ledger": "temporary SQLite",
+  "mode": "offline rules",
+  "cases": [
+    {
+      "name": "reject redemption before minimum holding period",
+      "status": "PASSED"
+    },
+    {
+      "name": "1000 CNY subscribe / 400 units redeem / cash and holdings conservation",
+      "status": "PASSED"
+    }
+  ],
+  "status": "COMPLETED",
+  "platform": "windows",
+  "scale": 1.25,
+  "authentication": "local login + transaction PIN + TOTP; native dialog; generated authenticator, not physical phone",
+  "final_available_minor": 940000,
+  "final_holdings_minor": 60000,
+  "orders": [
+    {
+      "order_id": "W3c4a73c5cdeb4920",
+      "account_id": "account-b7e486f2a53045118235bd4315765195",
+      "user_id": "registered-2c1e8d1f2e5f690a7b58c15441e52767",
+      "product_code": "YJ01251202A",
+      "side": "SELL",
+      "requested_minor": 40000,
+      "filled_minor": 40000,
+      "state": "SETTLED",
+      "version": 4,
+      "sequence": 2,
+      "created_at": "2026-10-18T12:00:10.886168+08:00",
+      "day": "2026-10-27",
+      "allocations": [
+        {
+          "lot_id": "L75608bc799454555",
+          "units_minor": 40000
+        }
+      ],
+      "events": [
+        {
+          "sequence": 1,
+          "day": "2026-10-27",
+          "state": "SUBMITTED",
+          "message": "申请已提交；尚未成交。资金冻结或份额锁定已入账。"
+        },
+        {
+          "sequence": 2,
+          "day": "2026-10-27",
+          "state": "ACCEPTED",
+          "message": "模拟渠道已受理，尚未成交。"
+        },
+        {
+          "sequence": 3,
+          "day": "2026-10-28",
+          "state": "WAITING_CASH",
+          "message": "赎回确认，持仓已扣减，资金待到账；未成交部分份额已释放。"
+        },
+        {
+          "sequence": 4,
+          "day": "2026-10-30",
+          "state": "SETTLED",
+          "message": "模拟赎回款已到账，可用余额已增加。"
+        }
+      ],
+      "rule_version": "wealth-demo-v1",
+      "simulation": true,
+      "product_snapshot": {
+        "code": "YJ01251202A",
+        "name": "北银理财京华远见春系列诚享7天持有期27号A",
+        "short_name": "北银7天27号A",
+        "issuer": "北银理财",
+        "issuer_risk": 2,
+        "minimum_minor": 100,
+        "hold_days": 7,
+        "fee": "0.53%/年（合同三项常规费率合计）",
+        "source": "https://www.beijingbobwealth.com.cn/upload/pdf/1778846245812-YJ01251202Abylcjhyjcxlcx7tcyq27hlccp-lccpsms-wzyx-2026-05-15-YJ01251202.pdf"
+      },
+      "next_on": "2026-10-30"
+    },
+    {
+      "order_id": "W96f3223971cb43d6",
+      "account_id": "account-b7e486f2a53045118235bd4315765195",
+      "user_id": "registered-2c1e8d1f2e5f690a7b58c15441e52767",
+      "product_code": "YJ01251202A",
+      "side": "BUY",
+      "requested_minor": 100000,
+      "filled_minor": 100000,
+      "state": "SETTLED",
+      "version": 3,
+      "sequence": 1,
+      "created_at": "2026-10-18T12:00:08.403438+08:00",
+      "day": "2026-10-18",
+      "allocations": [],
+      "events": [
+        {
+          "sequence": 1,
+          "day": "2026-10-18",
+          "state": "SUBMITTED",
+          "message": "申请已提交；尚未成交。资金冻结或份额锁定已入账。"
+        },
+        {
+          "sequence": 2,
+          "day": "2026-10-18",
+          "state": "ACCEPTED",
+          "message": "模拟渠道已受理，尚未成交。"
+        },
+        {
+          "sequence": 3,
+          "day": "2026-10-20",
+          "state": "SETTLED",
+          "message": "申购确认，已按模拟净值1元增加份额；未成交部分已解冻。"
+        }
+      ],
+      "rule_version": "wealth-demo-v1",
+      "simulation": true,
+      "product_snapshot": {
+        "code": "YJ01251202A",
+        "name": "北银理财京华远见春系列诚享7天持有期27号A",
+        "short_name": "北银7天27号A",
+        "issuer": "北银理财",
+        "issuer_risk": 2,
+        "minimum_minor": 100,
+        "hold_days": 7,
+        "fee": "0.53%/年（合同三项常规费率合计）",
+        "source": "https://www.beijingbobwealth.com.cn/upload/pdf/1778846245812-YJ01251202Abylcjhyjcxlcx7tcyq27hlccp-lccpsms-wzyx-2026-05-15-YJ01251202.pdf"
+      },
+      "next_on": "2026-10-20"
+    }
+  ]
+}
