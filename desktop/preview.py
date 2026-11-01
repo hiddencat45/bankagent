@@ -255,8 +255,13 @@ class PreviewWindow(BankWindow):
         if not hasattr(self, 'orb'): return
         root = self.centralWidget()
         self.orb.move(root.width()-82, root.height()-72)
-        inset = 0 if self.ai_expand.isChecked() else 12
-        self.assistant_box.setGeometry(inset, inset, root.width()-2*inset, root.height()-2*inset)
+        if self.ai_expand.isChecked():
+            width, height = root.width(), root.height()
+        else:
+            scale = .55 ** .5
+            width = min(root.width()-24, max(720, round(root.width()*scale)))
+            height = min(root.height()-24, max(620, round(root.height()*scale)))
+        self.assistant_box.setGeometry((root.width()-width)//2, (root.height()-height)//2, width, height)
         self.assistant_box.raise_()
         self.orb.setVisible(not self.assistant_box.isVisible())
         if not self.assistant_box.isVisible():
