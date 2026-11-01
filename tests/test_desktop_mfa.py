@@ -62,6 +62,7 @@ def test_native_enrollment_and_red_transfer(tmp_path, monkeypatch):
         assert '低风险' in bank.status.text()
         capture('low-risk-query',bank)
         app.processEvents(); wait(lambda:not bank.busy)
+        assert '低风险' in bank.status.text()
         bank.send(f'给{target}转1000元')
         wait(lambda:not bank.busy and bank.pending is not None)
         assert '中风险' in bank.confirmation_heading.text()

@@ -245,10 +245,16 @@ class LoginWindow(QWidget):
 class AuthenticatedWindow(PreviewWindow):
     def __init__(self, shell):
         self.shell = shell
+        self.read_only_result = False
         super().__init__(shell.client.url, client=shell.client)
         self.create_customer.hide()
         self.verify.clicked.disconnect()
         self.verify.clicked.connect(lambda: self.decide('approve'))
+
+    def run(self, kind, function):
+        if kind != 'accounts':
+            self.read_only_result = False
+        super().run(kind, function)
 
     def controls(self):
         super().controls()
@@ -340,7 +346,9 @@ class AuthenticatedWindow(PreviewWindow):
             receipts = [d['payload'] for e,d in result if e == 'card' and d.get('type') == 'result']
             read_operations = {'GET_BALANCE', 'QUERY_BILLS', 'QUERY_CARDS', 'QUERY_CARD_LIMITS', 'QUERY_ACCOUNTS', 'QUERY_TRANSFER_BATCHES'}
             if receipts and all(r.get('operation') in read_operations and r.get('status') == 'COMPLETED' for r in receipts):
-                self.status.setText('低风险 · 本人信息查询已完成；未执行资金或卡片变更。')
+                self.read_only_result = True
+        if self.read_only_result and kind in {'query', 'accounts'}:
+            self.status.setText('低风险 · 本人信息查询已完成；未执行资金或卡片变更。')
 
     def payment_dialog(self, configured):
         dialog = QDialog(self); dialog.setWindowTitle(('高风险转账 · 追加认证' if self.pending['risk_level'] == 'RED' else '转账 · 交易密码认证') if configured else '首次设置交易密码')
