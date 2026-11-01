@@ -32,10 +32,19 @@ def test_native_registration_onboarding_and_logout(tmp_path, monkeypatch):
     try:
         window=LoginWindow(service.start()); window.show()
         app.processEvents(); capture('login',window)
+        assert window.pages.currentIndex()==0 and not window.register.isVisible()
+        window.to_register.click()
+        assert window.pages.currentIndex()==1 and not window.login.isVisible()
+        capture('register',window)
         for k,v in {'username':'new_user','display_name':'测试新客户','password':password,'repeat':password}.items():
-            window.fields[k].setText(v)
+            window.register_fields[k].setText(v)
+        window.to_login.click(); window.to_register.click()
+        assert window.register_fields['username'].text()=='new_user'
+        assert window.register_fields['password'].text()==''
+        window.register_fields['password'].setText(password); window.register_fields['repeat'].setText(password)
         window.register.click(); wait(lambda:not window.busy)
         assert '注册成功' in window.status.text()
+        assert window.pages.currentIndex()==0 and window.fields['username'].text()=='new_user'
         window.fields['password'].setText(password); window.login.click()
         wait(lambda:not window.busy and window.open_account.isVisible())
         assert window.client.get('/bank/accounts')['accounts']==[]
