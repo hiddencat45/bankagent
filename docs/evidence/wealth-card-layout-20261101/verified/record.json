@@ -1,0 +1,159 @@
+{
+  "transport": "real TCP HTTP",
+  "ledger": "temporary SQLite",
+  "model": "offline rules; ranking from trusted backend",
+  "cases": [
+    {
+      "priority": "风险优先",
+      "eligible": 10,
+      "recommended": [
+        {
+          "product_code": "2119987003A",
+          "eligible": true,
+          "match_status": "matched",
+          "reasons": [
+            "管理人R1在本次模拟筛选上限R2内，预算覆盖起投金额",
+            "最低持有0天；含模拟确认与到账需4天，未超过剩余1095天"
+          ],
+          "notes": [
+            "首次接触非保本理财，需了解亏损及赎回限制；无经验本身不决定风险等级"
+          ],
+          "pending_reasons": [],
+          "remaining_days": 1095,
+          "real_status": "待核实，不能作为真实购买建议",
+          "simulated_earliest_cash_date": "2026-10-22",
+          "recommendation_rank": 1,
+          "ranking_version": "wealth-shortlist-v1",
+          "recommendation_reasons": [
+            "你选择风险优先；按风险等级优先比较后，这款位于合格候选的前列：管理人R1、不设最低持有期。",
+            "常规费率0.53%/年；相同风险和持有要求时，优先选择已核实常规费率较低的产品。",
+            "相比其余合格候选：8款风险等级更高，8款最低持有期更长。"
+          ],
+          "tradeoffs": [
+            "不设最低持有期，不等于即时到账；常规费率0.53%/年，不代表全部成本或当前优惠。"
+          ],
+          "comparison_group": "优先推荐",
+          "preference_reason": "先比较风险，再比较持有要求和常规费率",
+          "recommendation_label": "首选推荐"
+        },
+        {
+          "product_code": "5811323020",
+          "eligible": true,
+          "match_status": "matched",
+          "reasons": [
+            "管理人R1在本次模拟筛选上限R2内，预算覆盖起投金额",
+            "最低持有0天；含模拟确认与到账需4天，未超过剩余1095天"
+          ],
+          "notes": [
+            "首次接触非保本理财，需了解亏损及赎回限制；无经验本身不决定风险等级"
+          ],
+          "pending_reasons": [],
+          "remaining_days": 1095,
+          "real_status": "待核实，不能作为真实购买建议",
+          "simulated_earliest_cash_date": "2026-10-22",
+          "recommendation_rank": 2,
+          "ranking_version": "wealth-shortlist-v1",
+          "recommendation_reasons": [
+            "你选择风险优先；按风险等级优先比较后，这款位于合格候选的前列：管理人R1、不设最低持有期。",
+            "常规费率0.57%/年；相同风险和持有要求时，优先选择已核实常规费率较低的产品。"
+          ],
+          "tradeoffs": [
+            "首选华夏现金3号A的常规费率为0.53%/年；本款为0.57%/年。收益口径不同，不据此判断收益优劣。",
+            "不设最低持有期，不等于即时到账；常规费率0.57%/年，不代表全部成本或当前优惠。"
+          ],
+          "comparison_group": "优先推荐",
+          "preference_reason": "先比较风险，再比较持有要求和常规费率",
+          "recommendation_label": "第二个选择"
+        }
+      ],
+      "visible_cards": 2,
+      "other_cards": 8
+    },
+    {
+      "priority": "综合比较",
+      "eligible": 10,
+      "recommended": [
+        {
+          "product_code": "2119987003A",
+          "eligible": true,
+          "match_status": "matched",
+          "reasons": [
+            "管理人R1在本次模拟筛选上限R2内，预算覆盖起投金额",
+            "最低持有0天；含模拟确认与到账需4天，未超过剩余1095天"
+          ],
+          "notes": [
+            "首次接触非保本理财，需了解亏损及赎回限制；无经验本身不决定风险等级"
+          ],
+          "pending_reasons": [],
+          "remaining_days": 1095,
+          "real_status": "待核实，不能作为真实购买建议",
+          "simulated_earliest_cash_date": "2026-10-22",
+          "recommendation_rank": 1,
+          "ranking_version": "wealth-shortlist-v1",
+          "recommendation_reasons": [
+            "你选择综合比较；按风险等级优先比较后，这款位于合格候选的前列：管理人R1、不设最低持有期。",
+            "常规费率0.53%/年；相同风险和持有要求时，优先选择已核实常规费率较低的产品。",
+            "相比其余合格候选：8款风险等级更高，8款最低持有期更长。"
+          ],
+          "tradeoffs": [
+            "不设最低持有期，不等于即时到账；常规费率0.53%/年，不代表全部成本或当前优惠。"
+          ],
+          "comparison_group": "优先推荐",
+          "preference_reason": "分别选择风险与灵活性、常规费用有优势的安排；两种取舍不表示收益高低",
+          "recommendation_label": "风险与灵活性优先的选择"
+        },
+        {
+          "product_code": "5811223114",
+          "eligible": true,
+          "match_status": "matched",
+          "reasons": [
+            "管理人R2在本次模拟筛选上限R2内，预算覆盖起投金额",
+            "最低持有30天；含模拟确认与到账需36天，未超过剩余1095天"
+          ],
+          "notes": [
+            "首次接触非保本理财，需了解亏损及赎回限制；无经验本身不决定风险等级"
+          ],
+          "pending_reasons": [],
+          "remaining_days": 1095,
+          "real_status": "待核实，不能作为真实购买建议",
+          "simulated_earliest_cash_date": "2026-11-23",
+          "recommendation_rank": 2,
+          "ranking_version": "wealth-shortlist-v1",
+          "recommendation_reasons": [
+            "在已有可核实费率的合格候选中，三项常规年费率最低，为0.22%/年。",
+            "你的剩余用钱期限为1095天，最低持有30天，已通过模拟确认与到账时间检查。"
+          ],
+          "tradeoffs": [
+            "相比华夏现金3号A（R1、最低持有0天），这款为R2、最低持有30天；低常规费率不代表净收益更高。",
+            "最低持有30天，不等于即时到账；常规费率0.22%/年，不代表全部成本或当前优惠。"
+          ],
+          "comparison_group": "优先推荐",
+          "preference_reason": "分别选择风险与灵活性、常规费用有优势的安排；两种取舍不表示收益高低",
+          "recommendation_label": "较低常规费用的选择"
+        }
+      ],
+      "visible_cards": 2,
+      "other_cards": 8
+    }
+  ],
+  "status": "PASSED",
+  "platform": "windows",
+  "scale": 1.25,
+  "layout_checks": {
+    "catalog_sizes": [
+      [
+        1280,
+        850
+      ],
+      [
+        1040,
+        720
+      ]
+    ],
+    "catalog_horizontal_scroll": 0,
+    "chat_horizontal_scroll": 0,
+    "risk_expand_collapse": "passed in catalog and visible chat card; expanded catalog screenshot reviewed after height correction",
+    "catalog_pagination": "page 1 -> 2 -> 1",
+    "yield_data": "existing verified snapshots; no product figures or dates changed"
+  }
+}
