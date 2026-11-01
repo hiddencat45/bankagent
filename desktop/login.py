@@ -4,8 +4,9 @@ import threading
 from urllib.request import Request
 from urllib.error import HTTPError
 from PySide6.QtCore import Signal, QObject, Qt
+from PySide6.QtGui import QPainter, QColor, QLinearGradient, QPainterPath, QPen
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton,
-                              QDialog, QDialogButtonBox, QMenu)
+                              QDialog, QDialogButtonBox, QMenu, QHBoxLayout, QStackedWidget)
 from desktop.client import QueryClient, business_confirmation, VerificationRejected
 from desktop.preview import PreviewWindow
 from desktop.theme import STYLE, load_chinese_font
@@ -38,6 +39,24 @@ class Finished(QObject):
     result = Signal(object, object)
 
 
+class BrandPanel(QWidget):
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        gradient = QLinearGradient(0, 0, self.width(), self.height())
+        gradient.setColorAt(0, QColor('#124e40')); gradient.setColorAt(1, QColor('#54a183'))
+        painter.fillRect(self.rect(), gradient)
+        painter.setPen(QPen(QColor(225, 247, 234, 90), 1.5))
+        for offset in (0, 24, 65):
+            path = QPainterPath(); path.moveTo(-20, self.height()*.64+offset)
+            path.cubicTo(self.width()*.35, self.height()*.86+offset,
+                         self.width()*.65, self.height()*.48+offset, self.width()+20, self.height()*.67+offset)
+            painter.drawPath(path)
+        painter.setPen(Qt.PenStyle.NoPen); painter.setBrush(QColor(235, 255, 240, 90))
+        for x,y,r in ((.15,.50,5),(.38,.43,8),(.7,.35,5),(.84,.53,10),(.6,.61,4)):
+            painter.drawEllipse(int(self.width()*x), int(self.height()*y),r*2,r*2)
+
+
 class LoginWindow(QWidget):
     def __init__(self, url, ledger_path=''):
         super().__init__()
@@ -48,23 +67,62 @@ class LoginWindow(QWidget):
         self.busy = False
         self.pending = None
         self.setWindowTitle('有度 · 登录本地模拟银行')
-        self.resize(520, 620)
-        self.setStyleSheet(STYLE)
-        layout = QVBoxLayout(self); layout.setContentsMargins(42, 32, 42, 32)
-        title = QLabel('有度'); title.setObjectName('title'); layout.addWidget(title)
-        layout.addWidget(QLabel('本地账号 · 虚构资金 · 不代表银行实名认证'))
+        self.resize(860, 590); self.setMinimumSize(760, 570)
+        self.setStyleSheet(STYLE + '''
+            LoginWindow, QWidget#authForm {background:white;}
+            QWidget#authPage, QWidget#authPage QLabel, QStackedWidget {background:white;border:0;}
+            QWidget#authForm QLineEdit {border:0;border-bottom:1px solid #dce5e0;
+                border-radius:0;padding:12px 2px;background:white;}
+            QWidget#authForm QLineEdit:focus {border-bottom:2px solid #24674e;}
+            QPushButton#authLink {background:transparent;color:#24674e;text-align:left;padding:8px 0;}
+            QLabel#authHeading {font-size:23px;font-weight:600;background:transparent;}
+            QLabel#authNote {font-size:12px;color:#73857c;background:transparent;}
+        ''')
+        outer = QHBoxLayout(self); outer.setContentsMargins(0,0,0,0); outer.setSpacing(0)
+        brand = BrandPanel(); brand.setMinimumWidth(240); brand.setMaximumWidth(300)
+        brand_layout = QVBoxLayout(brand); brand_layout.setContentsMargins(30,44,26,32)
+        for value, size in [('有度',36),('你的本地银行助手',17)]:
+            label=QLabel(value); label.setStyleSheet(f'background:transparent;color:white;font-size:{size}px;')
+            brand_layout.addWidget(label)
+        brand_layout.addStretch()
+        note=QLabel('账户 · 卡片 · AI 对话\n每一步资金操作，都由你确认')
+        note.setStyleSheet('background:transparent;color:#e1f3e8;font-size:13px;'); note.setWordWrap(True)
+        brand_layout.addWidget(note); outer.addWidget(brand, 1)
+        form=QWidget(); form.setObjectName('authForm'); outer.addWidget(form, 2)
+        layout=QVBoxLayout(form); layout.setContentsMargins(36,30,36,24); layout.setSpacing(12)
+        title=QLabel('有度  /  本地模拟银行'); title.setObjectName('authHeading'); layout.addWidget(title)
+        self.pages=QStackedWidget(); layout.addWidget(self.pages,1)
+        login_page=QWidget(); register_page=QWidget(); onboarding_page=QWidget()
+        for page in (login_page,register_page,onboarding_page):
+            page.setObjectName('authPage'); self.pages.addWidget(page)
+        login_layout=QVBoxLayout(login_page); register_layout=QVBoxLayout(register_page)
+        onboard_layout=QVBoxLayout(onboarding_page)
+        for page_layout in (login_layout,register_layout,onboard_layout):
+            page_layout.setContentsMargins(0,14,0,0); page_layout.setSpacing(12)
+        login_layout.addWidget(QLabel('账号密码登录'))
+        register_layout.addWidget(QLabel('创建本地账号'))
         self.fields = {}
-        for key, label, secret in [('username','用户名（4–32位字母、数字或下划线）',False),
-                ('display_name','显示姓名（注册时填写）',False), ('password','登录密码（10–128位）',True),
-                ('repeat','再次输入密码（注册时填写）',True)]:
-            entry = QLineEdit(); entry.setPlaceholderText(label); entry.setAccessibleName(label)
-            entry.setMaxLength(128)
-            if secret: entry.setEchoMode(QLineEdit.EchoMode.Password)
-            self.fields[key] = entry; layout.addWidget(entry)
+        self.register_fields = {}
+        for target, page_layout, specs in (
+                (self.fields,login_layout,[('username','用户名',False),('password','登录密码',True)]),
+                (self.register_fields,register_layout,[('username','用户名：4–32位字母、数字或下划线',False),
+                    ('display_name','显示姓名',False),('password','登录密码：10–128位',True),('repeat','确认登录密码',True)])):
+            for key,label,secret in specs:
+                entry=QLineEdit(); entry.setPlaceholderText(label); entry.setAccessibleName(label); entry.setMaxLength(128)
+                if secret: entry.setEchoMode(QLineEdit.EchoMode.Password)
+                target[key]=entry; page_layout.addWidget(entry)
         self.login = QPushButton('登录'); self.login.setObjectName('primary')
-        self.register = QPushButton('注册新客户')
+        self.register = QPushButton('注册账号'); self.register.setObjectName('primary')
         self.login.clicked.connect(self.sign_in); self.register.clicked.connect(self.sign_up)
-        layout.addWidget(self.login); layout.addWidget(self.register)
+        login_layout.addWidget(self.login); login_layout.addStretch()
+        register_layout.addWidget(self.register); register_layout.addStretch()
+        self.to_register=QPushButton('还没有账号？  注册新账号 →'); self.to_register.setObjectName('authLink')
+        self.to_login=QPushButton('← 返回登录'); self.to_login.setObjectName('authLink')
+        self.to_register.clicked.connect(lambda:self.switch_page(1)); self.to_login.clicked.connect(lambda:self.switch_page(0))
+        login_layout.addWidget(self.to_register); register_layout.addWidget(self.to_login)
+        self.fields['password'].returnPressed.connect(self.sign_in)
+        self.register_fields['repeat'].returnPressed.connect(self.sign_up)
+        onboard_layout.addWidget(QLabel('欢迎使用 · 开立首个账户'))
         self.account = QLineEdit('日常账户'); self.account.setAccessibleName('首次账户名称')
         self.open_account = QPushButton('准备首次开户')
         self.approve = QPushButton('确认开户及演示入账')
@@ -73,11 +131,23 @@ class LoginWindow(QWidget):
         self.approve.clicked.connect(lambda: self.finish_account('approve'))
         self.cancel.clicked.connect(lambda: self.finish_account('reject'))
         for widget in (self.account, self.open_account, self.approve, self.cancel):
-            layout.addWidget(widget); widget.hide()
+            onboard_layout.addWidget(widget); widget.hide()
+        onboard_layout.addStretch()
         self.status = QLabel('新用户请先注册。旧演示客户暂不开放登录。')
         self.status.setWordWrap(True); self.status.setTextFormat(Qt.TextFormat.PlainText)
-        layout.addWidget(self.status); layout.addStretch()
+        self.status.setObjectName('authNote'); layout.addWidget(self.status)
+        footer=QLabel('本地模拟 · 虚构资金 · 不代表银行实名认证'); footer.setObjectName('authNote')
+        footer.setWordWrap(True); layout.addWidget(footer)
         self.delivery = Finished(self); self.delivery.result.connect(self.finished)
+
+    def switch_page(self, index):
+        if self.busy or self.pending: return
+        for fields in (self.fields,self.register_fields):
+            for key in ('password','repeat'):
+                if key in fields: fields[key].clear()
+        self.pages.setCurrentIndex(index)
+        self.status.setText('注册仅建立本地客户身份，不自动开户或入账。' if index else '新用户请先注册。旧演示客户暂不开放登录。')
+        (self.register_fields if index else self.fields)['username'].setFocus()
 
     def work(self, function, callback):
         if self.busy: return
@@ -102,21 +172,27 @@ class LoginWindow(QWidget):
             if self.bank: self.bank.status.setText(answer[1])
 
     def sign_up(self):
-        values = {k: v.text() for k,v in self.fields.items()}
+        values = {k: v.text() for k,v in self.register_fields.items()}
         if values['password'] != values.pop('repeat'):
             self.status.setText('两次登录密码不一致。'); return
-        self.fields['password'].clear(); self.fields['repeat'].clear()
+        self.register_fields['password'].clear(); self.register_fields['repeat'].clear()
         self.work(lambda: self.client.request('/auth/register', values),
-                  lambda _: self.status.setText('注册成功，请输入密码登录。尚未开户或入账。'))
+                  lambda _: self.registered(values['username']))
+
+    def registered(self, username):
+        self.switch_page(0); self.fields['username'].setText(username)
+        self.fields['password'].setFocus()
+        self.status.setText('注册成功，请输入密码登录。尚未开户或入账。')
 
     def sign_in(self):
         values = {k:self.fields[k].text() for k in ('username','password')}
-        self.fields['password'].clear(); self.fields['repeat'].clear()
+        self.fields['password'].clear()
         self.work(lambda: self.client.request('/auth/login', values), self.signed_in)
 
     def signed_in(self, result):
         self.client.token = result['token']
         if result['needs_account']:
+            self.pages.setCurrentIndex(2)
             self.status.setText('登录成功。当前没有银行账户，请先开户；确认后记入1000元演示资金。')
             self.account.show(); self.open_account.show()
         else: self.show_bank()
@@ -159,10 +235,11 @@ class LoginWindow(QWidget):
         self.client.token = None
         self.show()
         self.bank.close(); self.bank.deleteLater(); self.bank = None
-        for entry in self.fields.values(): entry.clear()
+        for fields in (self.fields,self.register_fields):
+            for entry in fields.values(): entry.clear()
         for widget in (self.account,self.open_account,self.approve,self.cancel): widget.hide()
         self.account.setReadOnly(False); self.pending = None
-        self.status.setText('已退出登录。'); self.show()
+        self.switch_page(0); self.status.setText('已退出登录。'); self.show()
 
 
 class AuthenticatedWindow(PreviewWindow):
