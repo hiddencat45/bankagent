@@ -76,5 +76,7 @@ def build_demo_data() -> dict:
         "subscriptions": subscriptions,
         "transactions": [dict(zip(fields, row)) for row in rows],
     }
+    for index, card in enumerate(data['cards'].values(), 1):
+        card['card_number'] = f'9900{index:012d}'
     validate_demo_data(data)
     return data

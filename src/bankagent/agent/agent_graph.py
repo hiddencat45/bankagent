@@ -225,6 +225,11 @@ def _followup_slots(message: str, pending: dict[str, Any]) -> dict[str, str]:
         return {}
     missing = pending["missing_fields"]
     found = {}
+    if 'contact_id' in missing or 'recipient_name' in missing:
+        from bankagent.banking.card_numbers import normalize
+        card = normalize(re.sub(r'^卡号(?:是|为)?\s*', '', message.strip()))
+        if card:
+            return {'recipient_name': card}
     amount = re.fullmatch(r"(?:金额(?:改为|是|为)?\s*)?([+\-0-9][^\s元块。！？!?；;]*)\s*(?:元|块钱|块)?[。！!]?", message.strip())
     if amount and ("amount" in missing or message.startswith("金额")):
         found["amount"] = amount.group(1)

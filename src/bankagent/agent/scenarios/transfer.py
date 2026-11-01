@@ -49,10 +49,12 @@ INTENTS: dict[str, IntentSpec] = {
 }
 
 CLARIFY_LABELS = {
-    "recipient_name": "收款人",
+    "recipient_name": "收款卡号（或已明确绑定的联系人）",
     "amount": "金额",
-    "contact_id": "通讯录中的有效收款人",
+    "contact_id": "有效的本地收款卡号；请核对卡号，不能向当前付款账户转账",
 }
+
+TOOL_DESCRIPTIONS = {'TRANSFER': '向本地模拟借记卡转账，recipient_name填写用户提供的完整收款卡号（字符串，保留前导零）。姓名不能唯一确定收款卡时追问卡号，保留已提供金额；不得编造卡号或内部引用。确认和交易密码由服务端处理。'}
 
 # 金额允许的最大小数位。超过即拒绝，不做四舍五入——资金计算不能悄悄改数。
 _MAX_DECIMAL_PLACES = 2
@@ -206,8 +208,11 @@ def confirmation(*, operation: str, params: dict, candidate_params: dict,
     if recipient is None:
         raise ValueError("收款人绑定已失效，无法生成确认卡")
 
+    from bankagent.banking.card_numbers import normalize
+    number = normalize(name)
     return {
         "recipient": recipient,
+        **({'recipient_input': number} if number else {}),
         "amount_minor": params.get("amount_minor"),
         "currency": params.get("currency"),
     }

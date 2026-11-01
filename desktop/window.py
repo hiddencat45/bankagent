@@ -238,7 +238,7 @@ class BankWindow(QMainWindow):
             '查询限额': 'QUERY_CARD_LIMITS', '设置限额': 'SET_CARD_LIMITS'}
         name, ok = QInputDialog.getText(self, action, '账户名称：' if action == '开户' else
                                        '虚构客户名称（勿填写真实身份资料）：' if action == '创建演示客户' else
-                                       '收款联系人或本人账户名称：' if action == '转账' else '卡片名称：',
+                                       '收款模拟卡号（16位）：' if action == '转账' else '卡片名称：',
                                        text=next((defaults[k] for k in ('display_name', 'customer_name', 'recipient_name', 'card_name') if k in defaults), ''))
         if not ok:
             return

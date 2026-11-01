@@ -1,6 +1,7 @@
 """Atomic batch is a list candidate over the existing transfer service, not a second ledger."""
 from bankagent.agent.scenarios import transfer
 from bankagent.banking import bank_backend
+from bankagent.banking.card_numbers import normalize
 from bankagent.banking.bank_types import YELLOW_DAILY_LIMIT_MINOR
 
 SCENARIO = 'batch_transfer'
@@ -16,6 +17,7 @@ CANDIDATE_SCHEMA = {'items': {'type': 'array', 'minItems': 2, 'maxItems': 10, 'i
     'additionalProperties': False}}}
 CLARIFY_LABELS = {'items': '转账列表'}
 TOOL_DESCRIPTIONS = {'QUERY_TRANSFER_BATCHES': '查询当前账户持久化的批量转账回执，包含完整收款列表、总额、整批提交结果及各项状态；重启后也可核对。'}
+TOOL_DESCRIPTIONS['BATCH_TRANSFER'] = '向多张本地模拟卡批量转账，每项recipient_name填写完整卡号字符串，保留金额。姓名不足以确定卡时追问卡号。整批一次确认认证，全有或全无。'
 
 
 def validate_candidates(args):
@@ -81,7 +83,7 @@ def execute(operation, params, context):
 def rejected_result(params, candidate_params, code):
     return {'operation': 'BATCH_TRANSFER', 'status': 'REJECTED', 'error_code': code,
             'data': {'atomic': True, 'committed': False, 'currency': 'CNY',
-                     'items': [{'recipient': candidate.get('recipient_name', '未指定'),
+                     'items': [{'recipient': ('尾号' + normalize(candidate['recipient_name'])[-4:]) if normalize(candidate.get('recipient_name')) else candidate.get('recipient_name', '未指定'),
                                 'amount_minor': row.get('amount_minor', 0),
                                 'status': 'NOT_EXECUTED', 'error_code': code}
                                for row, candidate in zip(params.get('items', []), candidate_params.get('items', []))]}}

@@ -319,6 +319,7 @@ def transfer_confirmation(frames):
         raise ValueError('confirmation mismatch')
     fields = ('items', 'total_minor', 'atomic', 'operation') if batch else ('amount_minor',)
     return {**{key: card[key] for key in (*required, *fields, 'currency', 'risk_level')},
+            **({'recipient_input': card['recipient_input']} if not batch and isinstance(card.get('recipient_input'), str) else {}),
             'thread_id': frames[0][1]['thread_id'], 'request_id': frames[0][1]['request_id']}
 
 

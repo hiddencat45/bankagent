@@ -54,8 +54,10 @@ def test_transfer_to_own_account_uses_same_ledger(setup):
 
 
 def test_transfer_disk_failure_rolls_back_both_sides(setup, monkeypatch):
+    from copy import deepcopy
     bank, grant, _ = setup
     b, params = bank(), transfer_args()
+    before = deepcopy(b._data)
     ctx = grant('TRANSFER', params)
     save = b._store.save
     def fail(db, data, completed):
@@ -64,7 +66,7 @@ def test_transfer_disk_failure_rolls_back_both_sides(setup, monkeypatch):
     monkeypatch.setattr(b._store, 'save', fail)
     with pytest.raises(sqlite3.OperationalError):
         b.execute_transfer(context=ctx, **params)
-    assert bank()._data == build_demo_data()
+    assert bank()._data == before  # Includes persisted card numbers from the migration.
     assert bank()._completed == {}
     assert bank().execute_transfer(context=ctx, **params)['status'] == 'COMPLETED'
 

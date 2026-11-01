@@ -36,6 +36,8 @@ class BankBackend(LifecycleMixin):
         self._hash = operation_hash
         self._clock = clock or (lambda: datetime.now(timezone(timedelta(hours=8))))
         self._data = deepcopy(data_factory())
+        from bankagent.banking.card_numbers import fill_missing
+        fill_missing(self._data.get('cards', {}))
         self._completed = {}
         self._store = None
         self._allow_demo_customers = allow_demo_customers
@@ -118,7 +120,7 @@ class BankBackend(LifecycleMixin):
             recipients += [{'display_name': row.get('display_name', '默认演示账户'), 'kind': '本人账户'}
                            for key, row in self._data['accounts'].items()
                            if row['user_id'] == context.user_id and key != context.account_id]
-            cards = [{'display_name': row['display_name'], 'status': row['status']}
+            cards = [{'display_name': row['display_name'], 'status': row['status'], 'card_number': row.get('card_number')}
                      for row in self._data['cards'].values() if row['account_id'] == context.account_id]
             return _result('DESKTOP_OBJECTS', {'recipients': recipients, 'cards': cards})
 
@@ -128,6 +130,19 @@ class BankBackend(LifecycleMixin):
                 raise PermissionError("ACCOUNT_NOT_ACCESSIBLE")
             if not isinstance(name, str) or not name.strip():
                 return []
+            from bankagent.banking.card_numbers import normalize
+            number = normalize(name)
+            if number:
+                matches = [(key, row) for key, row in self._data['cards'].items() if row.get('card_number') == number]
+                if len(matches) != 1: return []
+                key, card = matches[0]
+                target = card['account_id']
+                account = self._data['accounts'].get(target)
+                if not account or target == context.account_id: return []
+                customer = self._data.get('customers', {}).get(account['user_id'], {})
+                label = customer.get('display_name') or {'user-001':'默认演示客户','user-002':'张伟','user-003':'李娜'}.get(account['user_id'])
+                if not label: return []
+                return [{'contact_id': f'card:{key}:{target}:{number}', 'display_name': label + ' · 尾号' + number[-4:]}]
             contacts = [{"contact_id": key, "display_name": row["display_name"]}
                     for key, row in sorted(self._data["contacts"].items())
                     if row["user_id"] == context.user_id and row["display_name"] == name.strip()]
@@ -138,6 +153,18 @@ class BankBackend(LifecycleMixin):
             return contacts + own
 
     def _transfer_contact(self, context, contact_id):
+        if contact_id.startswith('card:'):
+            parts = contact_id.split(':')
+            if len(parts) != 4: return None
+            _, key, account, number = parts
+            matches = [(cid, card) for cid, card in self._data['cards'].items() if card.get('card_number') == number]
+            if len(matches) != 1 or matches[0][0] != key or matches[0][1]['account_id'] != account: return None
+            target = self._data['accounts'].get(account)
+            if not target or account == context.account_id: return None
+            name = self._data.get('customers', {}).get(target['user_id'], {}).get('display_name') or {'user-001':'默认演示客户','user-002':'张伟','user-003':'李娜'}.get(target['user_id'])
+            if not name: return None
+            return {'display_name': name + ' · 尾号' + number[-4:], 'user_id': context.user_id,
+                    'recipient_account_id': account}
         if contact_id.startswith('own:'):
             target = contact_id[4:]
             row = self._data['accounts'].get(target)
@@ -187,7 +214,9 @@ class BankBackend(LifecycleMixin):
                     return {}
                 contact = next((c for c in self._data.get('contacts', {}).values()
                     if c['user_id'] == context.user_id and c.get('recipient_account_id') == target), None)
-                name = contact['display_name'] if contact else self._data['accounts'].get(target, {}).get('display_name', '对方账户')
+                account = self._data['accounts'].get(target, {})
+                customer = self._data.get('customers', {}).get(account.get('user_id'), {})
+                name = contact['display_name'] if contact else customer.get('display_name', account.get('display_name', '对方账户'))
                 return {'counterparty_name': name}
             data = {"start": start.isoformat(), "end": end.isoformat(),
                     "currency": SUPPORTED_CURRENCY, "total_minor": sum(categories.values()),

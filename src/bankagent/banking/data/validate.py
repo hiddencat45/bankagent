@@ -56,8 +56,12 @@ def validate_demo_data(data: dict) -> None:
     _require(isinstance(cards, dict), "cards must be a mapping")
     for card_id, card in cards.items():
         _require(_text(card_id) and isinstance(card, dict), "invalid card")
-        _require(set(card) == {"account_id", "display_name", "status"},
+        _require(set(card) in ({"account_id", "display_name", "status"}, {"account_id", "display_name", "status", "card_number"}),
                  "unexpected card fields")
+        if 'card_number' in card:
+            from bankagent.banking.card_numbers import normalize
+            _require(normalize(card['card_number']) == card['card_number'] and card['card_number'] is not None, 'invalid card number')
+            _require(sum(c.get('card_number') == card['card_number'] for c in cards.values()) == 1, 'duplicate card number')
         _require(card["account_id"] in accounts, "unknown card account")
         _require(_text(card["display_name"]), "card display name required")
         _require(card["status"] in {"ACTIVE", "FROZEN"}, "invalid card status")
