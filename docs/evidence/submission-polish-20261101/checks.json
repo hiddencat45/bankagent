@@ -1,0 +1,13 @@
+{
+  "code_revision": "1dffb2b77d9b59032602067a8a45c2cc321bd502",
+  "gate": "scripts/check.ps1",
+  "python_passed": 870,
+  "python_seconds": 150.86,
+  "node_passed": 46,
+  "pip_check": "No broken requirements found",
+  "http_smoke": "passed before final layout-only fix",
+  "first_attempt": {"passed": 869, "failed": 1, "failure": "compact assistant confirmation overlap; fixed without weakening assertion"},
+  "visual_regression": "compact table clipping identified after green gate; fixed and added bounds assertion",
+  "daily_ledger": "not used by verification",
+  "real_phone": "not verified"
+}

@@ -1,0 +1,26 @@
+{
+  "mode": "offline rules",
+  "transport": "real TCP HTTP",
+  "ledger": "temporary SQLite",
+  "cases": [
+    {
+      "name": "ledger filters / month / reset / details",
+      "status": "COMPLETED"
+    },
+    {
+      "name": "ordinary form prepare and cancel",
+      "status": "COMPLETED",
+      "balance_minor": 400000
+    }
+  ],
+  "logical_size": [
+    1283,
+    720
+  ],
+  "scale": 1.5,
+  "platform": "windows",
+  "source_balance_minor": 400000,
+  "recipient_balance_minor": 600000,
+  "final_balance_minor": 400000,
+  "status": "COMPLETED"
+}

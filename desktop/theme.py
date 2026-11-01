@@ -94,7 +94,37 @@ QDialog QPushButton:default {background:#195440;color:white;}
 QDialog QDialogButtonBox {background:transparent;}
 QLabel#dialogHeading {font-size:22px;font-weight:600;color:#174f3d;padding-bottom:12px;}
 QLabel#dialogSummary {background:white;border:1px solid #dce6df;border-radius:10px;padding:18px;}
+/* Submission ledger: hierarchy, aligned data, and a persistent details panel. */
+QWidget {font-family:"Microsoft YaHei";font-size:14px;color:#172b24;}
+QLabel#title {font-size:28px;font-weight:700;color:#101e19;}
+QWidget#rail QLabel#brand {font-size:30px;font-weight:700;padding-top:10px;}
+QLabel#identityName {font-size:14px;font-weight:600;padding:8px 12px;}
+QWidget#rail QPushButton#navigation:checked {background:#1d5843;border-left:3px solid #43c78a;border-radius:7px;}
+QWidget#rail QPushButton#navigation {font-size:16px;}
+QFrame#ledgerList {background:white;border:1px solid #e3e8e4;border-radius:12px;}
+QFrame#ledgerList QLabel {background:transparent;}
+QFrame#ledgerSummary {background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #064b38,stop:1 #003328);border-radius:12px;}
+QLabel#ledgerTotal {font-size:23px;font-weight:600;color:white;background:transparent;padding:0 12px;}
+QLabel#summaryIcon {background:#286653;color:white;font-size:29px;border-radius:24px;}
+QFrame#summaryDivider {background:#527a68;margin:10px 14px;}
+QPushButton#ledgerAccount {background:white;border:1px solid #dce3de;padding:12px 16px;color:#17392b;}
+QTableWidget#ledgerTable {background:white;border:0;border-radius:0;padding:0;gridline-color:transparent;}
+QPushButton#ledgerTab {background:#f3f5f3;color:#233e30;padding:10px 24px;}
+QPushButton#ledgerTab:checked {background:#064b38;color:white;}
+QTableWidget#ledgerTable::item {padding:8px 5px;border-bottom:1px solid #edf0ed;}
+QTableWidget#ledgerTable QHeaderView::section {font-size:12px;background:#f5f7f5;color:#667069;padding:12px 5px;}
+QLabel#detailMark {background:#def5e6;border-radius:27px;color:#128146;font-size:32px;font-weight:600;}
+QFrame#transactionInspector QLabel#detailMark {background:#def5e6;}
+QTableWidget QWidget#statusCell {background:transparent;}
+QTableWidget QLabel#ledgerStatus {background:#e0f3e7;color:#177341;border-radius:6px;font-size:12px;}
+QLabel#detailAmount {font-size:27px;font-weight:700;color:#101e19;padding:4px 0 18px 0;}
+QFrame#transactionInspector QLabel#muted {font-size:13px;color:#79817b;}
+QFrame#transactionInspector QPlainTextEdit {font-size:12px;background:#f6f8f6;}
 '''
+
+
+from pathlib import Path
+STYLE += 'QComboBox::down-arrow,QDateEdit::down-arrow {width:16px;height:16px;image:url("' + (Path(__file__).resolve().parent / 'assets/chevron-down.svg').as_posix() + '");}'
 
 
 def load_chinese_font():
