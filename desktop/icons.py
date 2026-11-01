@@ -8,7 +8,17 @@ def icon(kind, size=24, color='#42755b'):
     painter = QPainter(pixmap); painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.scale(size/12, size/12)
     painter.setPen(QPen(QColor(color), 1.5)); painter.setBrush(Qt.BrushStyle.NoBrush)
-    if kind == 'check':
+    if kind == 'avatar':
+        painter.setPen(Qt.PenStyle.NoPen); painter.setBrush(QColor('#cee4da')); painter.drawEllipse(1,1,22,22)
+        painter.setBrush(QColor('#0c4936')); painter.drawEllipse(8,4,8,8); painter.drawRoundedRect(5,13,14,9,5,5)
+    elif kind == 'search':
+        painter.drawEllipse(3,3,12,12); painter.drawLine(14,14,21,21)
+    elif kind == 'filter':
+        for y,left,right in ((5,3,21),(11,6,18),(17,10,14)):painter.drawLine(left,y,right,y)
+    elif kind == 'calendar':
+        painter.drawRoundedRect(3,5,18,16,2,2); painter.drawLine(3,10,21,10)
+        painter.drawLine(8,2,8,7); painter.drawLine(16,2,16,7)
+    elif kind == 'check':
         painter.drawLine(4,12,10,18); painter.drawLine(10,18,21,6)
     elif kind in {'incoming','outgoing'}:
         painter.drawLine(12,4,12,20)

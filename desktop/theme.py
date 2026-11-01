@@ -97,7 +97,7 @@ QLabel#dialogSummary {background:white;border:1px solid #dce6df;border-radius:10
 /* Submission ledger: hierarchy, aligned data, and a persistent details panel. */
 QWidget {font-family:"Microsoft YaHei";font-size:14px;color:#172b24;}
 QLabel#title {font-size:28px;font-weight:700;color:#101e19;}
-QWidget#rail QLabel#brand {font-size:30px;font-weight:700;padding-top:10px;}
+QWidget#rail QLabel#brand {font-size:28px;font-weight:700;padding:0;}
 QLabel#identityName {font-size:14px;font-weight:600;padding:8px 12px;}
 QWidget#rail QPushButton#navigation:checked {background:#1d5843;border-left:3px solid #43c78a;border-radius:7px;}
 QWidget#rail QPushButton#navigation {font-size:16px;}
@@ -120,21 +120,32 @@ QTableWidget QLabel#ledgerStatus {background:#e0f3e7;color:#177341;border-radius
 QLabel#detailAmount {font-size:27px;font-weight:700;color:#101e19;padding:4px 0 18px 0;}
 QFrame#transactionInspector QLabel#muted {font-size:13px;color:#79817b;}
 QFrame#transactionInspector QPlainTextEdit {font-size:12px;background:#f6f8f6;}
+QWidget#rail QLabel#railFooter {color:#749e8c;font-size:12px;background:transparent;line-height:1.6;}
+QPushButton#profileMenu {background:transparent;color:#152b22;padding:8px 12px;}
+QPushButton#profileMenu:hover {background:#e5eee8;}
+QFrame#detailDivider {background:#e8ede9;}
+QFrame#ledgerSegments {background:#f3f5f3;border-radius:10px;}
+QLabel#detailAmount {font-size:29px;font-weight:700;}
+QTableWidget#ledgerTable:focus {border:1px solid #9ebead;}
+QWidget {font-family:"Microsoft YaHei UI";}
 '''
 
 
 from pathlib import Path
 STYLE += 'QComboBox::down-arrow,QDateEdit::down-arrow {width:16px;height:16px;image:url("' + (Path(__file__).resolve().parent / 'assets/chevron-down.svg').as_posix() + '");}'
+STYLE += 'QFrame#ledgerSummary {border-image:url("' + (Path(__file__).resolve().parent / 'assets/summary-forest.svg').as_posix() + '") 0 0 0 0 stretch stretch;}'
 
 
 def load_chinese_font():
     """Register the bundled Windows font when Qt's fallback misses the system family."""
     import os
     from pathlib import Path
-    from PySide6.QtGui import QFontDatabase
+    from PySide6.QtGui import QFontDatabase, QFont
+    from PySide6.QtWidgets import QApplication
     if getattr(load_chinese_font, 'loaded', False):
         return
     path = Path(os.environ.get('WINDIR', 'C:/Windows')) / 'Fonts/msyh.ttc'
     if path.exists():
         QFontDatabase.addApplicationFont(str(path))
+    QApplication.setFont(QFont('Microsoft YaHei UI',10))
     load_chinese_font.loaded = True

@@ -49,6 +49,13 @@ def test_ledger_filters_orb_transfer_refresh_identity_and_failure(tmp_path,monke
         from PySide6.QtCore import QPoint
         bounds=bills.table.rect().translated(bills.table.mapTo(bills.list_card,QPoint(0,0)))
         assert bills.list_card.rect().contains(bounds), 'Compact list clips its transaction table'
+        header_position=bills.header.mapTo(window.centralWidget(),QPoint(0,0))
+        window.main_scroll.verticalScrollBar().setValue(window.main_scroll.verticalScrollBar().maximum())
+        qt.processEvents()
+        assert bills.header.mapTo(window.centralWidget(),QPoint(0,0))==header_position
+        assert bills.header.isVisible() and bills.account_button.isVisible()
+        assert not window.customer_picker.isVisible() and not window.context_account.isVisible()
+        window.main_scroll.verticalScrollBar().setValue(0)
         bills.details(0)
         assert bills.rows[0]['transaction_id'] in bills.refs.toPlainText()
         bills.refs_toggle.click(); assert bills.refs.isVisible()

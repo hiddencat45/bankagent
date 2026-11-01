@@ -23,8 +23,9 @@ class AssistantOrb(QPushButton):
         glass.setColorAt(.5,QColor('#89b79a'))
         glass.setColorAt(1,QColor('#2d6850' if self.isDown() else '#50866c'))
         painter.setBrush(glass); painter.setPen(QPen(QColor(255,255,255,210),1.5)); painter.drawEllipse(4,3,56,56)
-        sparkle=QPainterPath(); sparkle.moveTo(32,17)
-        for x,y in [(36,28),(47,32),(36,36),(32,47),(28,36),(17,32),(28,28)]:sparkle.lineTo(x,y)
-        sparkle.closeSubpath(); painter.fillPath(sparkle,QColor(255,255,255,235))
+        painter.setPen(Qt.PenStyle.NoPen); painter.setBrush(QColor('#086347'))
+        painter.drawRoundedRect(15,18,34,29,12,12)
+        painter.setBrush(QColor('#e1fff1'))
+        painter.drawRoundedRect(24,27,4,11,2,2); painter.drawRoundedRect(36,27,4,11,2,2)
         if self.hasFocus():
             painter.setBrush(Qt.BrushStyle.NoBrush); painter.setPen(QPen(QColor('#16725b'),2)); painter.drawEllipse(1,1,62,62)

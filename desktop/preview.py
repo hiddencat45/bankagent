@@ -1,6 +1,8 @@
 """Native business workspace reusing BankWindow's session and confirmation controller."""
 import re
 from decimal import Decimal
+from pathlib import Path
+from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt, QTimer, QSize
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox, QStackedWidget, QScrollArea, QLineEdit, QComboBox, QListWidget,
@@ -61,8 +63,13 @@ class PreviewWindow(BankWindow):
         nav = QVBoxLayout(rail)
         nav.setContentsMargins(18, 26, 18, 20)
         nav.setSpacing(12)
-        nav.addWidget(text('有度', 'brand'))
-        nav.addWidget(text('更懂你的银行 AI', 'muted'))
+        brand_row=QHBoxLayout(); brand_row.setSpacing(10)
+        brand_mark=QLabel(); brand_mark.setPixmap(QIcon(str(Path(__file__).parent/'assets/youdu-brand.svg')).pixmap(40,40))
+        brand_row.addWidget(brand_mark)
+        brand_copy=QVBoxLayout(); brand_copy.setSpacing(0)
+        brand_copy.addWidget(text('有度','brand')); brand_copy.addWidget(text('更懂你的银行 AI','muted'))
+        brand_row.addLayout(brand_copy); brand_row.addStretch(); nav.addLayout(brand_row)
+        nav.addSpacing(28)
         self.overview_nav = QPushButton('账户概览')
         self.transfer_nav = QPushButton('转账')
         self.ledger_nav = QPushButton('交易记录')
@@ -87,13 +94,14 @@ class PreviewWindow(BankWindow):
         self.account_picker.setObjectName('accountPicker')
         self.account_picker.clicked.connect(lambda: self.show_context_menu('account'))
         card_layout.addWidget(self.account_picker)
-        nav.addWidget(account_card)
+        account_card.setParent(self.legacy_root); account_card.hide()
         self.customer_picker = QPushButton('演示客户正在读取…')
         self.customer_picker.setObjectName('customerPicker')
         self.customer_picker.setAccessibleName('切换演示客户')
         self.customer_picker.clicked.connect(lambda: self.show_context_menu('customer'))
-        nav.addWidget(self.customer_picker)
-        nav.addWidget(text('本地模拟环境 · 虚构数据', 'muted'))
+        self.customer_picker.setParent(self.legacy_root); self.customer_picker.hide()
+        nav.addWidget(text('—','railFooter'))
+        nav.addWidget(text('有度银行\n安全 · 专业 · 陪伴','railFooter'))
         outer.addWidget(rail)
         body = QWidget()
         layout = QVBoxLayout(body)
@@ -101,18 +109,22 @@ class PreviewWindow(BankWindow):
         layout.setSpacing(14)
         identity = QHBoxLayout()
         self.context_heading = text('正在读取当前客户与账户…')
-        identity.addWidget(self.context_heading, 1)
+        self.context_heading.hide()
+        identity.addWidget(self.account_picker)
+        self.account_picker.setObjectName('ledgerAccount')
+        identity.addStretch(1)
         self.connection_state = text('尚未连接', 'muted')
         identity.addWidget(self.connection_state)
         self.identity_name=text('正在读取身份…', 'identityName')
-        identity.addWidget(self.identity_name)
+        self.identity_name.hide()
         self.refresh_accounts.setText('刷新')
         self.refresh_accounts.setIcon(icon('refresh'))
         self.refresh_accounts.setObjectName('quietAction')
         self.refresh_accounts.setToolTip('刷新当前账户、卡与账单')
         identity.addWidget(self.refresh_accounts)
         self.more_actions = QPushButton('···')
-        self.more_actions.setObjectName('quietAction')
+        self.more_actions.setObjectName('profileMenu')
+        self.more_actions.setIcon(icon('avatar',26)); self.more_actions.setIconSize(QSize(26,26))
         self.more_actions.setAccessibleName('更多操作')
         self.more_actions.setToolTip('更多操作：重新连接')
         self.more_actions.clicked.connect(self.show_connection_menu)
@@ -136,6 +148,7 @@ class PreviewWindow(BankWindow):
         self.bills_page.requested.connect(self.load_ledger)
         self.bills_page.geometry_changed.connect(lambda:QTimer.singleShot(0,self.fit_page))
         self.bills_page.account_button.clicked.connect(lambda:self.show_context_menu('account',self.bills_page.account_button))
+        layout.insertWidget(1,self.bills_page.header)
         self.pages.addWidget(self.bills_page)
         main_layout.addWidget(self.pages)
         self.confirmation.setTitle('')
@@ -239,6 +252,7 @@ class PreviewWindow(BankWindow):
         action = menu.addAction('重新连接张伟' if self.client.startup_customer == 'zhang-wei' else '重新连接启动客户')
         action.setEnabled(self.reconnect.isEnabled())
         action.triggered.connect(self.reconnect.click)
+        menu.addAction('切换演示客户').triggered.connect(lambda:self.show_context_menu('customer',self.more_actions))
         menu.popup(self.more_actions.mapToGlobal(self.more_actions.rect().bottomLeft()))
 
     def update_context(self):
@@ -476,6 +490,8 @@ class PreviewWindow(BankWindow):
         self.overview_nav.setChecked(index == 0)
         self.transfer_nav.setChecked(index == 1)
         self.ledger_nav.setChecked(index == 2)
+        self.bills_page.header.setVisible(index==2)
+        self.account_picker.setVisible(index!=2)
         for i in range(self.pages.count()):
             self.pages.widget(i).setSizePolicy(QSizePolicy.Policy.Preferred,
                 QSizePolicy.Policy.Preferred if i == index else QSizePolicy.Policy.Ignored)
@@ -541,11 +557,13 @@ class PreviewWindow(BankWindow):
         self.bills_page.month.setEnabled(not self.busy)
         self.bills_page.account_button.setEnabled(bool(self.snapshot) and not self.busy and not self.pending and not self.uncertain)
         self.identity_name.setText(self.current_customer.text().removeprefix('当前演示客户：').replace('（演示客户）','').strip())
+        self.more_actions.setText(self.identity_name.text()+'  ⌄')
         self.update_context()
         if hasattr(self, "assistant_box"):
             self.assistant_box.sync()
         self.fit_page()
         self.status.setProperty('state', 'pending' if self.pending else 'error' if self.blocked or self.uncertain else 'normal')
+        self.status.setVisible(self.status.text() not in {'账户已更新','账单已更新 · 当前账户实际账本'})
         self.status.style().unpolish(self.status)
         self.status.style().polish(self.status)
 
@@ -731,6 +749,8 @@ class PreviewWindow(BankWindow):
             current = next(a for a in result['accounts'] if a['account_ref'] == actor[1])
             card=current.get('transfer_card')
             self.bills_page.account_button.setText((card['display_name']+' · 尾号'+card['last4'] if card else current['display_name'])+'  切换')
+            self.account_picker.setText(self.bills_page.account_button.text())
+            self.account_picker.setIcon(icon('card'))
             self.current_account.setText('当前账户：' + current['display_name'])
             self.ai_context.setText(self.current_customer.text() + '\n当前账户：' + current['display_name'])
             self.balance_value.setText('¥ ' + money(current['balance_minor']))

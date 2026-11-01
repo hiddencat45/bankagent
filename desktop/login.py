@@ -228,7 +228,7 @@ class LoginWindow(QWidget):
     def show_bank(self):
         self.pending = None
         self.bank = AuthenticatedWindow(self)
-        self.bank.statusBar().showMessage('当前账本：' + self.ledger_path)
+        self.bank.statusBar().showMessage('本地模拟账本 · 非真实资金')
         self.bank.show(); self.hide()
 
     def logged_out(self):
@@ -275,6 +275,7 @@ class AuthenticatedWindow(PreviewWindow):
     def show_connection_menu(self):
         menu = QMenu(self)
         menu.addAction('安全分级说明').triggered.connect(self.show_security_levels)
+        menu.addAction('诊断信息').triggered.connect(self.show_diagnostics)
         security = menu.addAction('绑定手机验证器')
         security.setEnabled(not self.busy and not self.uncertain)
         security.triggered.connect(self.bind_authenticator)
@@ -283,6 +284,15 @@ class AuthenticatedWindow(PreviewWindow):
         action.triggered.connect(lambda: self.shell.work(lambda: self.client.request('/auth/logout', {}),
                                                         lambda _: self.shell.logged_out()))
         menu.exec(self.more_actions.mapToGlobal(self.more_actions.rect().bottomLeft()))
+
+    def show_diagnostics(self):
+        dialog=QDialog(self); dialog.setWindowTitle('本地账本诊断'); dialog.resize(560,180)
+        layout=QVBoxLayout(dialog)
+        label=QLabel('当前账本：\n'+(self.shell.ledger_path or '自动验收临时账本'))
+        label.setTextFormat(Qt.TextFormat.PlainText); label.setWordWrap(True)
+        label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse); layout.addWidget(label)
+        close=QPushButton('关闭'); close.clicked.connect(dialog.accept); layout.addWidget(close)
+        dialog.exec()
 
     def show_security_levels(self):
         dialog = QDialog(self); dialog.setWindowTitle('安全分级 · 权限与风险'); dialog.resize(540, 420)

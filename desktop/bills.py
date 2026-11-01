@@ -4,11 +4,17 @@ from PySide6.QtCore import Qt, QDate, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QLineEdit, QDateEdit, QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView, QFrame, QPlainTextEdit, QBoxLayout, QScrollArea, QGridLayout)
+    QAbstractItemView, QFrame, QPlainTextEdit, QBoxLayout, QScrollArea, QGridLayout, QStyledItemDelegate, QStyle)
 from desktop.client import money
 from desktop.icons import icon
 
 KINDS = {'INCOME':'入账', 'TRANSFER_IN':'转入', 'EXPENSE':'消费', 'TRANSFER_OUT':'转出'}
+
+class LedgerDelegate(QStyledItemDelegate):
+    def paint(self,painter,option,index):
+        # Keyboard selection remains visible as a full row and a focused table border.
+        option.state &= ~QStyle.StateFlag.State_HasFocus
+        super().paint(painter,option,index)
 
 class BillsPage(QWidget):
     requested = Signal()
@@ -23,13 +29,13 @@ class BillsPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0,0,0,0)
         layout.setSpacing(16)
-        header=QHBoxLayout()
+        self.header=QWidget(); header=QHBoxLayout(self.header); header.setContentsMargins(0,8,0,12)
         title = QLabel('交易记录'); title.setObjectName('title'); header.addWidget(title)
         subtitle=QLabel('查询和管理您的账户交易明细'); subtitle.setObjectName('muted'); header.addWidget(subtitle)
         header.addStretch()
         self.account_button=QPushButton('正在读取卡片…'); self.account_button.setIcon(icon('card'))
         self.account_button.setObjectName('ledgerAccount'); self.account_button.setAccessibleName('切换账单账户')
-        header.addWidget(self.account_button); layout.addLayout(header)
+        header.addWidget(self.account_button)
         summary = QFrame(); summary.setObjectName('ledgerSummary')
         totals = QHBoxLayout(summary); totals.setContentsMargins(22,20,22,20); self.totals=[]
         for i,symbol in enumerate(('incoming','outgoing','card')):
@@ -43,10 +49,13 @@ class BillsPage(QWidget):
         self.list_card=QFrame(); self.list_card.setObjectName('ledgerList')
         listing=QVBoxLayout(self.list_card); listing.setContentsMargins(18,18,18,16); listing.setSpacing(16)
         tabs = QHBoxLayout()
+        segments=QFrame(); segments.setObjectName('ledgerSegments')
+        segment_layout=QHBoxLayout(segments); segment_layout.setContentsMargins(0,0,0,0); segment_layout.setSpacing(0)
         self.all_tab, self.expense_tab = QPushButton('全部交易'), QPushButton('消费账单')
         for button in (self.all_tab, self.expense_tab):
             button.setObjectName('ledgerTab')
-            button.setCheckable(True); tabs.addWidget(button)
+            button.setCheckable(True); segment_layout.addWidget(button)
+        tabs.addWidget(segments)
         tabs.addStretch()
         self.month=QComboBox(); self.month.setAccessibleName('账单月份'); self.month.setMinimumWidth(155)
         self.month.currentIndexChanged.connect(self.choose_month); tabs.addWidget(self.month)
@@ -62,16 +71,22 @@ class BillsPage(QWidget):
         listing.addWidget(self.date_range); self.date_range.hide()
         filters=QHBoxLayout()
         self.search = QLineEdit(); self.search.setPlaceholderText('搜索商户或对方'); self.search.setAccessibleName('搜索商户或对方')
-        self.search.setMinimumWidth(130); filters.addWidget(self.search,1)
+        self.search.setMinimumWidth(130); self.search.setMaximumWidth(300)
+        self.search.addAction(icon('search'),QLineEdit.ActionPosition.LeadingPosition)
+        filters.addWidget(self.search,2,Qt.AlignmentFlag.AlignBottom)
         self.kind, self.category = QComboBox(), QComboBox()
         self.kind.addItem('全部类型','')
         for key,value in KINDS.items(): self.kind.addItem(value,key)
         self.kind.setAccessibleName('交易类型'); self.category.setAccessibleName('交易分类')
         self.category.addItem('全部分类','')
-        filters.addWidget(self.kind); filters.addWidget(self.category)
+        for field,title in ((self.kind,'交易类型'),(self.category,'交易分类')):
+            column=QVBoxLayout(); column.setSpacing(4)
+            caption=QLabel(title); caption.setObjectName('muted'); column.addWidget(caption); column.addWidget(field)
+            filters.addLayout(column,1)
         self.query, self.reset = QPushButton('筛选'), QPushButton('重置筛选')
         self.query.setObjectName('primary')
-        self.reset.setObjectName('quietAction'); filters.addWidget(self.query); listing.addLayout(filters)
+        self.query.setIcon(icon('filter',18,'#ffffff'))
+        self.reset.setObjectName('quietAction'); filters.addWidget(self.query,0,Qt.AlignmentFlag.AlignBottom); listing.addLayout(filters)
         self.query.clicked.connect(self.requested.emit); self.reset.clicked.connect(self.reset_filters)
         self.search.returnPressed.connect(self.apply_filters)
         self.kind.currentIndexChanged.connect(self.apply_filters); self.category.currentIndexChanged.connect(self.apply_filters)
@@ -79,6 +94,7 @@ class BillsPage(QWidget):
         note=QLabel('汇总对应当前筛选 · 入账包含转入，转出不含商户消费'); note.setObjectName('muted'); note.setWordWrap(True); listing.addWidget(note)
         self.table=QTableWidget(0,7)
         self.table.setObjectName('ledgerTable')
+        self.table.setItemDelegate(LedgerDelegate(self.table))
         self.table.setHorizontalHeaderLabels(['交易时间','对方 / 商户','类型','分类','金额（元）','状态','操作'])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -111,6 +127,7 @@ class BillsPage(QWidget):
         detail_layout.addWidget(self.detail_body)
         self.detail_amount=QLabel('—'); self.detail_amount.setObjectName('detailAmount'); self.detail_amount.setAlignment(Qt.AlignmentFlag.AlignCenter)
         detail_layout.addWidget(self.detail_amount)
+        divider=QFrame(); divider.setObjectName('detailDivider'); divider.setFixedHeight(1); detail_layout.addWidget(divider)
         fields=QGridLayout(); fields.setVerticalSpacing(18); self.detail_values={}
         for index,name in enumerate(('交易时间','交易类型','交易状态','对方 / 商户','交易分类','备注')):
             caption=QLabel(name); caption.setObjectName('muted'); fields.addWidget(caption,index,0)
@@ -119,6 +136,7 @@ class BillsPage(QWidget):
             value.setAlignment(Qt.AlignmentFlag.AlignRight|Qt.AlignmentFlag.AlignVCenter)
             fields.addWidget(value,index,1); self.detail_values[name]=value
         detail_layout.addLayout(fields); detail_layout.addStretch()
+        divider=QFrame(); divider.setObjectName('detailDivider'); divider.setFixedHeight(1); detail_layout.addWidget(divider)
         self.refs=QPlainTextEdit(); self.refs.setReadOnly(True); self.refs.setMaximumHeight(120); self.refs.hide()
         self.refs_toggle=QPushButton('展开流水编号'); self.refs_toggle.setCheckable(True); self.refs_toggle.toggled.connect(self.refs.setVisible)
         self.refs_toggle.toggled.connect(self.geometry_changed.emit)
@@ -143,7 +161,7 @@ class BillsPage(QWidget):
         self.month.blockSignals(True); self.month.clear()
         base=QDate.fromString(self.default_range[0],'yyyy-MM-dd'); base=QDate(base.year(),base.month(),1)
         for offset in range(12):
-            value=base.addMonths(-offset); self.month.addItem(value.toString('yyyy年M月'),value.toString('yyyy-MM-dd'))
+            value=base.addMonths(-offset); self.month.addItem(icon('calendar',18),value.toString('yyyy年M月'),value.toString('yyyy-MM-dd'))
         self.month.addItem('自定义日期范围','custom')
         current=self.start.date(); index=self.month.findData(current.toString('yyyy-MM-dd'))
         whole=current.day()==1 and self.end.date()==current.addMonths(1).addDays(-1)
@@ -227,9 +245,10 @@ class BillsPage(QWidget):
             positive=row['kind'] in {'INCOME','TRANSFER_IN'}
             values=[row['occurred_at'][:16].replace('T',' '),row.get('counterparty_name') or row.get('merchant') or row['category'],
                 KINDS[row['kind']],row['category'],('+' if positive else '−')+money(row['amount_minor']),'已入账']
-            if row['category']=='模拟入金': values[1]='模拟入金'
+            if row['category']=='模拟入金': values[1]='模拟入金\n非真实存款'
             for col,value in enumerate(values):
                 item=QTableWidgetItem(value)
+                row_font=QFont('Microsoft YaHei UI'); row_font.setPixelSize(14); item.setFont(row_font)
                 item.setToolTip(value if col!=1 else (row.get('counterparty_name') or row.get('merchant') or row['category']))
                 if col==2: item.setIcon(icon('incoming' if positive else 'outgoing' if row['kind']=='TRANSFER_OUT' else 'card',18,'#128247' if positive else '#e47724'))
                 if col==4:
