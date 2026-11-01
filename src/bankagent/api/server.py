@@ -556,6 +556,7 @@ def create_demo_app():
     # 标记成模型不可用，而识别其实是好的——这会把人带偏。
     phraser_model = build_model_from_env()
     model = build_model_from_env()
-    return create_app(demo=True, candidate_model=model, query_model=model,
+    local_login = os.environ.get('BANKAGENT_LOCAL_LOGIN') == '1'
+    return create_app(demo=not local_login, local_login=local_login, candidate_model=model, query_model=model,
                       phraser=ResponsePhraser(phraser_model) if phraser_model is not None else None,
                       allow_lan=allow_lan, database_path=os.environ.get('BANKAGENT_DB_PATH') or None)

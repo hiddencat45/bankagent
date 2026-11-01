@@ -34,9 +34,9 @@ def box(title):
 
 
 class PreviewWindow(BankWindow):
-    def __init__(self, url, startup_customer=None):
+    def __init__(self, url, startup_customer=None, client=None):
         load_chinese_font()
-        super().__init__(url, startup_customer=startup_customer)
+        super().__init__(url, startup_customer=startup_customer, client=client)
         # Preserve the existing controller/widgets across the business views.
         self.legacy_root = self.takeCentralWidget()
         self.legacy_root.setParent(self)

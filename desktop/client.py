@@ -165,9 +165,9 @@ class QueryClient:
         try:
             frames = self._chat({'thread_id': pending['thread_id'], 'resume': payload}, pending['thread_id'])
         except HTTPError as exc:
-            if exc.code == 409:
+            if exc.code in {401, 409}:
                 problem = json.load(exc)
-                if problem.get('code', '').startswith('DEMO_AUTH_'):
+                if problem.get('code', '').startswith('DEMO_AUTH_') or problem.get('code') in {'INVALID_CREDENTIALS','CREDENTIALS_LOCKED','PAYMENT_PASSWORD_REQUIRED'}:
                     raise VerificationRejected(problem['message']) from None
             raise
         if frames[0][1]['request_id'] != pending['request_id']:

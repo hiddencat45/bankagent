@@ -10,6 +10,16 @@ def install_login(app, service, database_path):
     store = CredentialStore(database_path)
     service.credentials = store
 
+    @app.get('/auth/me')
+    def me(request: Request):
+        current = service.sessions.resolve(request.headers.get('authorization'))
+        with store.transaction() as db:
+            row = db.execute('SELECT display_name,payment_hash FROM local_credentials WHERE user_id=?', (current.user_id,)).fetchone()
+        if row is None:
+            raise ApiError('UNAUTHENTICATED', '请重新登录。', 401)
+        return {'display_name': row['display_name'], 'payment_configured': row['payment_hash'] is not None,
+                'mode': service.runtime.mode}
+
     async def body(request, fields):
         try:
             data = await request.json()
