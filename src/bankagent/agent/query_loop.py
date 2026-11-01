@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from bankagent.banking import bank_backend
 from bankagent.agent.scenarios import bills, REGISTRY
+from bankagent.agent import wealth_interview
 
 
 def _tool(name, description, properties, required=()):
@@ -32,6 +33,11 @@ TOOLS = [
     }, ("question",)),
 ]
 SYSTEM = """你是模拟银行助手。先选择工具，不凭空回答个人余额、金额、交易或执行状态。
+理财需求访谈用update_wealth_needs，每次仅提取用户明确说出的答案（可以多项），由服务端保留草稿并给出下一问。开场可传空answers。
+首次推荐先query_wealth了解已有需求；缺失、过期或用户要求填写/修改/完善需求时用update_wealth_needs；已有问卷自动复用，只问缺项。
+不要直接用prepare_save_wealth_profile猜满问卷。用户修改金额、日期、偏好时更新对应字段，重新核对完整摘要；问卷确认不等于申购授权。
+不要把“无经验”直接当成低风险等级；“稳一点”需澄清亏损态度。每次一两个问题，不重复追问已有答案，不引导用户改变答案来通过筛选。
+用户取消用cancel_task，换话题按新请求办理。未保存的需求不代表已确认问卷，不可用旧推荐冒充新需求结果。
 理财使用query_wealth和recommend_wealth读取真实模拟账本及确定性筛选。问卷不足先问用户，不能从流水推断答案或正式风险等级。
 产品库是真实产品资料，具体数量以查询结果为准；在售、渠道评级与实际到账待核实。模拟成交固定净值1元，不计收益和费用，不承诺实际收益。
 理财提交成功仅表示申请进入订单，必须读取data.order.state才能描述成交或到账。不能将顶层COMPLETED说成购买或到账成功。
@@ -70,6 +76,7 @@ class QueryAgent:
         self.tools += [_tool("query_transactions", "查询当前账户真实流水，包含转账和关联流水编号。", {
             "period": {"type": "string"}}, ("period",)),
             _tool("cancel_task", "取消尚未执行的任务；不能撤销已完成交易。", {})]
+        self.tools.append(_tool('update_wealth_needs',wealth_interview.DESCRIPTION,wealth_interview.SCHEMA,('answers',)))
         self.registry = registry = registry or REGISTRY
         for operation in sorted(registry.allowed_operations):
             spec = registry.spec_for_operation(operation)
@@ -155,6 +162,11 @@ class QueryAgent:
             self._tasks.pop(key, None)
             return {'status': execution['status'], 'result': execution, 'query_results': results,
                     'response': '本次操作未完成，已停止后续步骤。已完成部分见实际回执。'}
+        if execution is not None and execution['operation']=='SAVE_WEALTH_PROFILE' and task.get('wealth_prepared'):
+            result=bank_backend._configured().query_wealth(context=context,recommend=True)
+            self._tasks.pop(key,None)
+            return {'status':result['status'],'result':result,'query_results':[execution,result],
+                    'operation':result['operation'],'response':'需求已确认保存，以下是按新需求生成的模拟筛选结果；未购买产品。'}
         deadline = time.monotonic() + self.time_limit
         for _ in range(self.max_rounds):
             task["rounds"] += 1
@@ -209,6 +221,34 @@ class QueryAgent:
                 if not isinstance(args, dict):
                     raise QueryLoopError("MODEL_OUTPUT_INVALID")
                 prepared.append((call["id"], function["name"], args))
+            if any(name=='update_wealth_needs' for _,name,_ in prepared):
+                if len(prepared)!=1:raise QueryLoopError('MODEL_OUTPUT_INVALID')
+                call_id,_,args=prepared[0]
+                if set(args)-{'answers','restart'} or 'answers' not in args or ('restart' in args and type(args['restart']) is not bool):
+                    raise QueryLoopError('MODEL_OUTPUT_INVALID')
+                snapshot=bank_backend._configured().query_wealth(context=context)
+                if snapshot['status']!='COMPLETED':raise QueryLoopError('MODEL_OUTPUT_INVALID')
+                from datetime import date
+                day=date.fromisoformat(snapshot['data']['day'])
+                draft={} if args.get('restart') else task.get('wealth_draft',wealth_interview.seed(snapshot['data'].get('profile')))
+                try:draft=wealth_interview.update(draft,args['answers'],day)
+                except (ValueError,TypeError):
+                    question,fields='有一项金额、日期或选项无法确认，请重新描述；原有需求尚未保存或修改。',None
+                else:question,fields=wealth_interview.next_step(draft,day)
+                task['wealth_draft']=draft;task['draft']=True
+                task['interview_turns']=task.get('interview_turns',0)+1
+                if task['interview_turns']>40:raise QueryLoopError('QUERY_LIMIT_REACHED')
+                messages.append({k:answer[k] for k in ('role','content','tool_calls','reasoning_content') if k in answer})
+                # Each answer is a bounded new interaction, not an unbounded automatic tool loop.
+                task['calls_used']=0;task['rounds']=0
+                self._tasks[key]=task
+                if fields is not None:
+                    task.update(pending_call=call_id,wealth_prepared=True)
+                    return {'scenario':'wealth','intent':'WEALTH_PROFILE','candidate_params':fields,
+                            'status':'PROCESSING','task_loop':True,'query_results':[], 'response':''}
+                messages.append({'role':'tool','tool_call_id':call_id,'content':json.dumps(
+                    {'draft':draft,'next_question':question,'saved':False},ensure_ascii=False)})
+                return {'status':'NEEDS_CLARIFICATION','query_results':[], 'response':question}
             # Handoff never executes a write, and may not silently discard completed reads.
             if any(name in {"handoff_banking", "ask_user"} for _, name, _ in prepared):
                 if len(prepared) != 1 or (results and prepared[0][1] == "handoff_banking"):

@@ -89,7 +89,7 @@ class ProductCards(QWidget):
             hold=f"最低持有 {p['hold_days']} 天" if p['hold_days'] else '无封闭期'
             box.addWidget(text(hold+' · '+money(p['minimum_minor'])+' 元起投','wealthHint'))
             r=recommendations.get(p['code'])
-            status='待完善需求' if r is None else '符合模拟初筛' if r['eligible'] else '暂不匹配'
+            status='待完善需求' if r is None else r.get('comparison_group','符合模拟初筛' if r['eligible'] else '暂不匹配')
             box.addWidget(text(status,'wealthHint'))
             box.addStretch()
             button=QPushButton('选择产品');button.setCheckable(True)
@@ -115,16 +115,21 @@ class ProfileDialog(QDialog):
         super().__init__(parent);self.setWindowTitle('了解你的理财需求');self.setWindowModality(Qt.WindowModality.WindowModal)
         self.setStyleSheet(STYLE+WEALTH_STYLE);self.resize(620,650)
         outer=QVBoxLayout(self);outer.setContentsMargins(28,24,28,24);outer.setSpacing(14)
-        outer.addWidget(text('先了解你，再比较产品','title'))
-        outer.addWidget(text('约 1 分钟 · 仅用于模拟需求筛选，不代替银行正式风险测评。','wealthHint'))
+        outer.addWidget(text('查看和修改理财需求','title'))
+        outer.addWidget(text('修改后先核对再保存。明确日期优先；修改相对天数会清除原日期。仅模拟需求筛选。','wealthHint'))
         self.progress=text('','wealthTag');outer.addWidget(self.progress)
         self.pages=QStackedWidget();self.fields={}
         definitions=[[
             ('budget','计划投入多少（元）',None),('free_cash','扣除必要支出和备用金后的闲钱（元）',None),
             ('horizon_days','最早多久后会用到这笔钱（天）',None),
-            ('purpose','这笔钱的用途',['闲置资金','必要支出']),('liquidity','到账要求',['可等待','当天到账','固定日期'])],
-            [('loss','能否承受本金亏损',['不能亏损','仅低风险','接受波动']),('income','收入状况',['稳定','不稳定']),
+            ('purpose','这笔钱的用途',['闲置资金','必要支出']),('liquidity','到账要求',['可等待','当天到账','固定日期']),
+            ('need_on','明确用钱日期（YYYY-MM-DD，可选）',None),
+            ('early_redemption','固定日期时能否提前赎回',['可以','不可以','不确定']),
+            ('reserve','是否已预留必要支出和备用金',['已预留','未预留','不确定'])],
+            [('loss','能否承受本金亏损',['不能亏损','仅低风险','接受小幅亏损','接受波动','不确定']),('income','收入状况',['稳定','不稳定','不确定']),
              ('debt','还款与资金来源',['无压力','有还款压力','借款理财']),('experience','非保本理财经验',['无经验','有经验']),
+             ('impact','亏损或延期会影响生活或还款吗',['会','不会','不确定']),
+             ('loss_acceptance','仅低风险时，是否接受本金亏损',['可以','不可以','不确定']),
              ('priority','这次更看重什么',['风险优先','流动性优先','综合比较'])]]
         self.groups=[]
         for questions in definitions:
@@ -138,6 +143,7 @@ class ProfileDialog(QDialog):
                 else:w.setMaxLength(12);w.setPlaceholderText('请填写')
                 self.fields[key]=w;form.addRow(title,w)
             scroll=QScrollArea();scroll.setWidgetResizable(True);scroll.setWidget(page);self.pages.addWidget(scroll)
+        self.fields['horizon_days'].textEdited.connect(lambda _:self.fields['need_on'].clear())
         outer.addWidget(self.pages,1);self.error=text('','error');outer.addWidget(self.error)
         row=QHBoxLayout();self.later=QPushButton('稍后填写');self.later.setObjectName('quietAction');self.later.clicked.connect(self.reject);row.addWidget(self.later);row.addStretch()
         self.back=QPushButton('上一步');self.back.setObjectName('quietAction');self.back.clicked.connect(lambda:self.step(0));row.addWidget(self.back)
@@ -146,7 +152,9 @@ class ProfileDialog(QDialog):
         outer.addLayout(row);self.step(0)
 
     def values(self):
-        return {k:(w.text().strip() if isinstance(w,QLineEdit) else w.currentData()) for k,w in self.fields.items()}
+        from bankagent.banking.wealth import PROFILE_OPTIONAL
+        values={k:(w.text().strip() if isinstance(w,QLineEdit) else w.currentData()) for k,w in self.fields.items()}
+        return {k:v for k,v in values.items() if v or k not in PROFILE_OPTIONAL}
 
     def step(self,index):
         self.pages.setCurrentIndex(index);self.progress.setText(['01 / 02   资金安排','02 / 02   风险偏好'][index])
@@ -155,8 +163,10 @@ class ProfileDialog(QDialog):
     def validate(self,keys):
         import re
         values=self.values()
+        from bankagent.banking.wealth import PROFILE_OPTIONAL
         for k in keys:
-            if not values[k]:
+            if k in PROFILE_OPTIONAL:continue
+            if not values.get(k):
                 self.error.setText('请填写：'+self.fields[k].accessibleName());self.fields[k].setFocus();return False
         if 'budget' in keys:
             from decimal import Decimal,InvalidOperation
@@ -167,6 +177,11 @@ class ProfileDialog(QDialog):
                 valid=valid and amounts[0]>0 and values['horizon_days'].isascii() and values['horizon_days'].isdigit() and 1<=int(values['horizon_days'])<=3650
             except (InvalidOperation,ValueError):valid=False
             if not valid:self.error.setText('金额最多两位小数，预算需大于0；天数请填1至3650的整数。');return False
+            if values.get('need_on'):
+                from datetime import date
+                try:valid=date.fromisoformat(values['need_on']).isoformat()==values['need_on']
+                except ValueError:valid=False
+                if not valid:self.error.setText('日期请填写为YYYY-MM-DD。');return False
         return True
 
     def advance(self):

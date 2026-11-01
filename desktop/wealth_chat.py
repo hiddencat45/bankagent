@@ -43,28 +43,43 @@ def render(chat, receipt):
             expired = bool(data.get('profile'))
             text('先更新一下你的理财需求' if expired else '先了解你的需求，再帮你挑选', 'wealthChatTitle')
             text('之前的问卷已过期。请确认资金安排和风险偏好是否有变化。' if expired else
-                 '你准备拿出多少钱、多久不用，以及能否接受亏损？\n先完成一份简短问卷，再比较适合你需求的产品。')
-            action('更新我的需求' if expired else '填写需求问卷', 'profile', primary=True)
+                 '聊聊准备投入的金额、用钱时间和亏损接受程度。\n每次一两个问题，最后由你核对确认。')
+            action('更新我的需求' if expired else '开始对话了解需求', 'interview', primary=True)
+            action('用表单填写或修改 →', 'profile')
             action('先浏览产品资料 →', 'products')
         elif operation == 'RECOMMEND_WEALTH':
             matches = {r['product_code']: r for r in data['recommendations']}
             count = sum(bool(r['eligible']) for r in matches.values())
-            text(f'{count} 款产品符合当前模拟筛选条件' if count else '目前没有符合你需求的产品', 'wealthChatTitle')
-            text(f"已核对 {len(data['products'])} 款产品 · {len(matches)-count} 款不匹配", 'wealthChatCaption')
+            review=sum(r.get('match_status')=='review' for r in matches.values())
+            text(f'{count} 款产品符合当前模拟筛选条件' if count else '还需要补充条件，暂不能确认匹配' if review else '目前没有符合你需求的产品', 'wealthChatTitle')
+            text(f"已核对 {len(data['products'])} 款产品 · {review} 款待补充或核实 · {len(matches)-count-review} 款不匹配", 'wealthChatCaption')
+            if data.get('needs_deadline'):text('用钱日期 '+data['needs_deadline']+' · 以当前模拟日期计算剩余时间','wealthChatCaption')
             text('先比较风险和用钱时间，再决定是否继续。' if count else '可以查看排除理由，或更新实际需求；不必为了购买而改变答案。')
             excluded=QWidget();excluded_box=QVBoxLayout(excluded);excluded_box.setContentsMargins(0,0,0,0);excluded_box.setSpacing(8)
-            for product in data['products']:
-                result = matches.get(product['code'])
-                if result is None:
-                    continue
+            alternatives=QWidget();alternatives_box=QVBoxLayout(alternatives);alternatives_box.setContentsMargins(0,0,0,0);alternatives_box.setSpacing(8)
+            products={p['code']:p for p in data['products']}
+            for result in data['recommendations']:
+                product=products[result['product_code']]
                 card = QFrame(); card.setObjectName('wealthChatProduct')
                 content = QVBoxLayout(card); content.setContentsMargins(14, 12, 14, 10); content.setSpacing(6)
                 text(product['short_name'], 'wealthChatName', content)
                 hold = f"最低持有 {product['hold_days']} 天" if product['hold_days'] else '不设封闭期'
                 text(f"管理人 R{product['issuer_risk']}  ·  {money(product['minimum_minor'])} 元起  ·  {hold}", 'wealthChatCaption', content)
-                text(('通过初筛 · ' if result['eligible'] else '暂不匹配 · ') + '；'.join(result['reasons']), target=content)
+                group=result.get('comparison_group','通过初筛' if result['eligible'] else '暂不匹配')
+                text(group+' · '+('通过初筛 · ' if result['eligible'] else '')+'；'.join(result['reasons']), target=content)
+                if result.get('preference_reason') and result['eligible']:text(result['preference_reason'],'wealthChatCaption',content)
+                if result.get('notes'):text('；'.join(result['notes']),'wealthChatCaption',content)
                 action('查看产品详情 →', 'product', {'code': product['code']}, target=content)
-                (body if result['eligible'] else excluded_box).addWidget(card)
+                target=alternatives_box if group=='其他备选' else excluded_box if group in {'不匹配','暂不匹配'} else body
+                target.addWidget(card)
+            if alternatives_box.count():
+                alternative_toggle=QPushButton(f'查看 {alternatives_box.count()} 款其他备选')
+                alternative_toggle.setObjectName('wealthChatLink');alternative_toggle.setCheckable(True)
+                alternatives.hide()
+                def expand_alternatives(checked):
+                    alternatives.setVisible(checked);QTimer.singleShot(0,chat.fit_bubbles)
+                alternative_toggle.toggled.connect(expand_alternatives);body.addWidget(alternative_toggle);body.addWidget(alternatives)
+            else:alternatives.deleteLater()
             if excluded_box.count():
                 toggle=QPushButton(f'查看 {excluded_box.count()} 款不匹配产品及原因')
                 toggle.setObjectName('wealthChatLink');toggle.setCheckable(True);toggle.setChecked(not count)
@@ -74,6 +89,8 @@ def render(chat, receipt):
                     QTimer.singleShot(0,chat.fit_bubbles)
                 toggle.toggled.connect(expand);body.addWidget(toggle);body.addWidget(excluded);expand(not count)
             else:excluded.deleteLater()
+            action('通过对话补充或修改需求 →','interview')
+            action('用表单修改需求 →','profile')
             action('查看产品与匹配结果', 'products', primary=True)
         else:
             text('你的模拟理财账户', 'wealthChatTitle')

@@ -7,7 +7,7 @@ from copy import deepcopy
 from datetime import date, timedelta
 from uuid import uuid4
 
-RULE_VERSION = 'wealth-demo-v1'
+RULE_VERSION = 'wealth-demo-v2'
 NOTICE = '仅模拟：净值固定1元，不计收益、亏损及费用；演示日历仅排除周末，不代表银行实际规则。真实渠道在售、评级、费率优惠及到账待核实。'
 PRODUCTS = (
     dict(code='2119987003A', name='华夏理财现金管理类理财产品3号A', short_name='华夏现金3号A',
@@ -56,10 +56,14 @@ ERRORS = {'PROFILE_REQUIRED':'请先填写并确认模拟需求问卷。', 'PROF
           'SOURCE_CARD_REQUIRED':'请先办理并激活当前账户的借记卡。', 'SOURCE_CARD_NOT_ACTIVE':'当前账户卡片未激活或已冻结。',
           'USER_CANCELLED':'已取消本次操作，未执行变更。', 'INVALID_PARAMS':'输入不合法，请核对产品、金额及问卷。'}
 PROFILE_FIELDS = {'budget_minor', 'free_cash_minor', 'horizon_days', 'purpose', 'liquidity', 'loss', 'income', 'debt', 'experience', 'priority'}
+PROFILE_OPTIONAL = {'need_on', 'early_redemption', 'reserve', 'impact', 'loss_acceptance'}
 CHOICES = {'purpose': {'闲置资金','必要支出'}, 'liquidity': {'可等待','当天到账','固定日期'},
-           'loss': {'不能亏损','仅低风险','接受波动'}, 'income': {'稳定','不稳定'},
+           'loss': {'不能亏损','仅低风险','接受小幅亏损','接受波动','不确定'}, 'income': {'稳定','不稳定','不确定'},
            'debt': {'无压力','有还款压力','借款理财'}, 'experience': {'无经验','有经验'},
            'priority': {'风险优先','流动性优先','综合比较'}}
+OPTIONAL_CHOICES = {'early_redemption': {'可以','不可以','不确定'},
+                    'reserve': {'已预留','未预留','不确定'}, 'impact': {'会','不会','不确定'},
+                    'loss_acceptance': {'可以','不可以','不确定'}}
 
 
 def reply(operation, data=None, error=None):
@@ -77,30 +81,79 @@ def business_day(day, count=0):
 
 
 def validate_profile(p):
-    return (set(p) == PROFILE_FIELDS and all(type(p[k]) is int and 0 <= p[k] <= 10**10 for k in ('budget_minor','free_cash_minor'))
+    try:
+        if 'need_on' in p and date.fromisoformat(p['need_on']).isoformat()!=p['need_on']:return False
+    except (ValueError,TypeError):return False
+    return (PROFILE_FIELDS <= set(p) <= PROFILE_FIELDS | PROFILE_OPTIONAL and all(type(p[k]) is int and 0 <= p[k] <= 10**10 for k in ('budget_minor','free_cash_minor'))
             and p['budget_minor'] > 0 and type(p['horizon_days']) is int and 1 <= p['horizon_days'] <= 3650
-            and all(isinstance(p[k], str) and p[k] in choices for k, choices in CHOICES.items()))
+            and all(isinstance(p[k], str) and p[k] in choices for k, choices in CHOICES.items())
+            and all(isinstance(p[k],str) and p[k] in choices for k,choices in OPTIONAL_CHOICES.items() if k in p))
+
+
+def anchored_answers(profile):
+    """Read old profiles without rewriting them or moving their original deadline."""
+    answers=deepcopy(profile['answers'])
+    anchor=date.fromisoformat(profile.get('anchor_day',profile['recorded_at'][:10]))
+    answers.setdefault('need_on',(anchor+timedelta(days=answers['horizon_days'])).isoformat())
+    return answers
 
 
 def screen(product, profile, day):
-    reasons = []
+    reasons, pending, notes = [], [], []
     if profile['purpose'] != '闲置资金': reasons.append('必要支出不能承担亏损或延期到账')
     if profile['debt'] != '无压力': reasons.append('存在还款压力或使用借款')
     if profile['budget_minor'] > profile['free_cash_minor']: reasons.append('预算超过扣除必要支出和备用金后的闲钱')
     if profile['loss'] == '不能亏损': reasons.append('本产品不保本，不符合不能亏损的要求')
-    cap = 2 if profile['loss'] == '接受波动' and profile['experience'] == '有经验' and profile['income'] == '稳定' else 1
-    if product['issuer_risk'] > cap: reasons.append('超过本演示问卷的保守风险范围（非银行正式测评）')
-    if profile['liquidity'] != '可等待': reasons.append('要求当天或固定日期到账，真实渠道规则未核实')
+    if profile.get('loss_acceptance')=='不可以':reasons.append('你明确不能接受本金亏损')
+    elif profile['loss']=='仅低风险' and profile.get('loss_acceptance')!='可以':pending.append('低风险不等于保本，需要确认是否能接受本金亏损')
+    cap = 2 if profile['loss'] in {'接受小幅亏损','接受波动'} else 1
+    if profile['loss']=='不确定':pending.append('需要先明确本金亏损接受程度')
+    elif product['issuer_risk'] > cap: reasons.append('超过你选择的低风险比较范围（仅模拟偏好过滤，非正式评级）')
+    if profile.get('reserve') in {'未预留','不确定'}:pending.append('请先确认必要支出和应急备用金已预留')
+    if profile.get('impact')=='会':reasons.append('亏损或延期会影响生活或还款')
+    elif profile.get('impact')=='不确定':pending.append('需要确认亏损或延期对生活和还款的影响')
+    if profile['experience']=='无经验':notes.append('首次接触非保本理财，需了解亏损及赎回限制；无经验本身不决定风险等级')
+    if profile['liquidity']=='当天到账':pending.append('当天到账能力尚未核实，不能承诺满足')
+    elif profile['liquidity']=='固定日期':
+        if not profile.get('need_on'):pending.append('请明确用钱日期')
+        if profile.get('early_redemption')!='可以':pending.append('请确认能否提前赎回并预留到账时间')
+        notes.append('需提前安排赎回；真实渠道截止时间、节假日及到账仍须核实')
     earliest = business_day(business_day(day, 1) + timedelta(days=product['hold_days']))
     earliest = business_day(earliest, 2)
     needed = (earliest-day).days
-    if needed > profile['horizon_days']:
-        reasons.append(f"期限不足：持有{product['hold_days']}天，加上模拟确认与到账需{needed}天，超过你的{profile['horizon_days']}天用钱期限")
+    remaining=(date.fromisoformat(profile['need_on'])-day).days if profile.get('need_on') else profile['horizon_days']
+    if needed > remaining:
+        reasons.append(f"期限不足：持有{product['hold_days']}天，加上模拟确认与到账需{needed}天，距你的用钱日期仅剩{remaining}天")
     if profile['budget_minor'] < product['minimum_minor']: reasons.append('预算低于说明书起投金额')
-    return dict(product_code=product['code'], eligible=not reasons, reasons=reasons or [
+    status='excluded' if reasons else 'review' if pending else 'matched'
+    return dict(product_code=product['code'], eligible=status=='matched', match_status=status,
+                reasons=reasons or pending or [
         f"管理人R{product['issuer_risk']}在本次模拟筛选上限R{cap}内，预算覆盖起投金额",
-        f"最低持有{product['hold_days']}天；含模拟确认与到账需{needed}天，未超过你的{profile['horizon_days']}天用钱期限"],
+        f"最低持有{product['hold_days']}天；含模拟确认与到账需{needed}天，未超过剩余{remaining}天"],
+                notes=notes, pending_reasons=pending, remaining_days=remaining,
                 real_status='待核实，不能作为真实购买建议', simulated_earliest_cash_date=earliest.isoformat())
+
+
+def recommend_products(answers,day):
+    """Preference presentation never changes purchase eligibility."""
+    results=[screen(p,answers,day) for p in PRODUCTS]
+    priority=answers['priority']
+    def key(r):
+        p=PRODUCT_BY_CODE[r['product_code']]
+        return (p['hold_days'],p['issuer_risk']) if priority=='流动性优先' else (p['issuer_risk'],p['hold_days'])
+    results.sort(key=lambda r:({'matched':0,'review':1,'excluded':2}[r['match_status']],key(r)))
+    matched=[r for r in results if r['eligible']]
+    seen=set()
+    for r in results:
+        p=PRODUCT_BY_CODE[r['product_code']]
+        r['preference_reason']=('按最低持有期、风险依次比较；不等于到账更快' if priority=='流动性优先' else
+            '按管理人风险、最低持有期依次比较' if priority=='风险优先' else '展示不同持有安排供比较；不按不同口径历史收益排名')
+        if not r['eligible']:r['comparison_group']='待补充或核实' if r['match_status']=='review' else '不匹配';continue
+        category=0 if p['hold_days']==0 else 1 if p['hold_days']<=30 else 2
+        preferred=(category not in seen) if priority=='综合比较' else key(r)==key(matched[0])
+        seen.add(category)
+        r['comparison_group']='优先比较' if preferred else '其他备选'
+    return results
 
 
 class WealthMixin:
@@ -122,7 +175,8 @@ class WealthMixin:
             frozen = sum(o['requested_minor'] for o in orders if o['side']=='BUY' and o['state'] in {'SUBMITTED','ACCEPTED','UNCERTAIN'})
             waiting = sum(o['filled_minor'] for o in orders if o['state']=='WAITING_CASH')
             return reply(op, dict(products=deepcopy(PRODUCTS), profile=deepcopy(profile), profile_valid=bool(valid),
-                recommendations=[screen(p, profile['answers'], day) for p in PRODUCTS] if valid else [],
+                recommendations=recommend_products(anchored_answers(profile),day) if valid else [],
+                needs_deadline=anchored_answers(profile)['need_on'] if profile else None,
                 orders=sorted(orders, key=lambda o:o['sequence'], reverse=True), lots=lots, day=day.isoformat(),
                 available_minor=data['accounts'][account]['balance_minor'], frozen_minor=frozen, waiting_minor=waiting,
                 holdings_minor=sum(l['units_minor'] for l in lots), currency='CNY', notice=NOTICE, rule_version=RULE_VERSION))
@@ -130,7 +184,7 @@ class WealthMixin:
     def save_wealth_profile(self, *, context, **answers):
         if not validate_profile(answers): return reply('SAVE_WEALTH_PROFILE', error='INVALID_PARAMS')
         def apply(data):
-            profile = dict(answers=answers, recorded_at=self._now().isoformat(),
+            profile = dict(answers=answers, recorded_at=self._now().isoformat(), anchor_day=self._wealth_day(data,context.account_id).isoformat(),
                 expires_on=(self._now().date()+timedelta(days=365)).isoformat(), rule_version=RULE_VERSION,
                 assessment='仅模拟需求筛选，不是银行正式风险测评')
             data.setdefault('wealth_profiles', {})[context.user_id] = profile
@@ -165,7 +219,7 @@ class WealthMixin:
                 profile = data.get('wealth_profiles', {}).get(context.user_id)
                 if not profile: return reply(op, error='PROFILE_REQUIRED')
                 if date.fromisoformat(profile['expires_on']) < self._now().date(): return reply(op, error='PROFILE_EXPIRED')
-                if not screen(product, profile['answers'], day)['eligible']: return reply(op, error='WEALTH_NOT_MATCHED')
+                if not screen(product, anchored_answers(profile), day)['eligible']: return reply(op, error='WEALTH_NOT_MATCHED')
                 if amount_minor < product['minimum_minor']: return reply(op, error='INVALID_PARAMS')
                 exposure = sum(l['units_minor'] for l in data.get('wealth_lots', {}).values() if l['user_id']==context.user_id)
                 exposure += sum(o['requested_minor'] for o in data.get('wealth_orders', {}).values()

@@ -12,6 +12,7 @@ from desktop.wealth_chat import STYLE as WEALTH_CHAT_STYLE, render as render_wea
 class ChatView(QScrollArea):
     receipt_opened = Signal(dict)
     wealth_opened = Signal(str, dict)
+    reply_requested = Signal(str)
     def __init__(self):
         super().__init__()
         self.setWidgetResizable(True)
@@ -133,9 +134,16 @@ class ChatView(QScrollArea):
     def add_message(self, role, value, error=False, display_name=None):
         if not value:
             return
+        for button in self.findChildren(QPushButton,'wealthQuickReply'):button.setEnabled(False)
         body = self.bubble(role, 'errorBubble' if error else
                            'userBubble' if role == 'user' else 'assistantBubble', display_name)
         body.addWidget(self.label(value))
+        if role=='assistant' and not error:
+            from bankagent.agent.wealth_interview import quick_replies
+            for reply in quick_replies(value):
+                button=QPushButton(reply);button.setObjectName('wealthQuickReply')
+                button.clicked.connect(lambda checked=False,text=reply:self.reply_requested.emit(text))
+                body.addWidget(button)
         self.transcript.append(('你：' if role == 'user' else '有度：') + value)
 
     def add_receipt(self, receipt, summary):

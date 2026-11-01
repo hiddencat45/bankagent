@@ -1,0 +1,60 @@
+{
+  "mode": "live model + Windows native Qt + TCP HTTP",
+  "ledger": "temporary SQLite",
+  "turns": [
+    {
+      "user": "首次进入理财自动开启需求对话",
+      "transcript_tail": "这次计划拿多少钱理财？可以直接说“一万元”。"
+    },
+    {
+      "user": "我想拿一万元理财，已经扣除了生活开销、近期还款并留足应急备用金，没有借款也没有还款压力。",
+      "pending": false,
+      "transcript_tail": "最早什么时候可能用到这笔钱？有明确日期、大致期限，还是随时可能用？"
+    },
+    {
+      "user": "2027年11月1日要用这笔钱，可以提前赎回并留出到账时间。",
+      "pending": false,
+      "transcript_tail": "你能接受本金亏损吗？不能接受、能接受小幅亏损，还是能接受更明显的波动和亏损？不清楚也可以直说。"
+    },
+    {
+      "user": "我只想看低风险产品，没有买过非保本理财，亏损或延期不会影响生活和还款，这次风险优先。",
+      "pending": false,
+      "transcript_tail": "低风险也不保本。你能接受本金发生小幅亏损吗？还是本金不能少？"
+    },
+    {
+      "user": "能接受小幅亏损，但这次只考虑仅低风险的比较范围。",
+      "pending": true,
+      "transcript_tail": "低风险也不保本。你能接受本金发生小幅亏损吗？还是本金不能少？\n你：能接受小幅亏损，但这次只考虑仅低风险的比较范围。"
+    },
+    {
+      "user": "先把金额改为五千元，其他答案不变。",
+      "pending": true,
+      "transcript_tail": "低风险也不保本。你能接受本金发生小幅亏损吗？还是本金不能少？\n你：能接受小幅亏损，但这次只考虑仅低风险的比较范围。\n你：先把金额改为五千元，其他答案不变。"
+    }
+  ],
+  "status": "PASSED",
+  "platform": "windows",
+  "scale": 1.25,
+  "saved_answers": {
+    "debt": "无压力",
+    "liquidity": "固定日期",
+    "loss": "仅低风险",
+    "experience": "无经验",
+    "priority": "风险优先",
+    "reserve": "已预留",
+    "impact": "不会",
+    "purpose": "闲置资金",
+    "income": "不确定",
+    "need_on": "2027-11-01",
+    "early_redemption": "可以",
+    "loss_acceptance": "可以",
+    "budget_minor": 500000,
+    "free_cash_minor": 500000,
+    "horizon_days": 379
+  },
+  "matches": 2,
+  "orders": 0,
+  "balance": 500000,
+  "form_edit": "saved values preserved",
+  "draft": "preserved by first-use entry"
+}
