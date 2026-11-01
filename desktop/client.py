@@ -54,6 +54,14 @@ class QueryClient:
     def form(self, action, fields):
         return self._chat({'action': action, 'fields': fields}, path='/bank/form')
 
+    def wealth(self):
+        with self.opener.open(Request(self.url + '/bank/wealth',
+                headers={'Authorization': 'Bearer ' + self.token}), timeout=20) as response:
+            result = json.load(response)
+        if result.get('status') != 'COMPLETED':
+            raise ValueError('理财数据不可读取，请先开户并选择账户。')
+        return result['data']
+
     def accounts(self):
         with self.opener.open(Request(self.url + '/bank/accounts',
                 headers={'Authorization': 'Bearer ' + self.token}), timeout=20) as response:
@@ -231,6 +239,10 @@ def money(minor):
 
 
 def query_result(payload):
+    from bankagent.banking.wealth import OPERATIONS
+    if payload.get('operation') in OPERATIONS:
+        from bankagent.agent.scenarios.wealth import render
+        return render(payload)
     if payload.get('operation') == 'QUERY_TRANSFER_BATCHES' and payload.get('status') == 'COMPLETED':
         return '\n\n'.join(query_result(r) for r in payload['data']['receipts']) or '当前账户没有批量转账回执。'
     if payload.get('operation') == 'BATCH_TRANSFER' and payload.get('data'):
@@ -277,7 +289,8 @@ def query_result(payload):
             raise ValueError('invalid currency')
         lines = [f"消费合计：¥ {money(data['total_minor'])}",
                  f"查询期间：{data['start']} 至 {data['end']}（不含结束日）"]
-        kinds = {'INCOME': '收入', 'EXPENSE': '消费', 'TRANSFER_OUT': '转出', 'TRANSFER_IN': '转入'}
+        kinds = {'INCOME': '收入', 'EXPENSE': '消费', 'TRANSFER_OUT': '转出', 'TRANSFER_IN': '转入',
+                 'WEALTH_RESERVE': '申购冻结', 'WEALTH_RELEASE': '理财解冻', 'WEALTH_CREDIT': '赎回到账'}
         for row in data['transactions']:
             lines.append(f"{row['occurred_at']}  {kinds[row['kind']]}  {row.get('merchant') or row['category']}  ¥ {money(row['amount_minor'])}")
             if row.get('transfer_id') and row.get('related_transaction_id'):
@@ -349,6 +362,8 @@ def business_confirmation(frames):
     card = next(d['payload'] for e, d in frames if e == 'card' and d['type'] == 'confirm')
     signal = next(d for e, d in frames if e == 'interrupt')
     labels = {'CREATE_DEMO_CUSTOMER': '创建演示客户并首次开户',
+              'SAVE_WEALTH_PROFILE':'保存模拟问卷', 'SUBSCRIBE_WEALTH':'模拟申购', 'REDEEM_WEALTH':'模拟赎回',
+              'CANCEL_WEALTH_ORDER':'撤销模拟订单', 'ADVANCE_WEALTH_DEMO':'理财演示控制',
               'OPEN_ACCOUNT': '开立模拟账户', 'ISSUE_DEBIT_CARD': '办理借记卡',
               'ACTIVATE_DEBIT_CARD': '激活借记卡', 'PAY_BY_CARD': '模拟消费', 'SIMULATE_CARD_DEPOSIT': '模拟入金（非真实存款）',
               'FREEZE_CARD': '冻结卡片', 'UNFREEZE_CARD': '解冻卡片', 'SET_CARD_LIMITS': '设置消费限额'}
@@ -358,12 +373,19 @@ def business_confirmation(frames):
     for key in ('display_name', 'challenge_id', 'operation_hash', 'expires_at'):
         if not isinstance(card.get(key), str) or not card[key].strip():
             raise ValueError('invalid business confirmation')
-    if (card.get('risk_level') != 'YELLOW' or signal.get('kind') != 'CONFIRMATION'
-            or frames[-1][1]['status'] != 'AWAITING_CONFIRMATION'
+    strong = operation == 'SUBSCRIBE_WEALTH'
+    if (card.get('risk_level') != ('RED' if strong else 'YELLOW')
+            or signal.get('kind') != ('STRONG_AUTH' if strong else 'CONFIRMATION')
+            or frames[-1][1]['status'] != ('AWAITING_AUTHENTICATION' if strong else 'AWAITING_CONFIRMATION')
             or any(card[k] != signal.get(k) for k in ('challenge_id', 'operation_hash'))
             or datetime.fromisoformat(card['expires_at']).utcoffset() is None):
         raise ValueError('invalid confirmation binding')
     summary = f"业务：{labels[operation]}\n名称：{card['display_name']}"
+    from bankagent.banking.wealth import WRITES
+    if operation in WRITES:
+        if not isinstance(card.get('wealth_summary'), str) or not card['wealth_summary'].strip():
+            raise ValueError('invalid wealth confirmation')
+        summary = card['wealth_summary'] + '\n' + card['notice']
     if operation in {'OPEN_ACCOUNT', 'CREATE_DEMO_CUSTOMER'}:
         if type(card.get('opening_credit_minor')) is not int or card['opening_credit_minor'] != 0 or card.get('currency') != 'CNY':
             raise ValueError('invalid opening credit')
@@ -396,4 +418,4 @@ def business_confirmation(frames):
         if operation == 'FREEZE_CARD':
             summary += '\n冻结后该卡不能消费，其关联账户不能转出资金；模拟认证不能解除冻结。'
     return {**{k: card[k] for k in ('challenge_id', 'operation_hash', 'expires_at', 'risk_level')},
-            'summary': summary, 'thread_id': frames[0][1]['thread_id'], 'request_id': frames[0][1]['request_id']}
+            'operation': operation, 'summary': summary, 'thread_id': frames[0][1]['thread_id'], 'request_id': frames[0][1]['request_id']}

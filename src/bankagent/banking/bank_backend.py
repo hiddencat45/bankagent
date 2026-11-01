@@ -12,6 +12,7 @@ from datetime import date, datetime, timedelta, timezone
 from threading import RLock
 from uuid import uuid4
 from bankagent.banking.lifecycle import LifecycleMixin
+from bankagent.banking.wealth import WealthMixin
 
 from bankagent.banking.bank_types import (
     BILLS_MAX_RANGE_DAYS, MAX_BILL_TRANSACTIONS, SUPPORTED_CURRENCY,
@@ -25,7 +26,7 @@ def _result(operation: str, data=None, error=None) -> BackendResult:
             "data": data, "error_code": error}
 
 
-class BankBackend(LifecycleMixin):
+class BankBackend(LifecycleMixin, WealthMixin):
     """单个模拟实例；工厂数据是后端私有副本，所有读写使用共享互斥锁。"""
 
     def __init__(self, *, data_factory, lookup_authorization=None,
@@ -223,7 +224,7 @@ class BankBackend(LifecycleMixin):
                 if len(window[1]) == 2:
                     anomalies.append({"type": "POSSIBLE_DUPLICATE", "evidence": window[1]})
             fields = ("transaction_id", "occurred_at", "kind", "amount_minor", "category", "merchant")
-            links = ('transfer_id', 'related_transaction_id', 'batch_id')
+            links = ('transfer_id', 'related_transaction_id', 'batch_id', 'order_id')
             def counterparty(t):
                 target = t.get('counterparty_account_id')
                 if not target:

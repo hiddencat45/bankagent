@@ -155,7 +155,7 @@ def main():
     service = LocalService(env=env)
     try:
         from PySide6.QtWidgets import QApplication
-        sys.path.insert(0, str(ROOT))
+        sys.path[:0] = [str(ROOT), str(ROOT / 'src')]
         from desktop.window import BankWindow
 
         if sys.platform == 'win32':

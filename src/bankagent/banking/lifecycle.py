@@ -5,6 +5,7 @@ import json
 from uuid import uuid4
 
 from bankagent.banking.bank_types import TrustedContext, WriteContext
+from bankagent.banking.wealth import WRITES as WEALTH_WRITES
 
 DEMO_OPENING_BALANCE_MINOR = 0
 OPERATIONS = frozenset({'CREATE_DEMO_CUSTOMER', 'OPEN_ACCOUNT', 'ISSUE_DEBIT_CARD', 'ACTIVATE_DEBIT_CARD', 'PAY_BY_CARD', 'SET_CARD_LIMITS', 'SIMULATE_CARD_DEPOSIT'})
@@ -91,7 +92,7 @@ class LifecycleMixin:
 
     def _lifecycle_write(self, context, operation, params, apply):
         with self._transaction():
-            if operation not in OPERATIONS:
+            if operation not in OPERATIONS | WEALTH_WRITES:
                 return result(operation, error='OPERATION_NOT_ALLOWED')
             if not self._owned(context) and not (operation == 'OPEN_ACCOUNT' and self._unopened_customer(context)):
                 return result(operation, error='ACCOUNT_NOT_ACCESSIBLE')
@@ -114,6 +115,7 @@ class LifecycleMixin:
             expiry = record.get('expires_at')
             if (any(record.get(k) != v for k, v in expected.items())
                     or not record.get('challenge_id') or record.get('risk_level') not in {'YELLOW', 'RED'}
+                    or (operation == 'SUBSCRIBE_WEALTH' and record.get('risk_level') != 'RED')
                     or not isinstance(expiry, datetime) or expiry.utcoffset() is None or expiry <= self._now()):
                 return result(operation, error='AUTHORIZATION_INVALID')
             base = TrustedContext(context.user_id, context.account_id, context.request_id)

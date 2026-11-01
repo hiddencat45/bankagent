@@ -41,7 +41,7 @@ class BankWindow(QMainWindow):
         layout.addWidget(heading)
         self.status = QLabel('正在连接本地模拟银行…')
         layout.addWidget(self.status)
-        layout.addWidget(QLabel('模拟开户、借记卡、消费与转账 · 所有写操作先确认 · 理财推荐尚未开放'))
+        layout.addWidget(QLabel('模拟开户、借记卡、消费、转账与理财 · 所有写操作先确认'))
         self.current_customer = QLabel('当前演示客户：正在读取…')
         self.current_customer.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self.current_customer)
@@ -331,8 +331,10 @@ class BankWindow(QMainWindow):
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(28,28,28,24); layout.setSpacing(16)
         heading=QLabel('追加安全验证'); heading.setObjectName('dialogHeading'); layout.addWidget(heading)
-        label = QLabel(self.pending['summary'] + '\n\n当日已转出：¥ ' + money(info['daily_transfer_total_minor'])
-            + '\n含本笔累计超过 ¥ ' + money(info['threshold_minor']) + '，需要追加认证。\n'
+        reason = ('\n\n模拟申购不论金额均需要追加认证。\n' if self.pending.get('operation') == 'SUBSCRIBE_WEALTH'
+            else '\n\n当日已转出：¥ ' + money(info['daily_transfer_total_minor'])
+            + '\n含本笔累计超过 ¥ ' + money(info['threshold_minor']) + '，需要追加认证。\n')
+        label = QLabel(self.pending['summary'] + reason
             + info['notice'] + '\n本机模拟验证码：' + info['demo_code']
             + '\n有效期至：' + info['expires_at'] + '\n请输入上方模拟码，勿在聊天中提交。')
         label.setTextFormat(Qt.TextFormat.PlainText)
@@ -344,7 +346,7 @@ class BankWindow(QMainWindow):
         entry.setAccessibleName('模拟验证码')
         layout.addWidget(entry)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText('认证并确认原转账')
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText('认证并确认原操作')
         buttons.button(QDialogButtonBox.StandardButton.Ok).setObjectName('primary')
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
@@ -459,7 +461,8 @@ class BankWindow(QMainWindow):
                 self.uncertain = False
                 if pending is not None:
                     self.pending, self.decision = pending, None
-                    extra = ('\n当日累计转出（含本笔）超过1,000元。请点“前往模拟认证”，核对后继续原转账；也可取消。' if pending['risk_level'] == 'RED' else
+                    extra = ('\n模拟申购无论金额均需追加认证。请点“前往模拟认证”，核对后继续原申请；也可取消。' if pending.get('operation') == 'SUBSCRIBE_WEALTH' else
+                             '\n当日累计转出（含本笔）超过1,000元。请点“前往模拟认证”，核对后继续原转账；也可取消。' if pending['risk_level'] == 'RED' else
                              '\n确认后才会执行；对话业务可直接提出修改、取消或先查询，旧确认将失效。')
                     self.confirm_text.setText(pending['summary'] + extra)
                 elif kind != 'decision' or final not in {'FAILED', 'PENDING'}:

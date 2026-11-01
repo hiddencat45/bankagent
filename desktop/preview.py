@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushB
 from desktop.window import BankWindow
 from desktop.client import money, LedgerUnavailable
 from desktop.bills import BillsPage
+from desktop.wealth import WealthPage
 from desktop.orb import AssistantOrb
 from desktop.chat import ChatView
 from desktop.assistant_space import AssistantSpace, MessageInput
@@ -73,7 +74,8 @@ class PreviewWindow(BankWindow):
         self.overview_nav = QPushButton('账户概览')
         self.transfer_nav = QPushButton('转账')
         self.ledger_nav = QPushButton('交易记录')
-        for index, button in enumerate((self.overview_nav, self.transfer_nav, self.ledger_nav)):
+        self.wealth_nav = QPushButton('理财 · 模拟')
+        for index, button in enumerate((self.overview_nav, self.transfer_nav, self.ledger_nav, self.wealth_nav)):
             button.setCheckable(True)
             button.clicked.connect(lambda checked=False, page=index: self.show_page(page))
             nav.addWidget(button)
@@ -150,6 +152,12 @@ class PreviewWindow(BankWindow):
         self.bills_page.account_button.clicked.connect(lambda:self.show_context_menu('account',self.bills_page.account_button))
         layout.insertWidget(1,self.bills_page.header)
         self.pages.addWidget(self.bills_page)
+        self.wealth_page = WealthPage()
+        self.wealth_page.requested.connect(self.prepare_wealth_form)
+        self.wealth_page.refresh_requested.connect(self.load_accounts)
+        self.wealth_page.geometry_changed.connect(lambda: QTimer.singleShot(0, self.fit_page))
+        self.wealth_page.tabs.currentChanged.connect(lambda: QTimer.singleShot(0, lambda: self.main_scroll.verticalScrollBar().setValue(0)))
+        self.pages.addWidget(self.wealth_page)
         main_layout.addWidget(self.pages)
         self.confirmation.setTitle('')
         self.confirmation.setObjectName('operationConfirmation')
@@ -210,7 +218,7 @@ class PreviewWindow(BankWindow):
         outer.addWidget(body, 1)
         self.setStyleSheet(STYLE)
         for button, kind, label in ((self.overview_nav, 'overview', '账户概览'), (self.transfer_nav, 'transfer', '转账'),
-                              (self.ledger_nav, 'ledger', '交易记录'), (self.business_menu, 'card', '账户与卡')):
+                              (self.ledger_nav, 'ledger', '交易记录'), (self.wealth_nav, 'ledger', '理财 · 模拟'), (self.business_menu, 'card', '账户与卡')):
             button.setObjectName('navigation'); button.setText(label)
             button.setIcon(icon(kind, color='#c5dbd1'))
             button.setIconSize(QSize(22,22))
@@ -341,6 +349,11 @@ class PreviewWindow(BankWindow):
             self.assistant_box.feedback.setText('正在更新账户，请稍候再查看交易。')
             return
         self.toggle_assistant(False)
+        from bankagent.banking.wealth import OPERATIONS
+        if receipt['operation'] in OPERATIONS:
+            self.show_page(3)
+            self.wealth_page.tabs.setCurrentIndex(3 if (receipt.get('data') or {}).get('order') else 0)
+            return
         if receipt['operation'] in {'QUERY_BILLS', 'TRANSFER', 'BATCH_TRANSFER', 'PAY_BY_CARD'}:
             self.show_page(2)
             data = receipt.get('data') or {}
@@ -490,12 +503,16 @@ class PreviewWindow(BankWindow):
         self.overview_nav.setChecked(index == 0)
         self.transfer_nav.setChecked(index == 1)
         self.ledger_nav.setChecked(index == 2)
+        self.wealth_nav.setChecked(index == 3)
         self.bills_page.header.setVisible(index==2)
         self.account_picker.setVisible(index!=2)
         for i in range(self.pages.count()):
-            self.pages.widget(i).setSizePolicy(QSizePolicy.Policy.Preferred,
+            self.pages.widget(i).setSizePolicy(QSizePolicy.Policy.Preferred if i == index else QSizePolicy.Policy.Ignored,
                 QSizePolicy.Policy.Preferred if i == index else QSizePolicy.Policy.Ignored)
         self.fit_page()
+
+        if index == 3:
+            self.main_scroll.verticalScrollBar().setValue(0)
 
     def fit_page(self):
         page = self.pages.currentWidget()
@@ -520,6 +537,11 @@ class PreviewWindow(BankWindow):
             period = self.bills_page.period() if self.bills_page.default_range else None
             def read():
                 result = self.client.workspace_overview()
+                if hasattr(self.client, 'wealth'):
+                    try:
+                        result['wealth'] = self.client.wealth()
+                    except Exception:
+                        result['wealth_error'] = '理财数据未读取，请刷新重试。'
                 try:
                     result['bill_ledger'] = self.client.ledger(*period) if period else result['ledger']
                 except LedgerUnavailable as exc:
@@ -556,6 +578,9 @@ class PreviewWindow(BankWindow):
         self.bills_page.end.setEnabled(not self.busy)
         self.bills_page.month.setEnabled(not self.busy)
         self.bills_page.account_button.setEnabled(bool(self.snapshot) and not self.busy and not self.pending and not self.uncertain)
+        if hasattr(self, 'wealth_page'):
+            self.wealth_page.set_available(editable)
+            self.wealth_page.refresh.setEnabled(editable)
         self.identity_name.setText(self.current_customer.text().removeprefix('当前演示客户：').replace('（演示客户）','').strip())
         self.more_actions.setText(self.identity_name.text()+'  ⌄')
         self.update_context()
@@ -566,6 +591,16 @@ class PreviewWindow(BankWindow):
         self.status.setVisible(self.status.text() not in {'账户已更新','账单已更新 · 当前账户实际账本'})
         self.status.style().unpolish(self.status)
         self.status.style().polish(self.status)
+
+    def prepare_wealth_form(self, action, fields):
+        if self.busy or self.blocked or self.pending or self.uncertain or not self.client.token:
+            return
+        self.form_active = True
+        self.last_form = None
+        self._prepared_from_form = False
+        self.completed_form = False
+        self.toggle_assistant(False)
+        self.run('query', lambda: self.client.form(action, fields))
 
     def validate_transfer(self):
         if not hasattr(self, 'amount_error'):
@@ -710,6 +745,7 @@ class PreviewWindow(BankWindow):
         if not hasattr(self, 'pages'):
             return
         if kind in {'connect', 'customer', 'customer_error'}:
+            self.wealth_page.clear()
             self.bills_page.clear()
             self.bills_page.default_range = None
             self.ai_context.setText('当前账户正在读取…')
@@ -731,6 +767,11 @@ class PreviewWindow(BankWindow):
             self.toggle_assistant(True)
         elif kind == 'accounts':
             actor = (result.get('current_customer_ref'), result['current_account_ref'])
+            if result.get('wealth'):
+                self.wealth_page.set_data(result['wealth'], actor)
+            else:
+                self.wealth_page.clear()
+                self.wealth_page.feedback.setText(result.get('wealth_error', '理财数据尚未加载。'))
             if self.actor is not None and actor != self.actor:
                 self.amount.clear()
             changed = self.actor != actor
@@ -791,10 +832,11 @@ class PreviewWindow(BankWindow):
                         break
             transactions = sorted(result['ledger']['transactions'], key=lambda r: (r['occurred_at'], r['transaction_id']), reverse=True)[:5]
             self.transactions.setRowCount(len(transactions))
-            labels = {'INCOME': '收入', 'EXPENSE': '消费', 'TRANSFER_OUT': '转出', 'TRANSFER_IN': '转入'}
+            labels = {'INCOME': '收入', 'EXPENSE': '消费', 'TRANSFER_OUT': '转出', 'TRANSFER_IN': '转入',
+                      'WEALTH_RESERVE': '申购冻结', 'WEALTH_RELEASE': '理财解冻', 'WEALTH_CREDIT': '赎回到账'}
             for index, row in enumerate(transactions):
                 values = [row['occurred_at'][:16].replace('T', ' '), labels[row['kind']] + ' · ' + (row['merchant'] or row['category']),
-                          ('+' if row['kind'] in {'INCOME', 'TRANSFER_IN'} else '−') + money(row['amount_minor'])]
+                          ('+' if row['kind'] in {'INCOME', 'TRANSFER_IN', 'WEALTH_RELEASE', 'WEALTH_CREDIT'} else '−') + money(row['amount_minor'])]
                 for col, value in enumerate(values):
                     item = QTableWidgetItem(value)
                     if col == 2:
@@ -857,6 +899,10 @@ class PreviewWindow(BankWindow):
 
     @staticmethod
     def summarize(receipt):
+        from bankagent.banking.wealth import OPERATIONS
+        if receipt['operation'] in OPERATIONS:
+            from bankagent.agent.scenarios.wealth import render
+            return render(receipt)
         data = receipt.get('data') or {}
         operation, status = receipt['operation'], receipt['status']
         if operation == 'BATCH_TRANSFER' and data.get('items'):
