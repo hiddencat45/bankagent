@@ -1,10 +1,9 @@
 """Native wealth cards and a nonblocking, explicitly confirmed onboarding form."""
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtWidgets import (QWidget,QFrame,QLabel,QPushButton,QVBoxLayout,QHBoxLayout,
     QDialog,QLineEdit,QComboBox,QFormLayout,QStackedWidget,QScrollArea,QSizePolicy,QGridLayout)
-from desktop.client import money
 from desktop.theme import STYLE
-from desktop.wealth_disclosures import disclosure
+from desktop.wealth_product_card import ProductSummary, ProductRiskNote
 
 WEALTH_STYLE='''
 QFrame#wealthPanel {background:white;border:1px solid #e0e8e2;border-radius:14px;}
@@ -62,7 +61,8 @@ class ProductCards(QWidget):
         total=max(1,(len(self.cards)+5)//6);self.page=max(0,min(page,total-1))
         while self.box.count():self.box.takeAt(0).widget().hide()
         visible=self.cards[self.page*6:self.page*6+6]
-        columns=2 if 1<len(visible)<=4 else 3
+        columns=2 if self.width()>=760 and len(visible)>1 else 1
+        self.columns=columns
         for col in range(3):self.box.setColumnStretch(col,1 if col<columns else 0)
         for i,card in enumerate(visible):
             self.box.addWidget(card,i//columns,i%columns);card.show()
@@ -70,29 +70,31 @@ class ProductCards(QWidget):
         self.previous.setEnabled(self.page>0);self.next.setEnabled(self.page<total-1)
         self.updateGeometry();self.geometryChanged.emit()
 
+    def resizeEvent(self,event):
+        super().resizeEvent(event)
+        columns=2 if self.width()>=760 and len(self.cards[self.page*6:self.page*6+6])>1 else 1
+        if columns!=getattr(self,'columns',None):
+            QTimer.singleShot(0,lambda:self.show_page(self.page))
+
+    def refresh_geometry(self):
+        self.layout().invalidate()
+        self.updateGeometry()
+        self.geometryChanged.emit()
+
     def populate(self,products,recommendations):
         selected=max(0,self.row);self.setRowCount(0)
         for i,p in enumerate(products):
             card=QFrame(self);card.hide();card.setObjectName('wealthProduct');box=QVBoxLayout(card)
-            box.setContentsMargins(16,16,16,16);box.setSpacing(8)
-            head=QHBoxLayout();head.addWidget(text(p['issuer'],'wealthCaption'));head.addStretch()
-            head.addWidget(text(f"R{p['issuer_risk']}",'wealthTag'));box.addLayout(head)
-            box.addWidget(text(p['short_name'],'wealthName'))
-            box.addWidget(text('不保本 · 管理人评级','wealthCaption'))
-            d=disclosure(p['code'])
-            box.addWidget(text(d['value']+'%' if d.get('value') else '—','wealthYield'))
-            box.addWidget(text(d['metric'],'wealthHint'))
-            period=f"{d['start']} 至 {d['end']}" if d.get('value') else '尚无已核验的收益披露'
-            box.addWidget(text(period,'wealthCaption'))
-            box.addWidget(text('官方披露快照 · 非实时' if d.get('value') else '不以净值或基准替代收益率','wealthCaption'))
-            box.addSpacing(4)
-            hold=f"最低持有 {p['hold_days']} 天" if p['hold_days'] else '无封闭期'
-            box.addWidget(text(hold+' · '+money(p['minimum_minor'])+' 元起投','wealthHint'))
+            box.setContentsMargins(20,20,20,16);box.setSpacing(12)
+            box.addWidget(ProductSummary(p))
             r=recommendations.get(p['code'])
             status='待完善需求' if r is None else r.get('comparison_group','符合模拟初筛' if r['eligible'] else '暂不匹配')
             if r and r.get('recommendation_rank'):status=f"推荐 {r['recommendation_rank']} · {r['recommendation_label']}"
             box.addWidget(text(status,'wealthHint'))
             box.addStretch()
+            risk=ProductRiskNote()
+            risk.geometryChanged.connect(lambda:QTimer.singleShot(0,self.refresh_geometry))
+            box.addWidget(risk)
             button=QPushButton('选择产品');button.setCheckable(True)
             button.clicked.connect(lambda checked=False,row=i:self.selectRow(row))
             button.setAccessibleName('选择'+p['short_name']);box.addWidget(button)

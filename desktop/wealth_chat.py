@@ -2,6 +2,7 @@
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QFrame, QWidget, QVBoxLayout, QHBoxLayout, QPushButton
 from desktop.client import money
+from desktop.wealth_product_card import ProductSummary, ProductRiskNote
 from bankagent.banking.wealth import OPERATIONS, STATES
 
 
@@ -12,7 +13,7 @@ QLabel#wealthChatBody {font-size:14px;color:#425d50;}
 QLabel#wealthChatCaption {font-size:12px;color:#728278;}
 QLabel#wealthChatName {font-size:15px;font-weight:600;color:#244e3b;}
 QLabel#wealthChatTag {font-size:12px;color:#476957;}
-QFrame#wealthChatProduct {background:#f5f8f5;border:0;border-radius:10px;}
+QFrame#wealthChatProduct {background:white;border:1px solid #dfe7e1;border-radius:14px;}
 QPushButton#wealthChatPrimary {background:#205d46;color:white;border:0;border-radius:9px;padding:10px 18px;font-size:14px;}
 QPushButton#wealthChatPrimary:hover {background:#2d7157;}
 QPushButton#wealthChatLink {background:transparent;color:#476957;border:0;padding:8px 0;font-size:13px;text-align:left;}
@@ -63,12 +64,10 @@ def render(chat, receipt):
             for result in data['recommendations']:
                 product=products[result['product_code']]
                 card = QFrame(); card.setObjectName('wealthChatProduct')
-                content = QVBoxLayout(card); content.setContentsMargins(14, 12, 14, 10); content.setSpacing(6)
+                content = QVBoxLayout(card); content.setContentsMargins(20, 18, 20, 14); content.setSpacing(10)
                 if result.get('recommendation_rank'):
                     text(f"推荐 {result['recommendation_rank']} · {result['recommendation_label']}",'wealthChatTag',content)
-                text(product['short_name'], 'wealthChatName', content)
-                hold = f"最低持有 {product['hold_days']} 天" if product['hold_days'] else '不设封闭期'
-                text(f"管理人 R{product['issuer_risk']}  ·  {money(product['minimum_minor'])} 元起  ·  {hold}", 'wealthChatCaption', content)
+                content.addWidget(ProductSummary(product))
                 group=result.get('comparison_group','通过初筛' if result['eligible'] else '暂不匹配')
                 if result.get('recommendation_reasons'):
                     text('推荐理由' if result.get('recommendation_rank') else '备选说明','wealthChatName',content)
@@ -76,6 +75,9 @@ def render(chat, receipt):
                     for tradeoff in result.get('tradeoffs',[]):text('需要权衡 · '+tradeoff,'wealthChatCaption',content)
                 else:text(group+' · '+('通过初筛 · ' if result['eligible'] else '')+'；'.join(result['reasons']), target=content)
                 if result.get('notes') and not result.get('recommendation_rank'):text('；'.join(result['notes']),'wealthChatCaption',content)
+                risk=ProductRiskNote()
+                risk.geometryChanged.connect(lambda:QTimer.singleShot(0,chat.fit_bubbles))
+                content.addWidget(risk)
                 action('查看产品详情 →', 'product', {'code': product['code']}, target=content)
                 target=alternatives_box if group=='其他备选' else excluded_box if group in {'不匹配','暂不匹配'} else body
                 target.addWidget(card)
