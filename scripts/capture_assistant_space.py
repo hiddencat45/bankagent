@@ -17,7 +17,7 @@ def run(output, visible=False, scale=None, width=1280, height=850):
     if scale:
         os.environ['QT_SCREEN_SCALE_FACTORS'] = str(scale)
     from PySide6.QtWidgets import QApplication, QPushButton
-    from PySide6.QtCore import Qt
+    from PySide6.QtCore import Qt, QPoint
     from PySide6.QtTest import QTest
     from desktop.app import LocalService
     from desktop.preview import PreviewWindow
@@ -84,6 +84,10 @@ def run(output, visible=False, scale=None, width=1280, height=850):
             assert window.assistant_box.isVisible() and window.confirmation.isVisible()
             assert '40.00' in window.confirm_text.text() and '默认演示账户' in window.confirm_text.text()
             capture('confirmation')
+            viewport = window.assistant_box.confirm_scroll.viewport()
+            for control in (window.confirm_text, window.approve, window.edit, window.reject):
+                bounds = control.rect().translated(control.mapTo(viewport, QPoint(0, 0)))
+                assert viewport.rect().contains(bounds), 'Confirmation content is clipped'
             window.ai_close.click(); window.orb.click()
             assert window.pending == old
             assert window.balance_value.text() == '¥ 5,000.00'
