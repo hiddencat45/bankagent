@@ -27,8 +27,15 @@ def test_register_open_card_logout_and_restart(tmp_path):
         auth = {'Authorization': 'Bearer ' + switched.json()['token']}
         for action, fields in [('ISSUE_DEBIT_CARD', {'display_name':'日常卡'}), ('ACTIVATE_DEBIT_CARD', {'card_name':'日常卡'})]:
             assert result(confirm(c, auth, form(c, auth, action, **fields)))['status'] == 'COMPLETED'
-        result(confirm(c, auth, form(c, auth, 'OPEN_ACCOUNT', display_name='储蓄账户')))
-        pending = form(c, auth, 'TRANSFER', recipient_name='储蓄账户', amount='30')
+        assert result(confirm(c,auth,form(c,auth,'SIMULATE_CARD_DEPOSIT',card_name='日常卡',amount='1000')))['status']=='COMPLETED'
+        target=result(confirm(c, auth, form(c, auth, 'OPEN_ACCOUNT', display_name='储蓄账户')))['data']['account_id']
+        from test_funds_chain import select
+        auth=select(c,auth,target)
+        for action, fields in [('ISSUE_DEBIT_CARD', {'display_name':'储蓄卡'}), ('ACTIVATE_DEBIT_CARD', {'card_name':'储蓄卡'})]:
+            assert result(confirm(c, auth, form(c, auth, action, **fields)))['status'] == 'COMPLETED'
+        number=c.get('/bank/desktop-objects',headers=auth).json()['data']['cards'][0]['card_number']
+        auth=select(c,auth,account)
+        pending = form(c, auth, 'TRANSFER', recipient_name=number, amount='30')
         signal = next(d for e, d in pending if e == 'interrupt')
         payload = {'thread_id':pending[0][1]['thread_id'], 'resume':{
             'challenge_id':signal['challenge_id'], 'decision':'approve'}}
@@ -48,5 +55,5 @@ def test_register_open_card_logout_and_restart(tmp_path):
     with TestClient(create_app(database_path=path, local_login=True), base_url='http://localhost') as c:
         auth = login(c)
         accounts = c.get('/bank/accounts', headers=auth).json()['accounts']
-        assert len(accounts) == 2 and [a['balance_minor'] for a in accounts] == [97000, 103000]
+        assert len(accounts) == 2 and [a['balance_minor'] for a in accounts] == [97000, 3000]
         assert c.post('/bank/account-session', headers=auth, json={'account_ref':'account-002'}).status_code == 403

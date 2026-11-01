@@ -6,8 +6,8 @@ from uuid import uuid4
 
 from bankagent.banking.bank_types import TrustedContext, WriteContext
 
-DEMO_OPENING_BALANCE_MINOR = 100000
-OPERATIONS = frozenset({'CREATE_DEMO_CUSTOMER', 'OPEN_ACCOUNT', 'ISSUE_DEBIT_CARD', 'ACTIVATE_DEBIT_CARD', 'PAY_BY_CARD', 'SET_CARD_LIMITS'})
+DEMO_OPENING_BALANCE_MINOR = 0
+OPERATIONS = frozenset({'CREATE_DEMO_CUSTOMER', 'OPEN_ACCOUNT', 'ISSUE_DEBIT_CARD', 'ACTIVATE_DEBIT_CARD', 'PAY_BY_CARD', 'SET_CARD_LIMITS', 'SIMULATE_CARD_DEPOSIT'})
 DEFAULT_SINGLE_LIMIT_MINOR = 500000
 DEFAULT_DAILY_LIMIT_MINOR = 1000000
 
@@ -22,16 +22,12 @@ def text(value):
 
 
 def _open_account_record(data, user_id, display_name, now):
-    account_id, transaction_id = 'account-' + uuid4().hex, 'txn-' + uuid4().hex
+    account_id = 'account-' + uuid4().hex
     data['accounts'][account_id] = {'user_id': user_id,
         'display_name': display_name, 'balance_minor': DEMO_OPENING_BALANCE_MINOR, 'currency': 'CNY'}
-    data['transactions'].append({'transaction_id': transaction_id, 'account_id': account_id,
-        'occurred_at': now.isoformat(), 'kind': 'INCOME',
-        'amount_minor': DEMO_OPENING_BALANCE_MINOR, 'category': '演示入账',
-        'merchant': '模拟银行演示资金', 'subscription_id': None})
     return {'customer_id': user_id, 'account_id': account_id,
         'display_name': display_name, 'balance_minor': DEMO_OPENING_BALANCE_MINOR,
-        'currency': 'CNY', 'funding_source': 'DEMO_CREDIT', 'transaction_id': transaction_id}
+        'currency': 'CNY', 'funding_source': 'NONE', 'transaction_id': None}
 
 
 class LifecycleMixin:
@@ -205,3 +201,24 @@ class LifecycleMixin:
                 'amount_minor': amount_minor, 'currency': 'CNY', 'merchant': merchant,
                 'remaining_balance_minor': account['balance_minor']})
         return self._lifecycle_write(context, operation, params, apply)
+
+    def simulate_card_deposit(self, *, context: WriteContext, card_id: str, amount_minor: int):
+        operation = 'SIMULATE_CARD_DEPOSIT'
+        if not text(card_id) or type(amount_minor) is not int or not 0 < amount_minor <= 1000000:
+            return result(operation, error='INVALID_DEPOSIT')
+        def apply(data):
+            card = data['cards'].get(card_id)
+            if not card or card['account_id'] != context.account_id:
+                return result(operation, error='CARD_NOT_ACCESSIBLE')
+            if card['status'] != 'ACTIVE':
+                return result(operation, error='CARD_NOT_ACTIVE')
+            account = data['accounts'][context.account_id]
+            account['balance_minor'] += amount_minor
+            transaction = 'txn-' + uuid4().hex
+            data['transactions'].append({'transaction_id': transaction, 'account_id': context.account_id,
+                'occurred_at': self._now().isoformat(), 'kind': 'INCOME', 'amount_minor': amount_minor,
+                'category': '模拟入金', 'merchant': '本机测试资金（非真实存款）',
+                'subscription_id': None, 'card_id': card_id})
+            return result(operation, {'transaction_id': transaction, 'display_name': card['display_name'],
+                'amount_minor': amount_minor, 'currency': 'CNY', 'remaining_balance_minor': account['balance_minor']})
+        return self._lifecycle_write(context, operation, dict(card_id=card_id, amount_minor=amount_minor), apply)

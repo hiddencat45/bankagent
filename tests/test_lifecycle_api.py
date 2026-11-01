@@ -23,10 +23,11 @@ def test_account_session_lifecycle(tmp_path):
         switched = c.post('/bank/account-session', headers=auth, json={'account_ref': ref})
         assert switched.status_code == 200
         auth2 = {'Authorization': 'Bearer ' + switched.json()['token']}
-        assert result(chat(c, auth2, message='查询余额'))['data']['balance_minor'] == 100000
+        assert result(chat(c, auth2, message='查询余额'))['data']['balance_minor'] == 0
         assert result(submit(c, auth2, '办理借记卡「生活卡」'))['data']['status'] == 'PENDING_ACTIVATION'
         assert chat(c, auth2, message='解冻生活卡')[-1][1]['status'] == 'REJECTED'
         assert result(submit(c, auth2, '激活「生活卡」'))['data']['status'] == 'ACTIVE'
+        assert result(submit(c, auth2, '为「生活卡」模拟入金1000元'))['status'] == 'COMPLETED'
         payment = '使用「生活卡」在商户「演示超市」刷卡支付12.30元，分类「购物」'
         assert result(submit(c, auth2, payment))['data']['remaining_balance_minor'] == 98770
         submit(c, auth2, '冻结生活卡')
@@ -76,7 +77,7 @@ def test_bilateral_transfer_and_limits_through_agent(tmp_path):
         own = result(submit(c, auth, '开户「储蓄账户」'))['data']['account_id']
         submit(c, auth, '给储蓄账户转50元')
         row = next(a for a in c.get('/bank/accounts', headers=auth).json()['accounts'] if a['account_ref'] == own)
-        assert row['balance_minor'] == 105000
+        assert row['balance_minor'] == 5000  # Zero opening balance plus explicit incoming transfer.
         assert submit(c, auth, '设置限额「日常消费卡」单笔10元，每日20元', False)[-1][1]['status'] == 'REJECTED'
         assert result(chat(c, auth, message='查询限额「日常消费卡」'))['data']['single_limit_minor'] == 500000
         submit(c, auth, '设置限额「日常消费卡」单笔10元，每日20元')

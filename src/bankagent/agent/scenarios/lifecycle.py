@@ -23,7 +23,7 @@ CLARIFY_LABELS = {'display_name': '名称（例如：开户「日常账户」）
 LABELS = {'OPEN_ACCOUNT': '开立模拟账户', 'ISSUE_DEBIT_CARD': '办理借记卡',
           'ACTIVATE_DEBIT_CARD': '激活借记卡', 'PAY_BY_CARD': '模拟消费'}
 TOOL_DESCRIPTIONS = {'ISSUE_DEBIT_CARD': '为当前无卡账户申请唯一普通借记卡。先查询卡片；已有卡时告知用户先开户并在页面切换账户，不能再发共享余额卡。',
-                    'OPEN_ACCOUNT': '新开独立账户，确认后有1000元演示入账；需用户在页面切换后才可为此账户发卡。'}
+                    'OPEN_ACCOUNT': '新开零余额独立账户，不赠款。需用户在页面切换后办理并激活卡；用户明确需要测试资金时另行确认模拟入金。'}
 
 
 def resolve(candidate_params, context):
@@ -75,7 +75,7 @@ def confirmation(*, operation, params, candidate_params, context):
         card = next(c for c in cards['data']['cards'] if c['card_id'] == params['card_id'])
         details['display_name'] = card['display_name']
     if operation == 'OPEN_ACCOUNT':
-        details.update(opening_credit_minor=100000, currency='CNY')
+        details.update(opening_credit_minor=0, currency='CNY')
     if operation == 'ISSUE_DEBIT_CARD':
         details['account_policy'] = '当前账户仅允许一张普通卡；已有卡请先开户并切换。余额属于该独立账户，不复制其他账户资金。'
     if operation == 'PAY_BY_CARD':
@@ -101,7 +101,7 @@ def render(result):
                 'CARD_NOT_PENDING_ACTIVATION': '此卡不是待激活状态，本次未变更。'}.get(code, '本次业务未完成，请检查名称、卡片状态和输入信息。')
     data, op = result['data'], result['operation']
     if op == 'OPEN_ACCOUNT':
-        return f"模拟账户“{data['display_name']}”已开立，已记入 1,000.00 元演示资金。请在账户列表切换后办理新卡。"
+        return f"模拟账户“{data['display_name']}”已开立，余额0元，未自动入账。请在账户列表切换后办理并激活卡，需要测试资金时再明确模拟入金。"
     if op == 'ISSUE_DEBIT_CARD':
         return f"借记卡“{data['display_name']}”已办理，请激活后使用。"
     if op == 'ACTIVATE_DEBIT_CARD':

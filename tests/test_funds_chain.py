@@ -42,13 +42,14 @@ def test_complete_funds_chain_and_service_restart(tmp_path):
         account = result(submit(client, primary, '开户「链路账户」'))['data']['account_id']
         sender = select(client, primary, account)
         receiver = receiver_session(client)
-        assert balance(client, sender) == 100000
+        assert balance(client, sender) == 0
         assert balance(client, receiver) == 40000
         issued = result(submit(client, sender, '办理借记卡「链路卡」'))
         assert issued['data']['status'] == 'PENDING_ACTIVATION'
         assert pay(client, sender, '60')['error_code'] == 'CARD_NOT_ACTIVE'
-        assert balance(client, sender) == 100000
+        assert balance(client, sender) == 0
         submit(client, sender, '激活「链路卡」')
+        submit(client, sender, '为「链路卡」模拟入金1000元')
         submit(client, sender, '设置限额「链路卡」单笔60元，每日100元')
         assert pay(client, sender, '60.01')['error_code'] == 'CARD_SINGLE_LIMIT_EXCEEDED'
         assert pay(client, sender, '60')['data']['remaining_balance_minor'] == 94000

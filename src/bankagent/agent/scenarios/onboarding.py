@@ -19,7 +19,7 @@ def validate(operation, params):
 
 def confirmation(*, operation, params, candidate_params, context):
     return {'display_name': params['customer_name'], 'account_name': params['account_name'],
-            'opening_credit_minor': 100000, 'currency': 'CNY'}
+            'opening_credit_minor': 0, 'currency': 'CNY'}
 
 
 def execute(operation, params, context):
@@ -32,4 +32,4 @@ def render(result):
                 if result.get('error_code') == 'DEMO_CREATION_DISABLED' else '创建未完成，请核对结果后重试原确认操作。')
     data = result['data']
     return (f"已创建虚构客户“{data['customer_name']}”及首账户“{data['display_name']}”，"
-            '已记入1,000.00元演示资金。请在演示客户列表切换，再申请并激活借记卡。')
+            '初始余额0元，没有自动入账。请切换后申请并激活卡，再按需确认模拟入金。')

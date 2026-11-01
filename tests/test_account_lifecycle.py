@@ -37,7 +37,7 @@ def test_account_card_payment_freeze_unfreeze_restart(setup):
     opened = b.open_account(context=grant('OPEN_ACCOUNT', {'display_name': '消费账户'}), display_name='消费账户')
     assert opened['status'] == 'COMPLETED'
     account = opened['data']['account_id']
-    assert opened['data']['funding_source'] == 'DEMO_CREDIT'
+    assert opened['data']['funding_source'] == 'NONE' and opened['data']['balance_minor'] == 0
     q = TrustedContext('user-001', account, 'query')
     issue_params = {'display_name': '新借记卡'}
     issued = b.issue_debit_card(context=grant('ISSUE_DEBIT_CARD', issue_params, account), **issue_params)
@@ -49,6 +49,8 @@ def test_account_card_payment_freeze_unfreeze_restart(setup):
     for operation, method in [('FREEZE_CARD', b.freeze_card), ('UNFREEZE_CARD', b.unfreeze_card)]:
         assert method(context=grant(operation, {'card_id': card}, account), card_id=card)['error_code'] == 'CARD_NOT_ACTIVE'
     assert b.activate_debit_card(context=grant('ACTIVATE_DEBIT_CARD', {'card_id': card}, account), card_id=card)['status'] == 'COMPLETED'
+    deposit = dict(card_id=card, amount_minor=100000)
+    assert b.simulate_card_deposit(context=grant('SIMULATE_CARD_DEPOSIT', deposit, account), **deposit)['status'] == 'COMPLETED'
     paid = b.pay_by_card(context=pay_context, **payment)
     assert paid['data']['remaining_balance_minor'] == 88000
     assert b.freeze_card(context=grant('FREEZE_CARD', {'card_id': card}, account), card_id=card)['status'] == 'COMPLETED'

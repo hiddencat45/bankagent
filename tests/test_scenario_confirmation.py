@@ -202,19 +202,20 @@ def test_scenario_without_confirmation_hook_keeps_base_payload(monkeypatch):
     }
 
 
-def test_transfer_confirm_payload_fields_unchanged(card_app):
-    """回归：转账确认卡字段集合与重构前一致，既不增也不减。"""
+def test_transfer_confirm_payload_includes_bound_payer_card(card_app):
+    """契约增量：保留原确认字段，补充服务端当前付款卡名称和尾号。"""
     client, _, _ = card_app
     out = chat(client, login(client), message="给张伟转 300 元")
     payload = _confirm_payload(out)
 
     assert set(payload) == {
         "operation", "risk_level", "challenge_id", "operation_hash", "expires_at",
-        "recipient", "amount_minor", "currency",
+        "recipient", "amount_minor", "currency", "payer_card",
     }
     assert payload["recipient"] == "张伟"
     assert payload["amount_minor"] == 30000
     assert payload["currency"] == "CNY"
+    assert '日常消费卡' in payload['payer_card'] and '0001' in payload['payer_card']
 
 
 def test_transfer_confirmation_refuses_unmatched_recipient(card_app):

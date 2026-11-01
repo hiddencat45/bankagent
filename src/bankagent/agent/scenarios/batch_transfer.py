@@ -90,6 +90,8 @@ def rejected_result(params, candidate_params, code):
 
 
 def render(result):
+    if result.get('error_code') in {'SOURCE_CARD_REQUIRED', 'SOURCE_CARD_NOT_ACTIVE'}:
+        return '当前没有可付款的已激活借记卡。请先办卡并激活或切换付款卡，整批未执行。'
     if result.get('error_code') == 'SOURCE_CARD_FROZEN':
         return '付款账户的银行卡已冻结，整批转账未执行。请先解冻；模拟认证不能解除冻结。'
     data = result.get('data') or {}
