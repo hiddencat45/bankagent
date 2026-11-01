@@ -207,6 +207,7 @@ class PreviewWindow(BankWindow):
         self.ai_context.hide()
         self.conversation = ChatView()
         self.conversation.receipt_opened.connect(self.open_receipt)
+        self.conversation.wealth_opened.connect(self.open_wealth_receipt)
         self.input.hide()
         self.input = MessageInput()
         self.input.returnPressed.connect(lambda: self.send())
@@ -343,6 +344,32 @@ class PreviewWindow(BankWindow):
             self._prepared_from_form = True
         self.toggle_assistant(False)
         self.edit_form()
+
+    def open_wealth_receipt(self, destination, payload):
+        if self.busy or (self.pending and destination == 'profile'):
+            self.assistant_box.feedback.setText('请先完成或取消当前操作，再继续。')
+            return
+        self.toggle_assistant(False)
+        page = self.wealth_page
+        if destination != 'profile':
+            page.defer_onboarding()
+        self.show_page(3)
+        page.tabs.setCurrentIndex({'profile': 1, 'holdings': 2, 'orders': 3, 'order': 3}.get(destination, 0))
+        if destination == 'profile':
+            page.open_profile()
+        elif destination == 'product' and page.data:
+            for i, product in enumerate(page.data['products']):
+                if product['code'] == payload.get('code'):
+                    page.products.selectRow(i)
+                    page.show_product_detail()
+                    break
+        elif destination == 'order' and page.data:
+            for i, order in enumerate(page.data['orders']):
+                if order['order_id'] == payload.get('order_id'):
+                    page.orders.selectRow(i)
+                    break
+            else:
+                page.feedback.setText('当前账户未找到这笔订单，请刷新后核对。')
 
     def open_receipt(self, receipt):
         if self.busy:

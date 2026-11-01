@@ -1,0 +1,10 @@
+{
+  "status": "PASSED",
+  "platform": "windows",
+  "scale": 1.25,
+  "profile_action": "opens questionnaire, no implicit save",
+  "browse_action": "opens catalog without questionnaire",
+  "model": "offline rules",
+  "ledger": "temporary SQLite",
+  "balance": 500000
+}

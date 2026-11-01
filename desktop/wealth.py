@@ -99,6 +99,10 @@ class WealthPage(QWidget):
         if key not in self.onboarded:
             self.onboarded.add(key);self.open_profile()
 
+    def defer_onboarding(self):
+        if self.data and self.actor:
+            self.onboarded.add((self.actor[0] or self.actor[1], (self.data.get('profile') or {}).get('expires_on')))
+
     def showEvent(self,event):
         super().showEvent(event);QTimer.singleShot(0,self.maybe_onboard)
 
