@@ -109,6 +109,10 @@ class SQLiteStore:
                 data['card_account_migration'] = moves
             encoded, receipts = SQLiteStore.encode(data, completed)
             db.execute('UPDATE bank_state SET version=3, data=?, receipts=? WHERE id=1', (encoded, receipts))
+        from bankagent.banking.card_numbers import fill_missing
+        if fill_missing(data.get('cards', {})):
+            encoded, receipts = SQLiteStore.encode(data, completed)
+            db.execute('UPDATE bank_state SET data=?, receipts=? WHERE id=1', (encoded, receipts))
         return data, completed
 
     def save(self, db, data, completed):
