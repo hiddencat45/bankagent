@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButto
 from desktop.client import money
 from bankagent.banking.wealth import STATES, NOTICE
 from desktop.wealth_widgets import ProductCards,ProfileDialog,WEALTH_STYLE,text
+from desktop.wealth_disclosures import disclosure
 
 
 def label(value):
@@ -38,6 +39,7 @@ class WealthPage(QWidget):
         layout=QVBoxLayout(self); layout.setContentsMargins(0,0,0,0); layout.setSpacing(14)
         heading=QHBoxLayout(); title=text('理财','title');heading.addWidget(title);heading.addWidget(text('模拟账户','wealthTag'))
         heading.addStretch(); self.refresh=QPushButton('刷新理财'); self.refresh.clicked.connect(self.refresh_requested.emit); heading.addWidget(self.refresh)
+        self.refresh.setToolTip('刷新模拟账户与订单；公开收益为已核验快照，不随此按钮实时更新。')
         layout.addLayout(heading)
         layout.addWidget(text('从了解自己的需求开始，让每一笔安排更清楚。','wealthHint'))
         assets=QHBoxLayout();assets.setSpacing(14);self.asset_values={}
@@ -60,6 +62,7 @@ class WealthPage(QWidget):
         actions=QHBoxLayout(); self.buy_amount=QLineEdit(); self.buy_amount.setMaximumWidth(300);self.buy_amount.setPlaceholderText('模拟申购金额（元）'); self.buy_amount.setAccessibleName('模拟申购金额'); actions.addWidget(self.buy_amount)
         self.buy=self.button('准备模拟申购',self.buy_selected); actions.addWidget(self.buy)
         self.compare=self.button('比较匹配结果',self.compare_products); actions.addWidget(self.compare);actions.addStretch();selection.addLayout(actions);c.addWidget(selected)
+        c.addWidget(text('历史业绩不代表未来收益。各产品统计区间不同，不按数值高低排名；收益资料核验于 2026-11-01，来源见产品详情。','wealthCaption'))
         c.addWidget(text('真实产品公开资料 · 非保本；当前微众在售、销售评级、费率与到账安排待核实。','wealthCaption'))
         self.tabs.addTab(catalog,'产品浏览')
         self.questionnaire=ProfileDialog(self);self.fields=self.questionnaire.fields;self.save=self.questionnaire.save
@@ -184,8 +187,15 @@ class WealthPage(QWidget):
         if not self.data or self.products.currentRow()<0:return
         from html import escape
         p=self.data['products'][self.products.currentRow()]
-        dialog=QDialog(self);dialog.setWindowTitle('产品资料');dialog.resize(600,480);box=QVBoxLayout(dialog);box.setContentsMargins(24,24,24,24);box.setSpacing(18)
+        dialog=QDialog(self);dialog.setWindowTitle('产品资料');dialog.resize(640,650);box=QVBoxLayout(dialog);box.setContentsMargins(24,24,24,24);box.setSpacing(14)
         box.addWidget(text(p['name'],'wealthName'));box.addWidget(text('份额代码 '+p['code'],'wealthCaption'))
+        d=disclosure(p['code'])
+        box.addWidget(text(d['value']+'%  '+d['metric'] if d.get('value') else d['metric'],'wealthName'))
+        if d.get('value'):
+            box.addWidget(text(f"统计区间：{d['start']} 至 {d['end']}\n来源：{d['issuer']}官方披露 · 核验日期 {d['checked']}\n已保存的披露快照，不自动更新。",'wealthHint'))
+            box.addWidget(text(d['note'],'wealthHint'))
+            performance=QLabel('<a href="'+escape(d['source'],quote=True)+'">查看官方收益披露 ↗</a>');performance.setOpenExternalLinks(True);box.addWidget(performance)
+        box.addWidget(text('过往业绩不代表未来表现，不是收益承诺；各产品统计区间不同。','wealthHint'))
         box.addWidget(text(f"管理人：{p['issuer']}  ·  R{p['issuer_risk']}  ·  非保本\n合同常规费用：{p['fee']}\n真实渠道在售、评级、实际到账与当前费率待核实。"))
         source=QLabel('<a href="'+escape(p['source'],quote=True)+'">查看官方产品说明书 ↗</a>');source.setOpenExternalLinks(True);box.addWidget(source)
         box.addWidget(text(NOTICE,'wealthHint'));close=QPushButton('知道了');close.clicked.connect(dialog.accept);box.addWidget(close)

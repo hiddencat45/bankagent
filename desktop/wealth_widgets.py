@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QWidget,QFrame,QLabel,QPushButton,QVBoxLayout,QHB
     QDialog,QLineEdit,QComboBox,QFormLayout,QStackedWidget,QScrollArea,QSizePolicy)
 from desktop.client import money
 from desktop.theme import STYLE
+from desktop.wealth_disclosures import disclosure
 
 WEALTH_STYLE='''
 QFrame#wealthPanel {background:white;border:1px solid #e0e8e2;border-radius:14px;}
@@ -12,6 +13,7 @@ QFrame#wealthHero {background:#184f40;border-radius:14px;}
 QFrame#wealthHero QLabel {background:transparent;color:white;}
 QLabel#wealthCaption {color:#718479;font-size:12px;}
 QLabel#wealthNumber {font-size:26px;font-weight:600;}
+QLabel#wealthYield {color:#ad5835;font-size:32px;font-weight:600;}
 QLabel#wealthName {font-size:18px;font-weight:600;}
 QLabel#wealthTag {background:#eaf3ec;color:#336751;border-radius:5px;padding:4px 8px;font-size:12px;}
 QLabel#wealthHint {color:#667b70;font-size:13px;}
@@ -56,12 +58,19 @@ class ProductCards(QWidget):
             head.addWidget(text(f"R{p['issuer_risk']}",'wealthTag'));box.addLayout(head)
             box.addWidget(text(p['short_name'],'wealthName'))
             box.addWidget(text('不保本 · 管理人评级','wealthCaption'))
-            price=QHBoxLayout();price.addWidget(text(money(p['minimum_minor'])+' 元','wealthNumber'))
-            price.addWidget(text('起投','wealthCaption'));price.addStretch();box.addLayout(price)
-            box.addWidget(text(f"最低持有 {p['hold_days']} 天" if p['hold_days'] else '无封闭期'))
+            d=disclosure(p['code'])
+            box.addWidget(text(d['value']+'%' if d.get('value') else '—','wealthYield'))
+            box.addWidget(text(d['metric'],'wealthHint'))
+            period=f"{d['start']} 至 {d['end']}" if d.get('value') else '尚无已核验的收益披露'
+            box.addWidget(text(period,'wealthCaption'))
+            box.addWidget(text('官方披露快照 · 非实时' if d.get('value') else '不以净值或基准替代收益率','wealthCaption'))
+            box.addSpacing(4)
+            hold=f"最低持有 {p['hold_days']} 天" if p['hold_days'] else '无封闭期'
+            box.addWidget(text(hold+' · '+money(p['minimum_minor'])+' 元起投','wealthHint'))
             r=recommendations.get(p['code'])
             status='待完善需求' if r is None else '符合模拟初筛' if r['eligible'] else '暂不匹配'
             box.addWidget(text(status,'wealthHint'))
+            box.addStretch()
             button=QPushButton('选择产品');button.setCheckable(True)
             button.clicked.connect(lambda checked=False,row=i:self.selectRow(row))
             button.setAccessibleName('选择'+p['short_name']);box.addWidget(button)

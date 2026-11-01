@@ -1,0 +1,84 @@
+{
+  "checked_on": "2026-11-01",
+  "description": "Exact public response field excerpts; hashes identify full locally retrieved responses. No simulated values.",
+  "records": [
+    {
+      "code": "2119987003A",
+      "url": "https://www.hxwm.com.cn/images/gmlc/gmcpgwyj/20261026/e193382c-a4fd-416b-845f-8a1d50625fde.js",
+      "fields": {
+        "subShareCode": "2119987003A",
+        "startDate": "20210625",
+        "endDate": "20261025",
+        "yieldYear": "2.01",
+        "sectionType": "01"
+      },
+      "sha256": "ff8fec2b83a11e5daeec31682039805d673f69133ce107e0041afb7e765a57c0"
+    },
+    {
+      "code": "2119987003A",
+      "url": "https://www.hxwm.com.cn/images/xxpl/gmcpgg/jzbg/20260930/2a6f7b51-f314-4222-a632-0c62d8379e08.js",
+      "fields": {
+        "reportId": "00001",
+        "prodRegCode": "Z7003921000274",
+        "prodType": "03",
+        "subShareCode": "2119987003A",
+        "netValueDate": "2026-09-29",
+        "shareNetVal": "",
+        "acumltNetVal": "",
+        "astNetVal": "",
+        "yieldSevenDate": "0.9157",
+        "netRevPer10000": "0.2788",
+        "currency": "CNY",
+        "priceBuy": "",
+        "priceRedeem": ""
+      },
+      "sha256": "b089cef367dd9c85dee4207ff40a53d7d0a72d04626ccb44e4ad3d2bd4a78ca1"
+    },
+    {
+      "code": "YJ01251202A",
+      "url": "https://www.beijingbobwealth.com.cn/bylc-api/product/perform?PROD_CODE=YJ01251202A",
+      "fields": {
+        "PROD_CODE": "YJ01251202A",
+        "PROD_NAME": "春系列诚享7天持有期27号A类份额",
+        "NAV_DATE": "20261030",
+        "INC_PERIOD": "2026.04.28-2026.10.30",
+        "INC": 2.64,
+        "NAV": 1.013486,
+        "MONTHINC": 1.67,
+        "MONTHINC_PERIOD": "2026.09.30-2026.10.30"
+      },
+      "sha256": "c77cc5aee9b1c3247e88583ed568cbdfe4b4c9351b1b281cd4702fb72617a57d"
+    },
+    {
+      "code": "5811225439",
+      "url": "https://www.bocommwm.com/SITE/queryJylcProductDetail.do",
+      "request": {
+        "method": "POST",
+        "form": {
+          "REQ_MESSAGE": {
+            "REQ_HEAD": {
+              "TRAN_PROCESS": "",
+              "TRAN_ID": ""
+            },
+            "REQ_BODY": {
+              "c_fundcode": "5811225439",
+              "c_productcode": ""
+            }
+          }
+        }
+      },
+      "fields": {
+        "c_fundcode": "5811225439",
+        "c_fundname": "交银理财稳享灵动慧利日开41号（7天持有期）理财产品",
+        "c_agencyno": "微众银行",
+        "d_setupdate": "20250910",
+        "d_cdate": "20261029",
+        "d_date": "20261029",
+        "yieldratio": "2.3967%",
+        "f_netvalue": "1.0272300000",
+        "c_interestway": "0"
+      },
+      "sha256": "b842930f9d8d39646816a194d857f5f073c2973783894afd5ad215724079f571"
+    }
+  ]
+}
