@@ -1,0 +1,33 @@
+{
+  "platform": "windows",
+  "visible": true,
+  "logical_size": [
+    1280,
+    720
+  ],
+  "scale": 1.5,
+  "model": "offline rules",
+  "service": "real HTTP / isolated SQLite",
+  "balance_after_minor": 496000,
+  "filtered_transfer": [
+    {
+      "transaction_id": "txn-93b8e8cf721540d6ad97df5af6f6c9ab",
+      "occurred_at": "2026-10-18T12:00:02.869949+08:00",
+      "kind": "TRANSFER_OUT",
+      "amount_minor": 4000,
+      "category": "转账",
+      "merchant": null,
+      "counterparty_name": "张伟",
+      "transfer_id": "transfer-21dd8b8c21e04bc0ad4c147fc3a43942",
+      "related_transaction_id": "txn-47da3891060747209fc8a02980742005"
+    }
+  ],
+  "steps": [
+    "open ledger",
+    "toggle translucent orb",
+    "assistant queries balance: bubble and receipt card",
+    "assistant queries current-month bills",
+    "form transfer 40, approve",
+    "ledger refresh, search 张伟, exactly one outgoing 4000 minor"
+  ]
+}

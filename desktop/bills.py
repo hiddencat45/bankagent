@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt, QDate, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QLineEdit, QDateEdit, QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView, QDialog, QDialogButtonBox)
+    QAbstractItemView, QFrame, QPlainTextEdit, QBoxLayout, QScrollArea)
 from desktop.client import money
 
 KINDS = {'INCOME':'入账', 'TRANSFER_IN':'转入', 'EXPENSE':'消费', 'TRANSFER_OUT':'转出'}
@@ -20,8 +20,9 @@ class BillsPage(QWidget):
         self.page = 0
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0,0,0,0)
+        layout.setSpacing(16)
         title = QLabel('交易记录'); title.setObjectName('title'); layout.addWidget(title)
-        layout.addWidget(QLabel('查看当前账户的账单与资金往来'))
+        subtitle=QLabel('查看当前账户的账单与资金往来'); subtitle.setObjectName('muted'); layout.addWidget(subtitle)
         tabs = QHBoxLayout()
         self.all_tab, self.expense_tab = QPushButton('全部交易'), QPushButton('消费账单')
         for button in (self.all_tab, self.expense_tab):
@@ -44,29 +45,47 @@ class BillsPage(QWidget):
         self.search = QLineEdit(); self.search.setPlaceholderText('搜索商户或对方'); self.search.setAccessibleName('搜索商户或对方')
         filters.addWidget(self.search,1)
         layout.addLayout(filters)
-        actions = QHBoxLayout()
         self.query, self.reset = QPushButton('查询 / 刷新'), QPushButton('重置筛选')
-        self.query.setObjectName('primary'); actions.addWidget(self.query); actions.addWidget(self.reset); actions.addStretch()
-        layout.addLayout(actions)
+        self.query.setObjectName('primary')
+        tabs.addWidget(self.query); tabs.addWidget(self.reset)
         self.query.clicked.connect(self.requested.emit); self.reset.clicked.connect(self.reset_filters)
         self.search.returnPressed.connect(self.apply_filters)
         self.kind.currentIndexChanged.connect(self.apply_filters); self.category.currentIndexChanged.connect(self.apply_filters)
         self.search.textChanged.connect(self.apply_filters)
-        totals = QHBoxLayout(); self.totals=[]
+        summary = QFrame(); summary.setObjectName('ledgerSummary')
+        totals = QHBoxLayout(summary); totals.setContentsMargins(22,18,22,18); self.totals=[]
         for _ in range(3):
             label=QLabel('—'); label.setObjectName('ledgerTotal'); totals.addWidget(label,1); self.totals.append(label)
-        layout.addLayout(totals)
-        note=QLabel('以下统计对应筛选结果。支出包含消费与转出；消费不包含转账。'); note.setWordWrap(True); layout.addWidget(note)
+        layout.insertWidget(2,summary)
+        note=QLabel('统计对应当前筛选 · 支出包含消费与转出'); note.setObjectName('muted'); note.setWordWrap(True); layout.addWidget(note)
         self.table=QTableWidget(0,7)
         self.table.setHorizontalHeaderLabels(['日期时间','商户或对方','类型','分类','金额（元）','状态','操作'])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.verticalHeader().hide(); self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setDefaultSectionSize(42)
+        self.table.verticalHeader().hide(); self.table.setAlternatingRowColors(False)
+        self.table.setShowGrid(False)
+        self.table.verticalHeader().setDefaultSectionSize(58)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(1,QHeaderView.ResizeMode.Stretch)
         self.table.setMinimumHeight(260); self.table.cellDoubleClicked.connect(lambda r,c:self.details(r))
-        layout.addWidget(self.table)
+        self.table.cellClicked.connect(lambda r,c:self.details(r))
+        self.table.setColumnHidden(3,True)
+        self.table.setColumnHidden(5,True)
+        self.table.setColumnHidden(6,True)
+        self.body = QBoxLayout(QBoxLayout.Direction.LeftToRight)
+        self.body.setSpacing(18); self.body.addWidget(self.table,5)
+        self.inspector = QFrame(); self.inspector.setObjectName('transactionInspector')
+        detail_layout = QVBoxLayout(self.inspector); detail_layout.setContentsMargins(22,24,22,24); detail_layout.setSpacing(16)
+        heading=QLabel('交易详情'); heading.setObjectName('sectionTitle'); detail_layout.addWidget(heading)
+        self.detail_body=QLabel('选择一笔交易查看详情'); self.detail_body.setWordWrap(True)
+        self.detail_body.setTextFormat(Qt.TextFormat.PlainText); self.detail_body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        detail_scroll=QScrollArea(); detail_scroll.setWidgetResizable(True)
+        detail_scroll.setWidget(self.detail_body); detail_scroll.setMinimumHeight(180)
+        detail_layout.addWidget(detail_scroll,1)
+        self.refs=QPlainTextEdit(); self.refs.setReadOnly(True); self.refs.setMaximumHeight(120); self.refs.hide()
+        self.refs_toggle=QPushButton('展开流水编号'); self.refs_toggle.setCheckable(True); self.refs_toggle.toggled.connect(self.refs.setVisible)
+        detail_layout.addWidget(self.refs_toggle); detail_layout.addWidget(self.refs)
+        self.body.addWidget(self.inspector,3); layout.addLayout(self.body)
         footer=QHBoxLayout(); self.note=QLabel('正在读取账本…'); self.note.setWordWrap(True); footer.addWidget(self.note,1)
         self.previous,self.next=QPushButton('上一页'),QPushButton('下一页'); self.page_label=QLabel('—')
         for widget in (self.previous,self.page_label,self.next):footer.addWidget(widget)
@@ -78,6 +97,7 @@ class BillsPage(QWidget):
 
     def clear(self, message='正在读取账本…'):
         self.data=None; self.rows=[]; self.table.setRowCount(0); self.note.setText(message)
+        self.clear_details()
         for label in self.totals:label.setText('—')
         self.previous.setEnabled(False); self.next.setEnabled(False); self.page_label.setText('—')
 
@@ -128,11 +148,13 @@ class BillsPage(QWidget):
             if row['transaction_id'] in ids or (data.get('batch_id') and row.get('batch_id') == data['batch_id']):
                 self.page = index // 20; self.render()
                 self.table.selectRow(index % 20)
+                self.details(index % 20)
                 self.table.scrollToItem(self.table.item(index % 20, 0))
                 return
         self.note.setText('当前日期范围中未找到该笔交易，请调整日期后查询；回执仍保留在助手中。')
 
     def render(self):
+        self.clear_details()
         # Qt defers deletion of replaced cell widgets; hide them before repopulating.
         for index in range(self.table.rowCount()):
             previous = self.table.cellWidget(index, 6)
@@ -157,13 +179,19 @@ class BillsPage(QWidget):
         self.note.setText(f"{self.data['start']} 至 {end} · 共 {len(self.rows)} 笔 · 当前账户实际账本" if self.rows else '当前筛选条件下没有交易。可以重置筛选或更改日期。')
 
     def details(self,index):
+        if index < 0 or self.page*20+index >= len(self.rows): return
         row=self.rows[self.page*20+index]
-        dialog=QDialog(self); dialog.setWindowTitle('交易详情'); dialog.resize(470,300); layout=QVBoxLayout(dialog)
-        body=QLabel(f"{KINDS[row['kind']]} · ¥ {money(row['amount_minor'])}\n对方 / 商户：{row.get('counterparty_name') or row.get('merchant') or row['category']}\n时间：{row['occurred_at']}\n分类：{row['category']}\n状态：已入账")
-        body.setTextFormat(Qt.TextFormat.PlainText); body.setWordWrap(True); layout.addWidget(body)
-        from PySide6.QtWidgets import QPlainTextEdit
-        refs=QPlainTextEdit(); refs.setReadOnly(True); refs.setPlainText('\n'.join(label+'：'+row[key] for key,label in [('transaction_id','流水编号'),('transfer_id','转账编号'),('related_transaction_id','关联流水'),('batch_id','批量编号')] if key in row))
-        refs.hide(); toggle=QPushButton('展开流水编号'); toggle.setCheckable(True); toggle.toggled.connect(refs.setVisible)
-        layout.addWidget(toggle); layout.addWidget(refs)
-        buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Close); buttons.rejected.connect(dialog.reject); layout.addWidget(buttons)
-        dialog.exec(); dialog.deleteLater()
+        self.detail_body.setText(f"{KINDS[row['kind']]} · ¥ {money(row['amount_minor'])}\n已入账\n\n对方 / 商户：{row.get('counterparty_name') or row.get('merchant') or row['category']}\n\n时间：{row['occurred_at'].replace('T',' ')}\n分类：{row['category']}")
+        self.detail_body.setMinimumHeight(self.detail_body.heightForWidth(max(1,self.detail_body.width())))
+        self.refs.setPlainText('\n'.join(label+'：'+row[key] for key,label in [('transaction_id','流水编号'),('transfer_id','转账编号'),('related_transaction_id','关联流水'),('batch_id','批量编号')] if key in row))
+        self.refs_toggle.setEnabled(True)
+        self.table.selectRow(index)
+
+    def clear_details(self):
+        self.detail_body.setText('选择一笔交易查看详情')
+        self.detail_body.setMinimumHeight(0)
+        self.refs.clear(); self.refs_toggle.setChecked(False); self.refs_toggle.setEnabled(False)
+
+    def resizeEvent(self,event):
+        super().resizeEvent(event)
+        self.body.setDirection(QBoxLayout.Direction.LeftToRight if self.width() >= 980 else QBoxLayout.Direction.TopToBottom)

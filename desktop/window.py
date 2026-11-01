@@ -328,12 +328,15 @@ class BankWindow(QMainWindow):
         dialog = QDialog(self)
         dialog.setWindowTitle('独立模拟认证 · 非真实银行认证')
         layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(28,28,28,24); layout.setSpacing(16)
+        heading=QLabel('追加安全验证'); heading.setObjectName('dialogHeading'); layout.addWidget(heading)
         label = QLabel(self.pending['summary'] + '\n\n当日已转出：¥ ' + money(info['daily_transfer_total_minor'])
             + '\n含本笔累计超过 ¥ ' + money(info['threshold_minor']) + '，需要追加认证。\n'
             + info['notice'] + '\n本机模拟验证码：' + info['demo_code']
             + '\n有效期至：' + info['expires_at'] + '\n请输入上方模拟码，勿在聊天中提交。')
         label.setTextFormat(Qt.TextFormat.PlainText)
         label.setWordWrap(True)
+        label.setObjectName('dialogSummary')
         layout.addWidget(label)
         entry = QLineEdit()
         entry.setMaxLength(6)
@@ -341,6 +344,7 @@ class BankWindow(QMainWindow):
         layout.addWidget(entry)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.button(QDialogButtonBox.StandardButton.Ok).setText('认证并确认原转账')
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setObjectName('primary')
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)

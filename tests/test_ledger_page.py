@@ -44,7 +44,11 @@ def test_ledger_filters_orb_transfer_refresh_identity_and_failure(tmp_path,monke
         assert '默认演示账户' in window.ai_context.text()
         window.ai_close.click(); assert not window.assistant_box.isVisible()
         original=list(bills.rows)
+        bills.details(0)
+        assert bills.rows[0]['transaction_id'] in bills.refs.toPlainText()
+        bills.refs_toggle.click(); assert bills.refs.isVisible()
         bills.expense_tab.click(); assert bills.rows and all(r['kind']=='EXPENSE' for r in bills.rows)
+        assert not bills.refs.toPlainText() and not bills.refs_toggle.isChecked()
         expense=sum(r['amount_minor'] for r in bills.rows)
         assert expense==window.snapshot['ledger']['total_minor']
         bills.search.setText('不存在的商户'); assert bills.rows==[] and '没有交易' in bills.note.text()
@@ -53,6 +57,8 @@ def test_ledger_filters_orb_transfer_refresh_identity_and_failure(tmp_path,monke
         window.prepare_transfer.click(); wait(lambda:not window.busy and window.pending is not None)
         window.approve.click(); wait(lambda:not window.busy and window.pending is None and any(r['kind']=='TRANSFER_OUT' for r in bills.rows))
         bills.search.setText('张伟'); assert len(bills.rows)==1 and bills.rows[0]['amount_minor']==4000
+        bills.focus_receipt({'transaction_id':bills.rows[0]['transaction_id']})
+        assert '40.00' in bills.detail_body.text() and '张伟' in bills.detail_body.text()
         assert '40.00' in bills.totals[1].text() and '0.00' in bills.totals[2].text()
         bills.search.clear(); assert len(bills.rows)==len(original)+1
         window.send('本月账单'); wait(lambda:not window.busy)
@@ -62,6 +68,7 @@ def test_ledger_filters_orb_transfer_refresh_identity_and_failure(tmp_path,monke
             window.load_ledger(); wait(lambda:not window.busy)
             assert bills.table.rowCount()==0 and '异常' in bills.note.text()
             assert all(label.text()=='—' for label in bills.totals)
+            assert not bills.refs.toPlainText() and '选择一笔' in bills.detail_body.text()
         window.load_ledger(); wait(lambda:not window.busy and bills.data is not None)
         from PySide6.QtCore import QDate
         bills.start.setDate(QDate(2020,1,1)); bills.end.setDate(QDate(2020,1,31))

@@ -31,7 +31,7 @@ class ChatView(QScrollArea):
         self.setStyleSheet('''
             QScrollArea {border:0;background:transparent;}
             QWidget#userBubble {background:#dceee4;border:1px solid #c6dfd1;border-radius:12px;}
-            QWidget#assistantBubble {background:transparent;border:0;}
+            QWidget#assistantBubble {background:#ffffff;border:1px solid #dce6df;border-radius:12px;}
             QWidget#receiptCard {background:#f7fcf9;border:1px solid #bdd9cb;border-radius:12px;}
             QWidget#errorBubble {background:#fff3ee;border:1px solid #e7c0b5;border-radius:12px;}
             QLabel {background:transparent;border:0;}
