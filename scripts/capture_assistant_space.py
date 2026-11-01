@@ -85,9 +85,14 @@ def run(output, visible=False, scale=None, width=1280, height=850):
             assert '40.00' in window.confirm_text.text() and '默认演示账户' in window.confirm_text.text()
             capture('confirmation')
             viewport = window.assistant_box.confirm_scroll.viewport()
-            for control in (window.confirm_text, window.approve, window.edit, window.reject):
-                bounds = control.rect().translated(control.mapTo(viewport, QPoint(0, 0)))
-                assert viewport.rect().contains(bounds), 'Confirmation content is clipped'
+            bounds = window.confirm_text.rect().translated(window.confirm_text.mapTo(viewport, QPoint(0, 0)))
+            assert viewport.rect().contains(bounds), 'Confirmation content is clipped'
+            panel = window.assistant_box
+            scroll_bounds = panel.confirm_scroll.rect().translated(panel.confirm_scroll.mapTo(panel, QPoint(0, 0)))
+            for control in (window.approve, window.edit, window.reject):
+                bounds = control.rect().translated(control.mapTo(panel, QPoint(0, 0)))
+                assert panel.rect().contains(bounds), 'Confirmation action is clipped'
+                assert not scroll_bounds.intersects(bounds), f'Fixed actions overlap scrolling explanation: {scroll_bounds}, {bounds}'
             window.ai_close.click(); window.orb.click()
             assert window.pending == old
             assert window.balance_value.text() == '¥ 5,000.00'

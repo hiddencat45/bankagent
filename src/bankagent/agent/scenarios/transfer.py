@@ -184,6 +184,18 @@ def risk(operation: str, params: dict, context: TrustedContext) -> RiskLevel:
     return "RED" if projected > YELLOW_DAILY_LIMIT_MINOR else "YELLOW"
 
 
+def risk_context(context, amount_minor):
+    """Read-only confirmation snapshot; execution still rechecks the live ledger."""
+    from bankagent.banking.bank_backend import get_balance
+    balance = get_balance(context=context)
+    if balance['status'] != 'COMPLETED':
+        raise ValueError('Cannot explain risk without customer ledger')
+    daily = balance['data']['daily_transfer_total_minor']
+    return {'daily_transfer_total_minor': daily, 'current_amount_minor': amount_minor,
+            'projected_total_minor': daily + amount_minor, 'threshold_minor': YELLOW_DAILY_LIMIT_MINOR,
+            'scope': 'CUSTOMER_DAILY'}
+
+
 def confirmation(*, operation: str, params: dict, candidate_params: dict,
                  context: TrustedContext) -> dict:
     """确认卡展示字段：收款人姓名、金额、币种。
@@ -219,6 +231,7 @@ def confirmation(*, operation: str, params: dict, candidate_params: dict,
         **({'recipient_input': number} if number else {}),
         "amount_minor": params.get("amount_minor"),
         "currency": params.get("currency"),
+        "risk_context": risk_context(context, params['amount_minor']),
     }
 
 

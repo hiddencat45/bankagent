@@ -81,7 +81,7 @@ class EnrollmentDialog(QDialog):
         self.entry.setPlaceholderText('手机验证器6位动态码'); self.entry.setAccessibleName('手机验证器6位动态码')
         self.entry.setMaxLength(6); self.entry.setFocus()
         self.status.setText('扫描二维码，输入动态码完成绑定（5分钟内有效）。\n'
-                            '请勿分享二维码。保持手机与电脑时间准确。')
+                            '请使用身份验证器的“添加账户”扫码，不是微信或普通相机。\n请勿分享二维码。')
         self.submit.setText('验证动态码，完成绑定')
 
     def reject(self):

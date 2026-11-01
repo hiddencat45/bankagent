@@ -7,7 +7,7 @@ from PySide6.QtCore import Signal, QObject, Qt
 from PySide6.QtGui import QPainter, QColor, QLinearGradient, QPainterPath, QPen
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton,
                               QDialog, QDialogButtonBox, QMenu, QHBoxLayout, QStackedWidget)
-from desktop.client import QueryClient, business_confirmation, VerificationRejected
+from desktop.client import QueryClient, business_confirmation, VerificationRejected, money
 from desktop.preview import PreviewWindow
 from desktop.theme import STYLE, load_chinese_font
 
@@ -261,12 +261,13 @@ class AuthenticatedWindow(PreviewWindow):
             self.verify.hide()
             self.approve.setVisible(self.decision is None)
             self.approve.setEnabled(not self.busy and not self.uncertain and self.decision is None)
-            self.approve.setText('确认并验证交易密码')
+            self.approve.setText('确认并追加安全验证' if self.pending['risk_level'] == 'RED' else '确认并验证交易密码')
         else:
             self.approve.setText('确认办理')
 
     def show_connection_menu(self):
         menu = QMenu(self)
+        menu.addAction('安全分级说明').triggered.connect(self.show_security_levels)
         security = menu.addAction('绑定手机验证器')
         security.setEnabled(not self.busy and not self.uncertain)
         security.triggered.connect(self.bind_authenticator)
@@ -275,6 +276,43 @@ class AuthenticatedWindow(PreviewWindow):
         action.triggered.connect(lambda: self.shell.work(lambda: self.client.request('/auth/logout', {}),
                                                         lambda _: self.shell.logged_out()))
         menu.exec(self.more_actions.mapToGlobal(self.more_actions.rect().bottomLeft()))
+
+    def show_security_levels(self):
+        dialog = QDialog(self); dialog.setWindowTitle('安全分级 · 权限与风险'); dialog.resize(540, 420)
+        layout = QVBoxLayout(dialog); layout.setContentsMargins(28,24,28,24); layout.setSpacing(16)
+        for title, body in [
+            ('低风险 · 本人信息查询', '登录后查询本人的余额、卡片和账单；不能读取其他客户数据。'),
+            ('中风险 · 确认后办理', '写业务先核对并确认。转账含本次累计不超过1,000元，还需交易密码。'),
+            ('高风险 · 追加独立认证', '同一客户所有卡当日累计转出，含本次或整批超过1,000元，需交易密码＋手机动态码。'),
+            ('禁止执行 · 认证也不能放行', '冻结、余额不足、超限或不属于本人的付款卡，仍由服务端拒绝。AI与普通页面遵守相同规则。')]:
+            heading=QLabel(title); heading.setObjectName('dialogHeading'); layout.addWidget(heading)
+            label=QLabel(body); label.setWordWrap(True); layout.addWidget(label)
+        close=QPushButton('知道了'); close.clicked.connect(dialog.accept); layout.addWidget(close)
+        dialog.exec(); dialog.deleteLater()
+
+    def present_security(self):
+        if not self.pending or self.decision is not None:
+            return
+        transfer = 'recipient' in self.pending or 'items' in self.pending
+        high = self.pending['risk_level'] == 'RED'
+        self.confirmation_heading.setText('高风险 · 需要追加安全验证' if high else '中风险 · 核对后确认办理')
+        self.confirmation_heading.setStyleSheet('color:#9a3e18;' if high else 'color:#795b16;')
+        details = []
+        if transfer:
+            snapshot = self.pending.get('risk_context')
+            if snapshot:
+                details.append('客户当日已转出 ¥ ' + money(snapshot['daily_transfer_total_minor'])
+                    + ' ＋ 本次' + ('整批' if 'items' in self.pending else '') + ' ¥ ' + money(snapshot['current_amount_minor'])
+                    + ' ＝ 累计 ¥ ' + money(snapshot['projected_total_minor']))
+                details.append('范围：本人所有卡／账户；升级阈值：超过 ¥ ' + money(snapshot['threshold_minor']) + '。')
+            details.append(('所需验证：交易密码＋手机动态码。' if high else '所需验证：交易密码。') + ' 执行前仍会复核资金规则。')
+        else:
+            details.append('所需操作：核对内容并确认，尚未执行业务变更。')
+        self.confirm_text.setText(('付款账户：' if transfer else '办理账户：') + self.context_account.text()
+            + '\n' + self.pending['summary'] + '\n' + '\n'.join(details))
+        self.confirm_text.setMinimumHeight(0)
+        self.confirmation.layout().setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.confirm_text.setToolTip('累计金额为确认时快照；执行前复核，冻结、余额不足、限额或归属不符仍拒绝执行。')
 
     def bind_authenticator(self):
         from desktop.security import EnrollmentDialog
@@ -297,9 +335,15 @@ class AuthenticatedWindow(PreviewWindow):
         if kind == 'payment_setup':
             self.busy = False; self.controls(); self.status.setText('交易密码已设置，请再次确认原转账。'); return
         super().receive(kind, result)
+        self.present_security()
+        if kind == 'query' and not self.pending and isinstance(result, list):
+            receipts = [d['payload'] for e,d in result if e == 'card' and d.get('type') == 'result']
+            read_operations = {'GET_BALANCE', 'QUERY_BILLS', 'QUERY_CARDS', 'QUERY_CARD_LIMITS', 'QUERY_ACCOUNTS', 'QUERY_TRANSFER_BATCHES'}
+            if receipts and all(r.get('operation') in read_operations and r.get('status') == 'COMPLETED' for r in receipts):
+                self.status.setText('低风险 · 本人信息查询已完成；未执行资金或卡片变更。')
 
     def payment_dialog(self, configured):
-        dialog = QDialog(self); dialog.setWindowTitle('交易密码认证' if configured else '首次设置交易密码')
+        dialog = QDialog(self); dialog.setWindowTitle(('高风险转账 · 追加认证' if self.pending['risk_level'] == 'RED' else '转账 · 交易密码认证') if configured else '首次设置交易密码')
         dialog.resize(500, 380); layout = QVBoxLayout(dialog)
         layout.setContentsMargins(28,28,28,24); layout.setSpacing(16)
         heading=QLabel(dialog.windowTitle()); heading.setObjectName('dialogHeading'); layout.addWidget(heading)
@@ -308,9 +352,6 @@ class AuthenticatedWindow(PreviewWindow):
         layout.addWidget(summary)
         entries = []
         high_risk = configured and self.pending['risk_level'] == 'RED'
-        if high_risk:
-            note = QLabel('本次计入后，客户名下所有卡当日累计转出超过1,000元。\n请输入交易密码和手机验证器动态码。')
-            note.setWordWrap(True); layout.addWidget(note)
         names = (['交易密码', '手机验证器6位动态码'] if high_risk else ['交易密码']) if configured else ['登录密码','6位数字交易密码','再次输入交易密码']
         for name in names:
             entry=QLineEdit(); entry.setPlaceholderText(name); entry.setAccessibleName(name)

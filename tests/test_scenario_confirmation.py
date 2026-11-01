@@ -210,7 +210,7 @@ def test_transfer_confirm_payload_includes_bound_payer_card(card_app):
 
     assert set(payload) == {
         "operation", "risk_level", "challenge_id", "operation_hash", "expires_at",
-        "recipient", "amount_minor", "currency", "payer_card",
+        "recipient", "amount_minor", "currency", "payer_card", "risk_context",
     }
     assert payload["recipient"] == "张伟"
     assert payload["amount_minor"] == 30000

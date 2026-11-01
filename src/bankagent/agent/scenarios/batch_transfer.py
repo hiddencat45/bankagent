@@ -70,7 +70,10 @@ def risk(operation, params, context):
 def confirmation(*, operation, params, candidate_params, context):
     items = [transfer.confirmation(operation='TRANSFER', params=row, candidate_params=candidate, context=context)
              for row, candidate in zip(params['items'], candidate_params['items'])]
-    return {'items': items, 'total_minor': sum(row['amount_minor'] for row in items),
+    for item in items:
+        item.pop('risk_context', None)
+    total = sum(row['amount_minor'] for row in items)
+    return {'items': items, 'total_minor': total, 'risk_context': transfer.risk_context(context, total),
             'currency': 'CNY', 'atomic': True}
 
 

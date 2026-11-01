@@ -56,7 +56,7 @@ class AssistantSpace(QFrame):
         welcome.addWidget(title); welcome.addWidget(subtitle); self.column.addWidget(self.welcome)
         self.column.addWidget(owner.conversation, 1)
         self.confirm_scroll = QScrollArea(); self.confirm_scroll.setWidgetResizable(True)
-        self.confirm_scroll.setMaximumHeight(270); self.confirm_scroll.setMinimumHeight(230)
+        self.confirm_scroll.setMaximumHeight(270); self.confirm_scroll.setMinimumHeight(240)
         self.column.addWidget(self.confirm_scroll)
         self.shortcuts = QWidget(); shortcuts = QHBoxLayout(self.shortcuts); shortcuts.addStretch()
         self.shortcut_buttons = []
@@ -88,12 +88,14 @@ class AssistantSpace(QFrame):
 
     def sync(self):
         owner = self.owner
+        self.column.setSpacing(8 if owner.pending else 14)
         active = bool(owner.conversation.rows) or owner.pending is not None
         for widget in (self.welcome, self.shortcuts, self.top_space, self.bottom_space):
             widget.setVisible(not active)
         owner.conversation.setVisible(active)
         self.confirm_scroll.setVisible(owner.pending is not None and self.isVisible())
-        owner.conversation.setMinimumHeight(70 if owner.pending else 140)
+        owner.confirm_actions.setVisible(owner.pending is not None)
+        owner.conversation.setMinimumHeight(40 if owner.pending else 140)
         owner.input.setFixedHeight(48 if owner.pending else 92)
         customer = owner.current_customer.text().removeprefix('当前演示客户：')
         self.context.setText('本地模拟 · ' + owner.mode + '  /  ' + customer + ' · ' + owner.context_account.text())

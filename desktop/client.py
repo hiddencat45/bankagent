@@ -320,7 +320,16 @@ def transfer_confirmation(frames):
     if any(card[key] != signal.get(key) for key in ('challenge_id', 'operation_hash')):
         raise ValueError('confirmation mismatch')
     fields = ('items', 'total_minor', 'atomic', 'operation') if batch else ('amount_minor',)
+    risk_context = card.get('risk_context')
+    if risk_context is not None:
+        keys = ('daily_transfer_total_minor', 'current_amount_minor', 'projected_total_minor', 'threshold_minor')
+        if (not isinstance(risk_context, dict) or risk_context.get('scope') != 'CUSTOMER_DAILY'
+                or any(type(risk_context.get(k)) is not int or risk_context[k] < 0 for k in keys)
+                or risk_context['current_amount_minor'] != card['total_minor' if batch else 'amount_minor']
+                or risk_context['projected_total_minor'] != risk_context['daily_transfer_total_minor'] + risk_context['current_amount_minor']):
+            raise ValueError('invalid risk explanation')
     return {**{key: card[key] for key in (*required, *fields, 'currency', 'risk_level')},
+            **({'risk_context': risk_context} if risk_context is not None else {}),
             **({'payer_card': card['payer_card']} if isinstance(card.get('payer_card'), str) else {}),
             **({'recipient_input': card['recipient_input']} if not batch and isinstance(card.get('recipient_input'), str) else {}),
             'thread_id': frames[0][1]['thread_id'], 'request_id': frames[0][1]['request_id']}
