@@ -47,10 +47,10 @@ def test_transfer_to_own_account_uses_same_ledger(setup):
     matches = b.find_contacts(context=q, name='储蓄账户')
     params = transfer_args(matches[0]['contact_id'])
     assert b.execute_transfer(context=grant('TRANSFER', params), **params)['status'] == 'COMPLETED'
-    assert bank()._data['accounts'][account]['balance_minor'] == 104000
+    assert bank()._data['accounts'][account]['balance_minor'] == 4000
     reverse = b.find_contacts(context=TrustedContext('user-001', account, 'q'), name='默认演示账户')
     assert reverse == [{'contact_id': 'own:account-001', 'display_name': '默认演示账户'}]
-    assert sum(a['balance_minor'] for a in bank()._data['accounts'].values()) == 640000
+    assert sum(a['balance_minor'] for a in bank()._data['accounts'].values()) == 540000
 
 
 def test_transfer_disk_failure_rolls_back_both_sides(setup, monkeypatch):

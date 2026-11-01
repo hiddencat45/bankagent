@@ -31,6 +31,7 @@ def test_payment_survives_model_connection_failure_and_old_confirmation_is_dead(
                                ('ACTIVATE_DEBIT_CARD', {'card_name': name})]:
             assert result(confirm(c, auth, form(c, auth, action, **fields)))['status'] == 'COMPLETED'
         payment = dict(card_name=name, merchant='转账冻结商店', amount='12.30', category='购物')
+        assert result(confirm(c,auth,form(c,auth,'SIMULATE_CARD_DEPOSIT',card_name=name,amount='1000')))['status']=='COMPLETED'
         old = form(c, auth, 'PAY_BY_CARD', **payment)
         assert c.get('/bank/accounts', headers=auth).json()['accounts'][-1]['balance_minor'] == 100000
         assert confirm(c, auth, old, 'reject')[-1][1]['status'] == 'REJECTED'

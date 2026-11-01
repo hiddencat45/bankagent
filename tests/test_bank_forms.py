@@ -44,6 +44,7 @@ def test_all_forms_work_without_any_model_and_ai_reads_same_ledger(tmp_path):
         name = '冻结「家用」卡'  # Literal form value, never an instruction.
         assert write('ISSUE_DEBIT_CARD', display_name=name)['data']['status'] == 'PENDING_ACTIVATION'
         assert write('ACTIVATE_DEBIT_CARD', card_name=name)['data']['status'] == 'ACTIVE'
+        assert write('SIMULATE_CARD_DEPOSIT', card_name=name, amount='1000')['status'] == 'COMPLETED'
         payment = dict(card_name=name, merchant='商户「转账」', amount='12.30', category='购物')
         assert write('PAY_BY_CARD', **payment)['data']['remaining_balance_minor'] == 98770
         write('FREEZE_CARD', card_name=name)

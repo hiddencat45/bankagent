@@ -27,7 +27,7 @@ def test_create_first_account_issue_activate_and_restart(tmp_path):
         pending = new_customer(c, auth)
         assert len(customers(c, auth)) == 2
         card = next(d['payload'] for e, d in pending if e == 'card' and d['type'] == 'confirm')
-        assert (card['display_name'], card['account_name'], card['opening_credit_minor']) == ('小林', '首账户', 100000)
+        assert (card['display_name'], card['account_name'], card['opening_credit_minor']) == ('小林', '首账户', 0)
         assert confirm(c, auth, pending, 'reject')[-1][1]['status'] == 'REJECTED'
         assert len(customers(c, auth)) == 2
         pending = new_customer(c, auth)
@@ -39,7 +39,7 @@ def test_create_first_account_issue_activate_and_restart(tmp_path):
         assert c.post('/bank/account-session', headers=auth, json={'account_ref': account}).status_code == 403
         selected = switch(c, auth, ref)
         assert c.get('/bank/accounts', headers=selected).json()['accounts'] == [
-            {'account_ref': account, 'display_name': '首账户', 'balance_minor': 100000, 'currency': 'CNY'}]
+            {'account_ref': account, 'display_name': '首账户', 'balance_minor': 0, 'currency': 'CNY', 'transfer_card': None}]
         def write(action, **fields):
             return result(confirm(c, selected, form(c, selected, action, **fields)))
         issued = write('ISSUE_DEBIT_CARD', display_name='首卡')
@@ -47,6 +47,7 @@ def test_create_first_account_issue_activate_and_restart(tmp_path):
         payment = dict(card_name='首卡', merchant='演示商店', amount='1', category='购物')
         assert write('PAY_BY_CARD', **payment)['error_code'] == 'CARD_NOT_ACTIVE'
         assert write('ACTIVATE_DEBIT_CARD', card_name='首卡')['data']['status'] == 'ACTIVE'
+        assert write('SIMULATE_CARD_DEPOSIT', card_name='首卡', amount='1000')['status'] == 'COMPLETED'
         assert write('PAY_BY_CARD', **payment)['data']['remaining_balance_minor'] == 99900
         assert model.calls == 0
     with TestClient(create_app(demo=True, database_path=path), base_url='http://localhost') as c:
@@ -85,7 +86,7 @@ def test_creation_failure_retry_keeps_one_customer_account_and_credit(tmp_path, 
         assert result(confirm(c, auth, pending)) == completed
         assert len(customers(c, auth)) == 3
         selected = switch(c, auth, completed['data']['customer_ref'])
-        assert len(c.get('/bank/bills', headers=selected).json()['data']['transactions']) == 1
+        assert len(c.get('/bank/bills', headers=selected).json()['data']['transactions']) == 0
 
 
 @pytest.mark.parametrize('demo,lan', [(False, False), (True, True)])

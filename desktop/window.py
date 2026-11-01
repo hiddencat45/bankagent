@@ -83,7 +83,7 @@ class BankWindow(QMainWindow):
         layout.addLayout(accounts)
         business = QHBoxLayout()
         self.business_buttons = []
-        for label in ('开户', '办理借记卡', '激活', '刷卡消费', '转账', '冻结', '解冻', '查询限额', '设置限额'):
+        for label in ('开户', '办理借记卡', '激活', '模拟入金', '刷卡消费', '转账', '冻结', '解冻', '查询限额', '设置限额'):
             button = QPushButton(label)
             button.clicked.connect(lambda checked=False, action=label: self.business_form(action))
             business.addWidget(button)
@@ -233,7 +233,7 @@ class BankWindow(QMainWindow):
             return
         defaults = defaults or {}
         operations = {'创建演示客户': 'CREATE_DEMO_CUSTOMER', '开户': 'OPEN_ACCOUNT', '办理借记卡': 'ISSUE_DEBIT_CARD',
-            '激活': 'ACTIVATE_DEBIT_CARD', '刷卡消费': 'PAY_BY_CARD', '转账': 'TRANSFER',
+            '激活': 'ACTIVATE_DEBIT_CARD', '模拟入金': 'SIMULATE_CARD_DEPOSIT', '刷卡消费': 'PAY_BY_CARD', '转账': 'TRANSFER',
             '冻结': 'FREEZE_CARD', '解冻': 'UNFREEZE_CARD',
             '查询限额': 'QUERY_CARD_LIMITS', '设置限额': 'SET_CARD_LIMITS'}
         name, ok = QInputDialog.getText(self, action, '账户名称：' if action == '开户' else
@@ -249,7 +249,7 @@ class BankWindow(QMainWindow):
         key = 'display_name' if action in {'开户', '办理借记卡'} else 'recipient_name' if action == '转账' else 'card_name'
         fields = {key: name}
         if action == '创建演示客户':
-            account, ok = QInputDialog.getText(self, action, '首次开户名称（确认后记入1,000元演示资金）：', text=defaults.get('account_name', ''))
+            account, ok = QInputDialog.getText(self, action, '首次开户名称（初始余额0元）：', text=defaults.get('account_name', ''))
             if not ok:
                 return
             if not account.strip() or len(account) > 80 or any(c in account for c in '\n\r'):
@@ -269,7 +269,7 @@ class BankWindow(QMainWindow):
                     return
                 amounts.append(value)
             fields.update(single_limit=amounts[0], daily_limit=amounts[1])
-        elif action in {'刷卡消费', '转账'}:
+        elif action in {'刷卡消费', '转账', '模拟入金'}:
             if action == '刷卡消费':
                 merchant, ok = QInputDialog.getText(self, action, '演示商户名称：', text=defaults.get('merchant', ''))
                 if not ok:

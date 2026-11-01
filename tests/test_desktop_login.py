@@ -49,19 +49,28 @@ def test_native_registration_onboarding_and_logout(tmp_path, monkeypatch):
         wait(lambda:not window.busy and window.open_account.isVisible())
         assert window.client.get('/bank/accounts')['accounts']==[]
         window.open_account.click(); wait(lambda:not window.busy and window.pending is not None)
-        assert '1,000.00' in window.status.text()
+        assert '0.00' in window.status.text()
         window.approve.click()
         wait(lambda:window.bank is not None and not window.bank.busy and window.bank.snapshot is not None)
-        assert window.bank.balance_value.text()=='¥ 1,000.00'
+        assert window.bank.balance_value.text()=='¥ 0.00'
         assert not window.bank.switch_customer.isEnabled()
         assert not window.bank.customer_picker.isEnabled()
         capture('account',window.bank)
         bank=window.bank
         bank.toggle_assistant(True); app.processEvents(); capture('assistant',bank)
         bank.toggle_assistant(False)
-        pending=business_confirmation(window.client.form('OPEN_ACCOUNT',{'display_name':'储蓄账户'}))
-        window.client.resume(pending,'approve')
-        bank.send('给储蓄账户转30元')
+        from test_api_http import result
+        def write(action, **fields):
+            return result(window.client.resume(business_confirmation(window.client.form(action,fields)),'approve'))
+        source=window.client.accounts()['current_account_ref']
+        write('ISSUE_DEBIT_CARD',display_name='日常卡'); write('ACTIVATE_DEBIT_CARD',card_name='日常卡')
+        write('SIMULATE_CARD_DEPOSIT',card_name='日常卡',amount='1000')
+        target=write('OPEN_ACCOUNT',display_name='储蓄账户')['data']['account_id']
+        window.client.switch_account(target)
+        write('ISSUE_DEBIT_CARD',display_name='储蓄卡'); write('ACTIVATE_DEBIT_CARD',card_name='储蓄卡')
+        number=window.client.get('/bank/desktop-objects')['data']['cards'][0]['card_number']
+        window.client.switch_account(source)
+        bank.send(f'给{number}转30元')
         wait(lambda:not bank.busy and bank.pending is not None)
         pin=f'{secrets.randbelow(1000000):06d}'
         def fill(values):

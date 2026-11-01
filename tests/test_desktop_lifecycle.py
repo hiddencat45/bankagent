@@ -10,7 +10,7 @@ def opening():
     card = stream[1][1]['payload']
     card.pop('recipient')
     card.pop('amount_minor')
-    card.update(operation='OPEN_ACCOUNT', display_name='生活账户', opening_credit_minor=100000)
+    card.update(operation='OPEN_ACCOUNT', display_name='生活账户', opening_credit_minor=0)
     return stream
 
 
@@ -69,6 +69,7 @@ def test_real_desktop_lifecycle(tmp_path, monkeypatch):
         assert window.thread is None
         form('办理借记卡', ['生活卡'])
         form('激活', ['生活卡'])
+        form('模拟入金', ['生活卡', '1000'])
         pending = form('刷卡消费', ['生活卡', '演示超市', '12.30'])
         assert receipt(window.client.resume(pending, 'approve'))['data']['remaining_balance_minor'] == 98770
         form('冻结', ['生活卡'])

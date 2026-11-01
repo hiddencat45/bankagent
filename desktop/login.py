@@ -193,7 +193,7 @@ class LoginWindow(QWidget):
         self.client.token = result['token']
         if result['needs_account']:
             self.pages.setCurrentIndex(2)
-            self.status.setText('登录成功。当前没有银行账户，请先开户；确认后记入1000元演示资金。')
+            self.status.setText('登录成功。请先开立零余额账户，再申请并激活借记卡。需要测试资金时可手动模拟入金。')
             self.account.show(); self.open_account.show()
         else: self.show_bank()
 
@@ -262,6 +262,8 @@ class AuthenticatedWindow(PreviewWindow):
             self.approve.setVisible(self.decision is None)
             self.approve.setEnabled(not self.busy and not self.uncertain and self.decision is None)
             self.approve.setText('确认并验证交易密码')
+        else:
+            self.approve.setText('确认办理')
 
     def show_connection_menu(self):
         menu = QMenu(self)

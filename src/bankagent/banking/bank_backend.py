@@ -78,8 +78,15 @@ class BankBackend(LifecycleMixin):
         with self._transaction():
             if not self._owned(context) and not self._unopened_customer(context):
                 return _result('QUERY_ACCOUNTS', error='ACCOUNT_NOT_ACCESSIBLE')
+            def transfer_card(account):
+                cards = [c for c in self._data['cards'].values() if c['account_id'] == account]
+                if len(cards) != 1:
+                    return None
+                card = cards[0]
+                return {'display_name': card['display_name'], 'last4': card['card_number'][-4:], 'status': card['status']}
             return _result('QUERY_ACCOUNTS', {'accounts': [
                 {'account_ref': key, 'display_name': row.get('display_name', '默认演示账户'),
+                 'transfer_card': transfer_card(key),
                  'balance_minor': row['balance_minor'], 'currency': row['currency']}
                 for key, row in self._data['accounts'].items() if row['user_id'] == context.user_id],
                 'card_account_migration': [dict(row) for row in self._data.get('card_account_migration', [])
@@ -120,6 +127,8 @@ class BankBackend(LifecycleMixin):
             recipients += [{'display_name': row.get('display_name', '默认演示账户'), 'kind': '本人账户'}
                            for key, row in self._data['accounts'].items()
                            if row['user_id'] == context.user_id and key != context.account_id]
+            if self._data.get('customers', {}).get(context.user_id, {}).get('identity_type') == 'LOCAL':
+                recipients = []  # Formal card-to-card flow must not suggest unusable bare-account shortcuts.
             cards = [{'display_name': row['display_name'], 'status': row['status'], 'card_number': row.get('card_number')}
                      for row in self._data['cards'].values() if row['account_id'] == context.account_id]
             return _result('DESKTOP_OBJECTS', {'recipients': recipients, 'cards': cards})
@@ -143,6 +152,8 @@ class BankBackend(LifecycleMixin):
                 label = customer.get('display_name') or {'user-001':'默认演示客户','user-002':'张伟','user-003':'李娜'}.get(account['user_id'])
                 if not label: return []
                 return [{'contact_id': f'card:{key}:{target}:{number}', 'display_name': label + ' · 尾号' + number[-4:]}]
+            if self._data.get('customers', {}).get(context.user_id, {}).get('identity_type') == 'LOCAL':
+                return []  # Formal mode requires a concrete destination card, never a bare account/name.
             contacts = [{"contact_id": key, "display_name": row["display_name"]}
                     for key, row in sorted(self._data["contacts"].items())
                     if row["user_id"] == context.user_id and row["display_name"] == name.strip()]
@@ -165,6 +176,8 @@ class BankBackend(LifecycleMixin):
             if not name: return None
             return {'display_name': name + ' · 尾号' + number[-4:], 'user_id': context.user_id,
                     'recipient_account_id': account}
+        if self._data.get('customers', {}).get(context.user_id, {}).get('identity_type') == 'LOCAL':
+            return None
         if contact_id.startswith('own:'):
             target = contact_id[4:]
             row = self._data['accounts'].get(target)
@@ -286,6 +299,13 @@ class BankBackend(LifecycleMixin):
         if any(card['account_id'] == account_id and card['status'] == 'FROZEN'
                for card in data.get('cards', {}).values()):
             return 'SOURCE_CARD_FROZEN'
+        account = data['accounts'].get(account_id, {})
+        if data.get('customers', {}).get(account.get('user_id'), {}).get('identity_type') == 'LOCAL':
+            cards = [c for c in data.get('cards', {}).values() if c['account_id'] == account_id]
+            if len(cards) != 1:
+                return 'SOURCE_CARD_REQUIRED'
+            if cards[0]['status'] != 'ACTIVE':
+                return 'SOURCE_CARD_NOT_ACTIVE'
         return None
 
     def transfer_block_reason(self, *, context):
@@ -796,6 +816,10 @@ def open_account(*, context: WriteContext, display_name: str) -> BackendResult:
 
 def create_demo_customer(*, context: WriteContext, customer_name: str, account_name: str) -> BackendResult:
     return _configured().create_demo_customer(context=context, customer_name=customer_name, account_name=account_name)
+
+
+def simulate_card_deposit(*, context: WriteContext, card_id: str, amount_minor: int) -> BackendResult:
+    return _configured().simulate_card_deposit(context=context, card_id=card_id, amount_minor=amount_minor)
 
 
 def demo_customer_choices():

@@ -319,6 +319,7 @@ def transfer_confirmation(frames):
         raise ValueError('confirmation mismatch')
     fields = ('items', 'total_minor', 'atomic', 'operation') if batch else ('amount_minor',)
     return {**{key: card[key] for key in (*required, *fields, 'currency', 'risk_level')},
+            **({'payer_card': card['payer_card']} if isinstance(card.get('payer_card'), str) else {}),
             **({'recipient_input': card['recipient_input']} if not batch and isinstance(card.get('recipient_input'), str) else {}),
             'thread_id': frames[0][1]['thread_id'], 'request_id': frames[0][1]['request_id']}
 
@@ -327,16 +328,18 @@ def business_confirmation(frames):
     transfer = transfer_confirmation(frames)
     if transfer is not None and transfer.get('operation') == 'BATCH_TRANSFER':
         summary = '\n'.join(f"{i}. {row['recipient']}：¥ {money(row['amount_minor'])}" for i, row in enumerate(transfer['items'], 1))
+        if transfer['items'][0].get('payer_card'):
+            summary = '付款卡：' + transfer['items'][0]['payer_card'] + '\n' + summary
         return {**transfer, 'summary': summary + f"\n合计：¥ {money(transfer['total_minor'])}\n整批全有或全无：任一笔失败，整批不扣款。"}
     if transfer is not None:
-        return {**transfer, 'summary': f"收款人：{transfer['recipient']}\n金额：¥ {money(transfer['amount_minor'])}"}
+        return {**transfer, 'summary': ('付款卡：' + transfer['payer_card'] + '\n' if transfer.get('payer_card') else '') + f"收款人：{transfer['recipient']}\n金额：¥ {money(transfer['amount_minor'])}"}
     if frames[-1][1]['status'] not in {'AWAITING_CONFIRMATION', 'AWAITING_AUTHENTICATION'}:
         return None
     card = next(d['payload'] for e, d in frames if e == 'card' and d['type'] == 'confirm')
     signal = next(d for e, d in frames if e == 'interrupt')
     labels = {'CREATE_DEMO_CUSTOMER': '创建演示客户并首次开户',
               'OPEN_ACCOUNT': '开立模拟账户', 'ISSUE_DEBIT_CARD': '办理借记卡',
-              'ACTIVATE_DEBIT_CARD': '激活借记卡', 'PAY_BY_CARD': '模拟消费',
+              'ACTIVATE_DEBIT_CARD': '激活借记卡', 'PAY_BY_CARD': '模拟消费', 'SIMULATE_CARD_DEPOSIT': '模拟入金（非真实存款）',
               'FREEZE_CARD': '冻结卡片', 'UNFREEZE_CARD': '解冻卡片', 'SET_CARD_LIMITS': '设置消费限额'}
     operation = card.get('operation')
     if operation not in labels:
@@ -351,13 +354,17 @@ def business_confirmation(frames):
         raise ValueError('invalid confirmation binding')
     summary = f"业务：{labels[operation]}\n名称：{card['display_name']}"
     if operation in {'OPEN_ACCOUNT', 'CREATE_DEMO_CUSTOMER'}:
-        if card.get('opening_credit_minor') != 100000 or card.get('currency') != 'CNY':
+        if type(card.get('opening_credit_minor')) is not int or card['opening_credit_minor'] != 0 or card.get('currency') != 'CNY':
             raise ValueError('invalid opening credit')
-        summary += '\n将记入 ¥ 1,000.00 演示资金（非真实存款）。'
+        summary += '\n初始余额 ¥ 0.00，不自动入账；办卡激活后可另行确认模拟入金。'
         if operation == 'CREATE_DEMO_CUSTOMER':
             if not isinstance(card.get('account_name'), str) or not card['account_name'].strip():
                 raise ValueError('invalid first account')
             summary += '\n首次开户名称：' + card['account_name'] + '\n仅创建虚构演示身份，不进行实名注册。'
+    elif operation == 'SIMULATE_CARD_DEPOSIT':
+        if type(card.get('amount_minor')) is not int or not 0 < card['amount_minor'] <= 1000000 or card.get('currency') != 'CNY':
+            raise ValueError('invalid deposit amount')
+        summary += '\n将增加模拟资金：¥ ' + money(card['amount_minor']) + '\n仅本人已激活卡可入金，不是真实存款。'
     elif operation == 'PAY_BY_CARD':
         if (not isinstance(card.get('merchant'), str) or not card['merchant'].strip()
                 or card.get('currency') != 'CNY' or type(card.get('amount_minor')) is not int

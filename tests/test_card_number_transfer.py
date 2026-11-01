@@ -6,17 +6,21 @@ from test_bank_forms import form, confirm
 from test_api_http import result, chat
 
 
-def customer(c, username):
+def customer(c, username, funding='1000'):
     password = secrets.token_urlsafe(24)
     assert c.post('/auth/register',json={'username':username,'display_name':'同名客户','password':password}).status_code==200
     token = c.post('/auth/login',json={'username':username,'password':password}).json()['token']
     auth={'Authorization':'Bearer '+token}
+    assert c.get('/bank/accounts',headers=auth).json()['accounts']==[]
     account=result(confirm(c,auth,form(c,auth,'OPEN_ACCOUNT',display_name='日常账户')))['data']['account_id']
+    assert c.get('/bank/accounts',headers=auth).json()['accounts'][0]['balance_minor']==0
     token=c.post('/bank/account-session',headers=auth,json={'account_ref':account}).json()['token']
     auth={'Authorization':'Bearer '+token}
     for action,fields in [('ISSUE_DEBIT_CARD',{'display_name':'日常卡'}),('ACTIVATE_DEBIT_CARD',{'card_name':'日常卡'})]:
         assert result(confirm(c,auth,form(c,auth,action,**fields)))['status']=='COMPLETED'
     number=c.get('/bank/desktop-objects',headers=auth).json()['data']['cards'][0]['card_number']
+    if funding:
+        assert result(confirm(c,auth,form(c,auth,'SIMULATE_CARD_DEPOSIT',card_name='日常卡',amount=funding)))['status']=='COMPLETED'
     return auth,password,number
 
 

@@ -210,8 +210,12 @@ def confirmation(*, operation: str, params: dict, candidate_params: dict,
 
     from bankagent.banking.card_numbers import normalize
     number = normalize(name)
+    from bankagent.banking.bank_backend import desktop_objects
+    cards = desktop_objects(context=context)['data']['cards']
+    payer = cards[0]['display_name'] + ' · 尾号' + cards[0]['card_number'][-4:] if len(cards) == 1 else None
     return {
         "recipient": recipient,
+        **({'payer_card': payer} if payer else {}),
         **({'recipient_input': number} if number else {}),
         "amount_minor": params.get("amount_minor"),
         "currency": params.get("currency"),
@@ -290,6 +294,8 @@ def render(result: BackendResult) -> str:
         if explained is not None:
             return explained
         return {
+            "SOURCE_CARD_REQUIRED": "当前账户没有唯一付款卡，请先办理借记卡或切换付款卡。",
+            "SOURCE_CARD_NOT_ACTIVE": "付款卡尚未激活，不能转账。请先激活。",
             "SOURCE_CARD_FROZEN": "付款账户的银行卡已冻结，不能转出资金。请先解冻；模拟认证不能解除冻结，本次未扣款。",
             "AUTHORIZATION_REQUIRED": "这笔转账还没有完成确认，请先确认后再提交。",
             "AUTHORIZATION_INVALID": "确认已失效或不匹配，请重新发起转账。",
