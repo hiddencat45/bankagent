@@ -53,6 +53,23 @@ def test_review_products_are_not_labeled_as_excluded(chat):
     assert '低风险不等于保本' in shown(view) and '不能确认匹配' in shown(view)
 
 
+def test_ten_matches_show_only_two_recommendations_and_explicit_comparison(chat):
+    from PySide6.QtWidgets import QPushButton,QFrame
+    from desktop.preview import PreviewWindow
+    from bankagent.banking.wealth import recommend_products
+    from datetime import date
+    view,app=chat;receipt=snapshot(True)
+    receipt['data']['profile']['answers']={**receipt['data']['profile']['answers'],'horizon_days':1095,'priority':'风险优先'}
+    receipt['data']['recommendations']=recommend_products(receipt['data']['profile']['answers'],date(2026,11,1))
+    view.add_receipt(receipt,PreviewWindow.summarize(receipt));app.processEvents()
+    assert '为你优先推荐 2 款产品' in shown(view) and '10 款通过初筛' in shown(view)
+    cards=view.findChildren(QFrame,'wealthChatProduct')
+    assert sum(c.isVisible() for c in cards)==2
+    assert '8款风险等级更高' in shown(view) and '需要权衡' in shown(view)
+    next(b for b in view.findChildren(QPushButton) if b.text()=='查看 8 款其他备选').click();app.processEvents()
+    assert sum(c.isVisible() for c in cards)==10
+
+
 def test_missing_and_expired_profile_guide_without_recommending_or_writing(chat):
     from PySide6.QtWidgets import QPushButton
     from desktop.preview import PreviewWindow

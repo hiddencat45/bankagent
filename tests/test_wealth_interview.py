@@ -99,10 +99,10 @@ def test_preferences_change_comparison_groups_not_purchase_eligibility():
     comprehensive=recommend_products({**ANSWERS,'priority':'综合比较'},DAY)
     liquid=recommend_products({**ANSWERS,'priority':'流动性优先'},DAY)
     codes=lambda rows:{r['product_code'] for r in rows if r['eligible']}
-    preferred=lambda rows:{r['product_code'] for r in rows if r['comparison_group']=='优先比较'}
+    preferred=lambda rows:{r['product_code'] for r in rows if r['recommendation_rank']}
     assert codes(risk)==codes(comprehensive)==codes(liquid)
     assert preferred(risk)!=preferred(comprehensive)
-    assert all('最低持有期' in r['preference_reason'] for r in liquid)
+    assert all('持有要求' in r['preference_reason'] for r in liquid if r['eligible'])
     assert any(r['eligible'] and r['comparison_group']=='其他备选' for r in risk)
 
 

@@ -4,7 +4,7 @@ PySide6 本地银行模拟应用。模型理解请求并提出工具调用；服
 
 ## 当前版本与入口（2026-11-01）
 
-当前交付分支为 `contract/wealth-conversation`，承接 #76–#97 的未合并功能；**main 不包含这些最新能力**。此前 #56、#61–#74 于10月28日合并，仅代表当时版本。本轮不合并 PR、不推 main。
+当前交付分支为 `contract/wealth-top-recommendations`，承接 #76–#98 的未合并功能；**main 不包含这些最新能力**。此前 #56、#61–#74 于10月28日合并，仅代表当时版本。本轮不合并 PR、不推 main。
 
 本机继续双击项目根目录 **Youdu.exe**。关闭旧窗口再打开即可加载新界面；原账号、密码和账本绑定不变，不需要重新注册或更换测试入口。
 
@@ -19,6 +19,8 @@ Youdu.exe 是内嵌机器人图标的启动器，调用项目 `.venv`，不是�
 聊天中的理财结果使用原生引导卡、产品匹配卡和订单卡：缺需求时提供对话及表单入口；固定日期和当天到账的未核实条件显示“待补充或核实”，不再一律判不匹配。用钱日期固定保存，偏好影响比较顺序及分组；无经验不直接赋风险等级。产品费用、代码和官方资料在详情中查看。提交包更新仍按用户要求暂停。
 
 对话收集完成后，确认保存需求会自动展示只读匹配结果；表单保存后可点“查看匹配产品”。产品页“比较匹配结果”也在对话中展示结果。推荐不申购、不扣款，存在待确认操作时先完成或取消；“其他备选”不会仅因排序靠后被禁止模拟申购。
+
+推荐页现在先给出1～2款优先项及相对理由，其他合格产品折叠；“10款通过初筛”不再作为主结论。根据风险、持有要求和已核实合同常规费率进行偏好比较，不按产品代码预设推荐名单，不混排不同口径收益率。综合比较展示两种取舍，不伪造统一评分或最高收益预测。见[推荐排序原理与验证](docs/理财推荐排序.md)。
 
 ## 当前能力
 
@@ -39,7 +41,7 @@ Youdu.exe 是内嵌机器人图标的启动器，调用项目 `.venv`，不是�
 Windows、Python 3.10、Git；开发门禁另需 Node。PowerShell 在目标目录运行：
 
 ```powershell
-git clone --branch contract/wealth-conversation https://github.com/hiddencat45/bankagent.git
+git clone --branch contract/wealth-top-recommendations https://github.com/hiddencat45/bankagent.git
 cd bankagent
 .\scripts\setup-desktop.ps1
 .\Youdu.exe

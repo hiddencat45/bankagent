@@ -186,7 +186,7 @@ class WealthPage(QWidget):
         i=self.products.currentRow()
         if self.data is None or not 0<=i<len(self.data['products']):return
         p=self.data['products'][i]; r=next((r for r in self.data['recommendations'] if r['product_code']==p['code']),None)
-        self.product_text.setText('已选：'+p['short_name']+'\n'+('；'.join(r['reasons']) if r else '填写需求后，可查看匹配理由。'))
+        self.product_text.setText('已选：'+p['short_name']+'\n'+('；'.join(r.get('recommendation_reasons') or r['reasons']) if r else '填写需求后，可查看匹配理由。'))
 
     def show_product_detail(self):
         if not self.data or self.products.currentRow()<0:return
