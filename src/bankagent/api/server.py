@@ -95,7 +95,7 @@ class Service:
                 if state.get('operation_hash') != expected:
                     raise ApiError('CHALLENGE_STATE_MISMATCH', '操作参数已变化，请重新发起。', 409)
                 authenticated = False
-                local_payment = (hasattr(self, 'credentials') and record['operation'] in {'TRANSFER', 'BATCH_TRANSFER'})
+                local_payment = (hasattr(self, 'credentials') and record['operation'] in {'TRANSFER', 'BATCH_TRANSFER', 'SUBSCRIBE_WEALTH'})
                 if local_payment and req.resume.decision == 'approve' and record['decision'] == 'PENDING':
                     self.credentials.verify_payment(session.user_id, req.resume.otp)
                     if record['risk_level'] == 'RED':
@@ -382,6 +382,14 @@ def create_app(*, demo=False, clock=None, authenticate=None, candidate_model=Non
         from bankagent.banking.bank_backend import desktop_objects as read_objects
         current = service.sessions.resolve(request.headers.get('authorization'))
         return read_objects(context=TrustedContext(current.user_id, current.account_id, 'desktop-objects'))
+
+    @app.get('/bank/wealth')
+    def wealth_workspace(request: Request):
+        from bankagent.banking.bank_backend import _configured
+        current = service.sessions.resolve(request.headers.get('authorization'))
+        if request.query_params:
+            raise ApiError('INVALID_REQUEST', '理财账户由登录会话确定。', 400)
+        return _configured().query_wealth(context=TrustedContext(current.user_id, current.account_id, 'wealth-view'))
 
     @app.get('/bank/transfer-batches')
     def transfer_batches(request: Request):

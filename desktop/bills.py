@@ -8,7 +8,8 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushB
 from desktop.client import money
 from desktop.icons import icon
 
-KINDS = {'INCOME':'入账', 'TRANSFER_IN':'转入', 'EXPENSE':'消费', 'TRANSFER_OUT':'转出'}
+KINDS = {'INCOME':'入账', 'TRANSFER_IN':'转入', 'EXPENSE':'消费', 'TRANSFER_OUT':'转出',
+         'WEALTH_RESERVE':'申购冻结', 'WEALTH_RELEASE':'理财解冻', 'WEALTH_CREDIT':'赎回到账'}
 
 class LedgerDelegate(QStyledItemDelegate):
     def paint(self,painter,option,index):
@@ -209,10 +210,10 @@ class BillsPage(QWidget):
             and (not category or r['category']==category)
             and (not search or search in ((r.get('merchant') or '')+' '+(r.get('counterparty_name') or '')).casefold())],
             key=lambda r:(r['occurred_at'],r['transaction_id']),reverse=True)
-        incoming=sum(r['amount_minor'] for r in self.rows if r['kind'] in {'INCOME','TRANSFER_IN'})
-        outgoing=sum(r['amount_minor'] for r in self.rows if r['kind']=='TRANSFER_OUT')
+        incoming=sum(r['amount_minor'] for r in self.rows if r['kind'] in {'INCOME','TRANSFER_IN','WEALTH_RELEASE','WEALTH_CREDIT'})
+        outgoing=sum(r['amount_minor'] for r in self.rows if r['kind'] in {'TRANSFER_OUT','WEALTH_RESERVE'})
         expense=sum(r['amount_minor'] for r in self.rows if r['kind']=='EXPENSE')
-        for label,name,value in zip(self.totals,['入账','转出','消费'],[incoming,outgoing,expense]):
+        for label,name,value in zip(self.totals,['入账与解冻','转出与冻结','消费'],[incoming,outgoing,expense]):
             label.setText('<span style="font-size:14px;font-weight:400">'+name+'</span><br/>'
                           '<span style="font-size:26px;font-weight:600">¥ '+money(value)+'</span>')
         self.page=0; self.render()
@@ -242,7 +243,7 @@ class BillsPage(QWidget):
         self.table.setRowCount(0)
         rows=self.rows[self.page*20:(self.page+1)*20]; self.table.setRowCount(len(rows))
         for index,row in enumerate(rows):
-            positive=row['kind'] in {'INCOME','TRANSFER_IN'}
+            positive=row['kind'] in {'INCOME','TRANSFER_IN','WEALTH_RELEASE','WEALTH_CREDIT'}
             values=[row['occurred_at'][:16].replace('T',' '),row.get('counterparty_name') or row.get('merchant') or row['category'],
                 KINDS[row['kind']],row['category'],('+' if positive else '−')+money(row['amount_minor']),'已入账']
             if row['category']=='模拟入金': values[1]='模拟入金\n非真实存款'
@@ -271,13 +272,13 @@ class BillsPage(QWidget):
         if index < 0 or self.page*20+index >= len(self.rows): return
         row=self.rows[self.page*20+index]
         self.detail_mark.setPixmap(icon('check',30,'#128146').pixmap(30,30)); self.detail_body.setText('交易已入账')
-        positive=row['kind'] in {'INCOME','TRANSFER_IN'}
+        positive=row['kind'] in {'INCOME','TRANSFER_IN','WEALTH_RELEASE','WEALTH_CREDIT'}
         self.detail_amount.setText(('＋' if positive else '−')+'¥ '+money(row['amount_minor']))
         values=[row['occurred_at'][:16].replace('T',' '),KINDS[row['kind']],'已入账',
             row.get('counterparty_name') or row.get('merchant') or row['category'],row['category'],
             '本机测试资金，非真实存款' if row['category']=='模拟入金' else '—']
         for widget,value in zip(self.detail_values.values(),values): widget.setText(value)
-        self.refs.setPlainText('\n'.join(label+'：'+row[key] for key,label in [('transaction_id','流水编号'),('transfer_id','转账编号'),('related_transaction_id','关联流水'),('batch_id','批量编号')] if key in row))
+        self.refs.setPlainText('\n'.join(label+'：'+row[key] for key,label in [('transaction_id','流水编号'),('transfer_id','转账编号'),('related_transaction_id','关联流水'),('batch_id','批量编号'),('order_id','理财订单')] if key in row))
         self.refs_toggle.setEnabled(True)
         self.table.selectRow(index)
 

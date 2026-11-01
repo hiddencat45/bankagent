@@ -3,6 +3,13 @@ from bankagent.api.contracts import ApiError
 from bankagent.agent.scenarios import ScenarioError
 
 FORM_ACTIONS = {
+    'QUERY_WEALTH': ('wealth', 'WEALTH_QUERY'),
+    'RECOMMEND_WEALTH': ('wealth', 'WEALTH_RECOMMEND'),
+    'SAVE_WEALTH_PROFILE': ('wealth', 'WEALTH_PROFILE'),
+    'SUBSCRIBE_WEALTH': ('wealth', 'WEALTH_BUY'),
+    'REDEEM_WEALTH': ('wealth', 'WEALTH_SELL'),
+    'CANCEL_WEALTH_ORDER': ('wealth', 'WEALTH_CANCEL'),
+    'ADVANCE_WEALTH_DEMO': ('wealth', 'WEALTH_ADVANCE'),
     'SIMULATE_CARD_DEPOSIT': ('card_deposit', 'CARD_DEPOSIT'),
     'CREATE_DEMO_CUSTOMER': ('onboarding', 'DEMO_CUSTOMER_CREATE'),
     'OPEN_ACCOUNT': ('lifecycle', 'ACCOUNT_OPEN'),

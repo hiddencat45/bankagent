@@ -143,6 +143,11 @@ class ChatView(QScrollArea):
         else:
             body.addWidget(self.label(summary))
         data = receipt.get('data') or {}
+        from bankagent.banking.wealth import OPERATIONS
+        if receipt['operation'] in OPERATIONS:
+            button = QPushButton('查看理财持仓与订单 →')
+            button.clicked.connect(lambda: self.receipt_opened.emit(receipt))
+            body.addWidget(button)
         if receipt['operation'] == 'QUERY_BILLS' and receipt['status'] == 'COMPLETED':
             categories = {}
             for row in data.get('transactions', []):
