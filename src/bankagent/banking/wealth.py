@@ -19,6 +19,27 @@ PRODUCTS = (
     dict(code='5811225439', name='交银理财稳享灵动慧利日开41号（7天持有期）', short_name='交银7天41号',
          issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=7, fee='0.52%/年（合同三项常规费率合计）',
          source='https://www.bocommwm.cn/BankCommSite/upload/infos/202509/05/3583668/20250905163601_交银理财稳享灵动慧利日开41号（7天持有期）理财产品（微众银行代销）.pdf'),
+    dict(code='5811323020', name='交银理财稳享现金添利（乐享版）1号理财产品B', short_name='交银现金添利1号B',
+         issuer='交银理财', issuer_risk=1, minimum_minor=1, hold_days=0, fee='0.57%/年（三项常规费率合计）；不收取超额业绩报酬；特定流动性风险情形可收强制赎回费',
+         source='https://www.bocommwm.com/BankCommSite/upload/infos/202608/20/3698979/20260820161810_20260820161755PRaLa1425.pdf'),
+    dict(code='5811225192', name='交银理财慧选日开2号（14天持有期）理财产品', short_name='交银慧选14天2号',
+         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=14, fee='0.47%/年（三项常规费率合计）；超过2.10%/年部分按20%提取超额业绩报酬',
+         source='https://www.bocommwm.com/BankCommSite/upload/infos/202608/19/3697978/20260819172428_20260819172427EZYnZ1143.pdf'),
+    dict(code='5811223114', name='交银理财稳享灵动慧利日开4号（30天持有期）安鑫版理财产品D', short_name='交银安鑫30天4号D',
+         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=30, fee='0.22%/年（三项常规费率合计）；不收取超额业绩报酬',
+         source='https://www.bocommwm.com/BankCommSite/upload/infos/202608/19/3697985/20260819172428_20260819172427dStuA1156.pdf'),
+    dict(code='5811225237', name='交银理财慧选日开8号（90天持有期）理财产品', short_name='交银慧选90天8号',
+         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=90, fee='0.57%/年（三项常规费率合计）；超过2.53%/年部分按40%提取超额业绩报酬',
+         source='https://www.bocommwm.com/BankCommSite/upload/infos/202608/12/3691777/20260812172144_20260812172131tSIWW1474.pdf'),
+    dict(code='5811223020', name='交银理财稳享固收精选日开8号（150天持有期）理财产品D', short_name='交银固收150天8号D',
+         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=150, fee='0.62%/年（三项常规费率合计）；超过1.10%/年部分按30%提取超额业绩报酬',
+         source='https://www.bocommwm.com/BankCommSite/upload/infos/202608/12/3691813/20260812172147_20260812172132dcSzE1554.pdf'),
+    dict(code='5811223109', name='交银理财稳享灵动慧利日开6号（180天持有期）鑫享版理财产品', short_name='交银鑫享180天6号',
+         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=180, fee='0.42%/年（三项常规费率合计）；不收取超额业绩报酬',
+         source='https://www.bocommwm.com/BankCommSite/upload/infos/202608/12/3691806/20260812172146_20260812172133HbyUq1706.pdf'),
+    dict(code='5811225212', name='交银理财慧选日开6号（365天持有期）理财产品', short_name='交银慧选365天6号',
+         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=365, fee='0.47%/年（三项常规费率合计）；超过业绩比较基准区间中枢部分按40%提取超额业绩报酬',
+         source='https://www.bocommwm.com/BankCommSite/upload/infos/202608/12/3691780/20260812172144_20260812172131EGfce1472.pdf'),
 )
 PRODUCT_BY_CODE = {p['code']: p for p in PRODUCTS}
 WRITES = frozenset({'SAVE_WEALTH_PROFILE', 'SUBSCRIBE_WEALTH', 'REDEEM_WEALTH', 'CANCEL_WEALTH_ORDER', 'ADVANCE_WEALTH_DEMO'})
@@ -66,15 +87,19 @@ def screen(product, profile, day):
     if profile['purpose'] != '闲置资金': reasons.append('必要支出不能承担亏损或延期到账')
     if profile['debt'] != '无压力': reasons.append('存在还款压力或使用借款')
     if profile['budget_minor'] > profile['free_cash_minor']: reasons.append('预算超过扣除必要支出和备用金后的闲钱')
-    if profile['loss'] == '不能亏损': reasons.append('三款产品均不保本')
+    if profile['loss'] == '不能亏损': reasons.append('本产品不保本，不符合不能亏损的要求')
     cap = 2 if profile['loss'] == '接受波动' and profile['experience'] == '有经验' and profile['income'] == '稳定' else 1
     if product['issuer_risk'] > cap: reasons.append('超过本演示问卷的保守风险范围（非银行正式测评）')
     if profile['liquidity'] != '可等待': reasons.append('要求当天或固定日期到账，真实渠道规则未核实')
     earliest = business_day(business_day(day, 1) + timedelta(days=product['hold_days']))
     earliest = business_day(earliest, 2)
-    if (earliest-day).days > profile['horizon_days']: reasons.append('期限不足以覆盖模拟确认、持有与到账时间')
+    needed = (earliest-day).days
+    if needed > profile['horizon_days']:
+        reasons.append(f"期限不足：持有{product['hold_days']}天，加上模拟确认与到账需{needed}天，超过你的{profile['horizon_days']}天用钱期限")
     if profile['budget_minor'] < product['minimum_minor']: reasons.append('预算低于说明书起投金额')
-    return dict(product_code=product['code'], eligible=not reasons, reasons=reasons or ['预算、模拟风险范围和期限通过初筛'],
+    return dict(product_code=product['code'], eligible=not reasons, reasons=reasons or [
+        f"管理人R{product['issuer_risk']}在本次模拟筛选上限R{cap}内，预算覆盖起投金额",
+        f"最低持有{product['hold_days']}天；含模拟确认与到账需{needed}天，未超过你的{profile['horizon_days']}天用钱期限"],
                 real_status='待核实，不能作为真实购买建议', simulated_earliest_cash_date=earliest.isoformat())
 
 

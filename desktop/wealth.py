@@ -55,6 +55,7 @@ class WealthPage(QWidget):
         self.tabs=QTabWidget(); layout.addWidget(self.tabs)
         catalog=QWidget(); c=QVBoxLayout(catalog); c.setAlignment(Qt.AlignmentFlag.AlignTop); c.setSpacing(12)
         self.products=ProductCards()
+        self.products.geometryChanged.connect(self.fit_tab)
         self.products.itemSelectionChanged.connect(self.product_detail); c.addWidget(self.products)
         selected=QFrame();selected.setObjectName('wealthPanel');selection=QVBoxLayout(selected);selection.setContentsMargins(18,14,18,14)
         detail_row=QHBoxLayout();self.product_text=text('请选择产品','wealthHint');detail_row.addWidget(self.product_text,1)

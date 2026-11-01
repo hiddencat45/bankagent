@@ -59,7 +59,10 @@ def test_screening_reasons_and_amounts_are_receipt_facts(chat):
     receipt['data']['recommendations'] = [dict(product_code=p['code'], eligible=i == 0,
         reasons=['预算与期限通过' if i == 0 else '不符合风险范围']) for i, p in enumerate(PRODUCTS)]
     view.add_receipt(receipt, PreviewWindow.summarize(receipt)); app.processEvents()
-    assert '1 款产品' in shown(view) and shown(view).count('不符合风险范围') == 2
+    assert '1 款产品' in shown(view) and '不符合风险范围' not in shown(view)
+    next(b for b in view.findChildren(QPushButton) if b.text().endswith('款不匹配产品及原因')).click()
+    app.processEvents()
+    assert shown(view).count('不符合风险范围') == len(PRODUCTS)-1
     actions=[];view.wealth_opened.connect(lambda *args:actions.append(args))
     next(b for b in view.findChildren(QPushButton) if b.text() == '查看产品详情 →').click()
     assert actions == [('product', {'code': PRODUCTS[0]['code']})]

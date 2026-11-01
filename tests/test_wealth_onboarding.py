@@ -31,6 +31,20 @@ def test_first_visit_defer_and_explicit_gate_never_saves(page):
     p.questionnaire.reject();p.compare.click();assert p.questionnaire.isVisible() and not calls
 
 
+def test_catalog_paging_preserves_product_identity_and_selection(page):
+    p,app=page;p.questionnaire.reject();cards=p.products
+    assert cards.rowCount()==10 and cards.box.count()==6
+    cards.next.click();app.processEvents()
+    assert cards.page==1 and cards.box.count()==4
+    cards.select_buttons[9].click()
+    assert cards.currentRow()==9 and PRODUCTS[9]['short_name'] in p.product_text.text()
+    p.set_data(deepcopy(p.data),p.actor);app.processEvents()
+    assert cards.currentRow()==9 and cards.page==1
+    cards.previous.click();app.processEvents()
+    assert cards.page==0 and cards.currentRow()==9  # Browsing does not change purchase selection.
+    cards.select_buttons[0].click();assert cards.currentRow()==0
+
+
 def test_two_step_form_requires_answers_and_emits_only_confirmation_request(page):
     from PySide6.QtWidgets import QLineEdit
     p,app=page;d=p.questionnaire;calls=[];p.requested.connect(lambda *args:calls.append(args))

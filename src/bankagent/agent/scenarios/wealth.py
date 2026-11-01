@@ -141,7 +141,7 @@ def render(result):
         lines.append(p['short_name']+'（'+p['code']+'）'+('：'+('模拟候选；真实渠道待核实' if r['eligible'] else '不匹配')+'；'+'；'.join(r['reasons']) if r else '：资料可查看，尚未筛选')+
                      f"。管理人R{p['issuer_risk']}，{_money(p['minimum_minor'])}元起，"+(f"最低持有{p['hold_days']}天" if p['hold_days'] else '无封闭期')+'；'+p['fee']+'。')
     if d['profile_valid']:
-        lines.append('三款均不保本。华夏管理人评级较低且无封闭期；北银与交银均有7天持有要求。合同费率差不能证明未来收益更高，不做收益排名。')
+        lines.append(f"共{len(d['products'])}款真实产品资料，{sum(r['eligible'] for r in d['recommendations'])}款通过模拟初筛。各产品持有期不同，均不保本；过往收益统计口径不同，不做收益排名。")
     for lot in d['lots']:lines.append(f"持仓{lot['lot_id']}：{lot['product_code']}，共{_money(lot['units_minor'])}份，可赎回{_money(lot['redeemable_minor'])}份，解锁日{lot['unlock_on']}。")
     for o in d['orders'][:10]:lines.append(f"订单{o['order_id']}：{STATES[o['state']]}，申请{_money(o['requested_minor'])}{'元' if o['side']=='BUY' else '份'}。")
     return '\n'.join(lines)

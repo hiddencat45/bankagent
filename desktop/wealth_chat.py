@@ -1,6 +1,6 @@
 """Present trusted receipts; actions navigate or request read-only screening."""
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout, QPushButton
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QFrame, QWidget, QVBoxLayout, QHBoxLayout, QPushButton
 from desktop.client import money
 from bankagent.banking.wealth import OPERATIONS, STATES
 
@@ -50,7 +50,9 @@ def render(chat, receipt):
             matches = {r['product_code']: r for r in data['recommendations']}
             count = sum(bool(r['eligible']) for r in matches.values())
             text(f'{count} 款产品符合当前模拟筛选条件' if count else '目前没有符合你需求的产品', 'wealthChatTitle')
+            text(f"已核对 {len(data['products'])} 款产品 · {len(matches)-count} 款不匹配", 'wealthChatCaption')
             text('先比较风险和用钱时间，再决定是否继续。' if count else '可以查看排除理由，或更新实际需求；不必为了购买而改变答案。')
+            excluded=QWidget();excluded_box=QVBoxLayout(excluded);excluded_box.setContentsMargins(0,0,0,0);excluded_box.setSpacing(8)
             for product in data['products']:
                 result = matches.get(product['code'])
                 if result is None:
@@ -62,7 +64,16 @@ def render(chat, receipt):
                 text(f"管理人 R{product['issuer_risk']}  ·  {money(product['minimum_minor'])} 元起  ·  {hold}", 'wealthChatCaption', content)
                 text(('通过初筛 · ' if result['eligible'] else '暂不匹配 · ') + '；'.join(result['reasons']), target=content)
                 action('查看产品详情 →', 'product', {'code': product['code']}, target=content)
-                body.addWidget(card)
+                (body if result['eligible'] else excluded_box).addWidget(card)
+            if excluded_box.count():
+                toggle=QPushButton(f'查看 {excluded_box.count()} 款不匹配产品及原因')
+                toggle.setObjectName('wealthChatLink');toggle.setCheckable(True);toggle.setChecked(not count)
+                def expand(checked):
+                    excluded.setVisible(checked)
+                    toggle.setText('收起不匹配产品' if checked else f'查看 {excluded_box.count()} 款不匹配产品及原因')
+                    QTimer.singleShot(0,chat.fit_bubbles)
+                toggle.toggled.connect(expand);body.addWidget(toggle);body.addWidget(excluded);expand(not count)
+            else:excluded.deleteLater()
             action('查看产品与匹配结果', 'products', primary=True)
         else:
             text('你的模拟理财账户', 'wealthChatTitle')

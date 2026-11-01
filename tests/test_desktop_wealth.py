@@ -38,7 +38,7 @@ def test_wealth_controls_purchase_redeem_and_restart_view(tmp_path,monkeypatch):
         w.resize(1040,720);qt.processEvents()
         assert w.main_scroll.horizontalScrollBar().maximum()==0
         assert w.pages.currentWidget()==page
-        assert page.products.rowCount()==3
+        assert page.products.rowCount()==10
         wait(lambda:page.questionnaire.isVisible())
         for key,value in FIELDS.items():
             field=page.fields[key]

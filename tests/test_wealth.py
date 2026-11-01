@@ -160,7 +160,10 @@ def test_form_chat_confirm_query_and_restart(tmp_path):
         assert c.get('/bank/wealth',headers=auth).json()['data']['profile'] is None
         confirm(c,auth,pending)
         candidates=result(form(c,auth,'RECOMMEND_WEALTH'))['data']['recommendations']
-        assert len(candidates)==3 and all(r['eligible'] for r in candidates)
+        assert len(candidates)==10
+        assert {r['product_code'] for r in candidates if r['eligible']}=={
+            '2119987003A','YJ01251202A','5811225439','5811323020','5811225192','5811223114'}
+        assert all('期限不足' in ';'.join(r['reasons']) for r in candidates if not r['eligible'])
         pending=chat(c,auth,message='模拟申购「北银7天27号A」100元')
         assert '100.00元' in business_confirmation(pending)['summary']
         confirm(c,auth,pending,'reject')
