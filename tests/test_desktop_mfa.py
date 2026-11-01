@@ -53,6 +53,25 @@ def test_native_enrollment_and_red_transfer(tmp_path, monkeypatch):
         shell.show_bank(); bank=shell.bank
         wait(lambda:not bank.busy and bank.snapshot is not None)
         bank.resize(1200,800)
+        def close_levels():
+            levels=next(w for w in app.topLevelWidgets() if isinstance(w,QDialog) and w.isVisible())
+            capture('security-levels',levels); levels.accept()
+        QTimer.singleShot(30,close_levels); bank.show_security_levels()
+        bank.send('现在余额多少')
+        wait(lambda:not bank.busy)
+        assert '低风险' in bank.status.text()
+        capture('low-risk-query',bank)
+        app.processEvents(); wait(lambda:not bank.busy)
+        assert '低风险' in bank.status.text()
+        bank.send(f'给{target}转1000元')
+        wait(lambda:not bank.busy and bank.pending is not None)
+        assert '中风险' in bank.confirmation_heading.text()
+        assert '累计 ¥ 1,000.00' in bank.confirm_text.text()
+        assert '所需验证：交易密码。' in bank.confirm_text.text()
+        bank.toggle_assistant(True); capture('medium-risk-confirm',bank)
+        bank.reject.click(); wait(lambda:not bank.busy and bank.pending is None)
+        bank.toggle_assistant(False)
+        app.processEvents(); wait(lambda:not bank.busy)
         dialog=EnrollmentDialog(shell.client,bank); dialog.show()
         app.processEvents(); capture('mfa-before-binding',dialog)
         # Observe only this isolated enrollment response to stand in for a phone authenticator.
@@ -76,6 +95,13 @@ def test_native_enrollment_and_red_transfer(tmp_path, monkeypatch):
         bank.send(f'给{target}转1001元')
         wait(lambda:not bank.busy and bank.pending is not None)
         assert bank.pending['risk_level']=='RED'
+        assert '高风险' in bank.confirmation_heading.text()
+        assert '累计 ¥ 1,001.00' in bank.confirm_text.text()
+        assert '所需验证：交易密码＋手机动态码。' in bank.confirm_text.text()
+        bank.toggle_assistant(True); capture('high-risk-confirm',bank)
+        app.processEvents()
+        assert bank.approve.isVisible()
+        assert bank.assistant_box.rect().contains(bank.approve.mapTo(bank.assistant_box, bank.approve.rect().bottomRight()))
         errors=[]
         def fill():
             payment=next((w for w in app.topLevelWidgets() if isinstance(w,QDialog) and w.isVisible()),None)

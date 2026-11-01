@@ -38,6 +38,9 @@ def test_all_cards_threshold_exact_boundary_mfa_and_restart(tmp_path):
         a,password,own,b,target,pin = setup(c)
         first = form(c,a,'TRANSFER',recipient_name=target,amount='1000')
         assert business_confirmation(first)['risk_level']=='YELLOW'
+        assert business_confirmation(first)['risk_context']=={
+            'daily_transfer_total_minor':0, 'current_amount_minor':100000,
+            'projected_total_minor':100000, 'threshold_minor':100000, 'scope':'CUSTOMER_DAILY'}
         assert result(parse_stream(authorize(c,a,first,pin).content))['status']=='COMPLETED'
         # A second account/card has its own balance but shares this customer's daily total.
         second = result(confirm(c,a,form(c,a,'OPEN_ACCOUNT',display_name='第二账户')))['data']['account_id']
@@ -47,6 +50,8 @@ def test_all_cards_threshold_exact_boundary_mfa_and_restart(tmp_path):
             assert result(confirm(c,a,form(c,a,action,**fields)))['status']=='COMPLETED'
         pending = form(c,a,'TRANSFER',recipient_name=target,amount='1')
         assert business_confirmation(pending)['risk_level']=='RED'
+        assert business_confirmation(pending)['risk_context']['daily_transfer_total_minor']==100000
+        assert business_confirmation(pending)['risk_context']['projected_total_minor']==100100
         assert authorize(c,a,pending,pin).json()['code']=='MFA_REQUIRED'
         assert balance(c,a)==210000 and balance(c,b)==100000
         generator, clock, code = bind(c,a,password)
@@ -124,6 +129,7 @@ def test_ai_batch_mfa_atomic_failure_and_success(tmp_path):
             pending=chat(c,a,message='请分两笔付到这张卡，确认总金额后再办理')
             assert business_confirmation(pending) is not None, [(e, d.get('status'),d.get('message'),d.get('code')) for e,d in pending]
             assert business_confirmation(pending)['risk_level']=='RED'
+            assert business_confirmation(pending)['risk_context']['current_amount_minor']==sum(int(v)*100 for v in amounts)
             assert authorize(c,a,pending,pin).json()['code']=='MFA_INVALID'
             reply=authorize(c,a,pending,pin,code())
             actual=batch_result(parse_stream(reply.content))
