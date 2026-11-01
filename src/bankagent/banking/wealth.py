@@ -11,34 +11,34 @@ RULE_VERSION = 'wealth-demo-v2'
 NOTICE = '仅模拟：净值固定1元，不计收益、亏损及费用；演示日历仅排除周末，不代表银行实际规则。真实渠道在售、评级、费率优惠及到账待核实。'
 PRODUCTS = (
     dict(code='2119987003A', name='华夏理财现金管理类理财产品3号A', short_name='华夏现金3号A',
-         issuer='华夏理财', issuer_risk=1, minimum_minor=1, hold_days=0, fee='0.53%/年（合同三项常规费率合计）',
+         issuer='华夏理财', issuer_risk=1, minimum_minor=1, hold_days=0, regular_fee_bps=53, fee='0.53%/年（合同三项常规费率合计）',
          source='https://wap.hxb.com.cn/lcpdf/4363285c6ea303487e01ab8673ad1f77.html'),
     dict(code='YJ01251202A', name='北银理财京华远见春系列诚享7天持有期27号A', short_name='北银7天27号A',
-         issuer='北银理财', issuer_risk=2, minimum_minor=100, hold_days=7, fee='0.53%/年（合同三项常规费率合计）',
+         issuer='北银理财', issuer_risk=2, minimum_minor=100, hold_days=7, regular_fee_bps=53, fee='0.53%/年（合同三项常规费率合计）',
          source='https://www.beijingbobwealth.com.cn/upload/pdf/1778846245812-YJ01251202Abylcjhyjcxlcx7tcyq27hlccp-lccpsms-wzyx-2026-05-15-YJ01251202.pdf'),
     dict(code='5811225439', name='交银理财稳享灵动慧利日开41号（7天持有期）', short_name='交银7天41号',
-         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=7, fee='0.52%/年（合同三项常规费率合计）',
+         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=7, regular_fee_bps=52, fee='0.52%/年（合同三项常规费率合计）',
          source='https://www.bocommwm.cn/BankCommSite/upload/infos/202509/05/3583668/20250905163601_交银理财稳享灵动慧利日开41号（7天持有期）理财产品（微众银行代销）.pdf'),
     dict(code='5811323020', name='交银理财稳享现金添利（乐享版）1号理财产品B', short_name='交银现金添利1号B',
-         issuer='交银理财', issuer_risk=1, minimum_minor=1, hold_days=0, fee='0.57%/年（三项常规费率合计）；不收取超额业绩报酬；特定流动性风险情形可收强制赎回费',
+         issuer='交银理财', issuer_risk=1, minimum_minor=1, hold_days=0, regular_fee_bps=57, fee='0.57%/年（三项常规费率合计）；不收取超额业绩报酬；特定流动性风险情形可收强制赎回费',
          source='https://www.bocommwm.com/BankCommSite/upload/infos/202608/20/3698979/20260820161810_20260820161755PRaLa1425.pdf'),
     dict(code='5811225192', name='交银理财慧选日开2号（14天持有期）理财产品', short_name='交银慧选14天2号',
-         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=14, fee='0.47%/年（三项常规费率合计）；超过2.10%/年部分按20%提取超额业绩报酬',
+         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=14, regular_fee_bps=47, fee='0.47%/年（三项常规费率合计）；超过2.10%/年部分按20%提取超额业绩报酬',
          source='https://www.bocommwm.com/BankCommSite/upload/infos/202608/19/3697978/20260819172428_20260819172427EZYnZ1143.pdf'),
     dict(code='5811223114', name='交银理财稳享灵动慧利日开4号（30天持有期）安鑫版理财产品D', short_name='交银安鑫30天4号D',
-         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=30, fee='0.22%/年（三项常规费率合计）；不收取超额业绩报酬',
+         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=30, regular_fee_bps=22, fee='0.22%/年（三项常规费率合计）；不收取超额业绩报酬',
          source='https://www.bocommwm.com/BankCommSite/upload/infos/202608/19/3697985/20260819172428_20260819172427dStuA1156.pdf'),
     dict(code='5811225237', name='交银理财慧选日开8号（90天持有期）理财产品', short_name='交银慧选90天8号',
-         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=90, fee='0.57%/年（三项常规费率合计）；超过2.53%/年部分按40%提取超额业绩报酬',
+         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=90, regular_fee_bps=57, fee='0.57%/年（三项常规费率合计）；超过2.53%/年部分按40%提取超额业绩报酬',
          source='https://www.bocommwm.com/BankCommSite/upload/infos/202608/12/3691777/20260812172144_20260812172131tSIWW1474.pdf'),
     dict(code='5811223020', name='交银理财稳享固收精选日开8号（150天持有期）理财产品D', short_name='交银固收150天8号D',
-         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=150, fee='0.62%/年（三项常规费率合计）；超过1.10%/年部分按30%提取超额业绩报酬',
+         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=150, regular_fee_bps=62, fee='0.62%/年（三项常规费率合计）；超过1.10%/年部分按30%提取超额业绩报酬',
          source='https://www.bocommwm.com/BankCommSite/upload/infos/202608/12/3691813/20260812172147_20260812172132dcSzE1554.pdf'),
     dict(code='5811223109', name='交银理财稳享灵动慧利日开6号（180天持有期）鑫享版理财产品', short_name='交银鑫享180天6号',
-         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=180, fee='0.42%/年（三项常规费率合计）；不收取超额业绩报酬',
+         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=180, regular_fee_bps=42, fee='0.42%/年（三项常规费率合计）；不收取超额业绩报酬',
          source='https://www.bocommwm.com/BankCommSite/upload/infos/202608/12/3691806/20260812172146_20260812172133HbyUq1706.pdf'),
     dict(code='5811225212', name='交银理财慧选日开6号（365天持有期）理财产品', short_name='交银慧选365天6号',
-         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=365, fee='0.47%/年（三项常规费率合计）；超过业绩比较基准区间中枢部分按40%提取超额业绩报酬',
+         issuer='交银理财', issuer_risk=2, minimum_minor=100, hold_days=365, regular_fee_bps=47, fee='0.47%/年（三项常规费率合计）；超过业绩比较基准区间中枢部分按40%提取超额业绩报酬',
          source='https://www.bocommwm.com/BankCommSite/upload/infos/202608/12/3691780/20260812172144_20260812172131EGfce1472.pdf'),
 )
 PRODUCT_BY_CODE = {p['code']: p for p in PRODUCTS}
@@ -135,25 +135,9 @@ def screen(product, profile, day):
 
 
 def recommend_products(answers,day):
-    """Preference presentation never changes purchase eligibility."""
-    results=[screen(p,answers,day) for p in PRODUCTS]
-    priority=answers['priority']
-    def key(r):
-        p=PRODUCT_BY_CODE[r['product_code']]
-        return (p['hold_days'],p['issuer_risk']) if priority=='流动性优先' else (p['issuer_risk'],p['hold_days'])
-    results.sort(key=lambda r:({'matched':0,'review':1,'excluded':2}[r['match_status']],key(r)))
-    matched=[r for r in results if r['eligible']]
-    seen=set()
-    for r in results:
-        p=PRODUCT_BY_CODE[r['product_code']]
-        r['preference_reason']=('按最低持有期、风险依次比较；不等于到账更快' if priority=='流动性优先' else
-            '按管理人风险、最低持有期依次比较' if priority=='风险优先' else '展示不同持有安排供比较；不按不同口径历史收益排名')
-        if not r['eligible']:r['comparison_group']='待补充或核实' if r['match_status']=='review' else '不匹配';continue
-        category=0 if p['hold_days']==0 else 1 if p['hold_days']<=30 else 2
-        preferred=(category not in seen) if priority=='综合比较' else key(r)==key(matched[0])
-        seen.add(category)
-        r['comparison_group']='优先比较' if preferred else '其他备选'
-    return results
+    """Rank the current eligible pool; never change purchase eligibility."""
+    from bankagent.banking.wealth_ranking import shortlist
+    return shortlist(PRODUCTS,[screen(p,answers,day) for p in PRODUCTS],answers['priority'])
 
 
 class WealthMixin:

@@ -90,6 +90,7 @@ class ProductCards(QWidget):
             box.addWidget(text(hold+' · '+money(p['minimum_minor'])+' 元起投','wealthHint'))
             r=recommendations.get(p['code'])
             status='待完善需求' if r is None else r.get('comparison_group','符合模拟初筛' if r['eligible'] else '暂不匹配')
+            if r and r.get('recommendation_rank'):status=f"推荐 {r['recommendation_rank']} · {r['recommendation_label']}"
             box.addWidget(text(status,'wealthHint'))
             box.addStretch()
             button=QPushButton('选择产品');button.setCheckable(True)

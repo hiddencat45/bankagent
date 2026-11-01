@@ -56,7 +56,7 @@ def test_wealth_controls_purchase_redeem_and_restart_view(tmp_path,monkeypatch):
         monkeypatch.setattr(w.client,'form',tracked)
         w.conversation.verticalScrollBar().setValue(0)
         link.click();link.click()  # A second click while busy must not send another request.
-        wait(lambda:not w.busy and any('款产品符合' in l.text() for l in w.conversation.findChildren(QLabel)))
+        wait(lambda:not w.busy and any('为你优先推荐' in l.text() for l in w.conversation.findChildren(QLabel)))
         wait(lambda:w.conversation.verticalScrollBar().value()==w.conversation.verticalScrollBar().maximum())
         assert calls==[('RECOMMEND_WEALTH',{})]
         assert w.assistant_box.isVisible() and w.pages.currentIndex()==0

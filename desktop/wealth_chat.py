@@ -50,11 +50,13 @@ def render(chat, receipt):
         elif operation == 'RECOMMEND_WEALTH':
             matches = {r['product_code']: r for r in data['recommendations']}
             count = sum(bool(r['eligible']) for r in matches.values())
+            recommended=sum(bool(r.get('recommendation_rank')) for r in matches.values())
+            legacy=bool(matches) and not any('recommendation_rank' in r for r in matches.values())
             review=sum(r.get('match_status')=='review' for r in matches.values())
-            text(f'{count} 款产品符合当前模拟筛选条件' if count else '还需要补充条件，暂不能确认匹配' if review else '目前没有符合你需求的产品', 'wealthChatTitle')
-            text(f"已核对 {len(data['products'])} 款产品 · {review} 款待补充或核实 · {len(matches)-count-review} 款不匹配", 'wealthChatCaption')
+            text(f'{count} 款产品通过初筛，请刷新获取推荐' if legacy else f'为你优先推荐 {recommended} 款产品' if recommended else '还需要补充条件，暂不能确认匹配' if review else '目前没有符合你需求的产品', 'wealthChatTitle')
+            text(f"从 {len(data['products'])} 款产品中比较 · {count} 款通过初筛 · {review} 款待补充或核实 · {len(matches)-count-review} 款不匹配", 'wealthChatCaption')
             if data.get('needs_deadline'):text('用钱日期 '+data['needs_deadline']+' · 以当前模拟日期计算剩余时间','wealthChatCaption')
-            text('先比较风险和用钱时间，再决定是否继续。' if count else '可以查看排除理由，或更新实际需求；不必为了购买而改变答案。')
+            text('以下是按你的需求选出的优先项；列出推荐理由和取舍，其他合格产品可展开比较。' if recommended else '可以查看排除理由，或更新实际需求；不必为了购买而改变答案。')
             excluded=QWidget();excluded_box=QVBoxLayout(excluded);excluded_box.setContentsMargins(0,0,0,0);excluded_box.setSpacing(8)
             alternatives=QWidget();alternatives_box=QVBoxLayout(alternatives);alternatives_box.setContentsMargins(0,0,0,0);alternatives_box.setSpacing(8)
             products={p['code']:p for p in data['products']}
@@ -62,13 +64,18 @@ def render(chat, receipt):
                 product=products[result['product_code']]
                 card = QFrame(); card.setObjectName('wealthChatProduct')
                 content = QVBoxLayout(card); content.setContentsMargins(14, 12, 14, 10); content.setSpacing(6)
+                if result.get('recommendation_rank'):
+                    text(f"推荐 {result['recommendation_rank']} · {result['recommendation_label']}",'wealthChatTag',content)
                 text(product['short_name'], 'wealthChatName', content)
                 hold = f"最低持有 {product['hold_days']} 天" if product['hold_days'] else '不设封闭期'
                 text(f"管理人 R{product['issuer_risk']}  ·  {money(product['minimum_minor'])} 元起  ·  {hold}", 'wealthChatCaption', content)
                 group=result.get('comparison_group','通过初筛' if result['eligible'] else '暂不匹配')
-                text(group+' · '+('通过初筛 · ' if result['eligible'] else '')+'；'.join(result['reasons']), target=content)
-                if result.get('preference_reason') and result['eligible']:text(result['preference_reason'],'wealthChatCaption',content)
-                if result.get('notes'):text('；'.join(result['notes']),'wealthChatCaption',content)
+                if result.get('recommendation_reasons'):
+                    text('推荐理由' if result.get('recommendation_rank') else '备选说明','wealthChatName',content)
+                    for reason in result['recommendation_reasons']:text(reason,target=content)
+                    for tradeoff in result.get('tradeoffs',[]):text('需要权衡 · '+tradeoff,'wealthChatCaption',content)
+                else:text(group+' · '+('通过初筛 · ' if result['eligible'] else '')+'；'.join(result['reasons']), target=content)
+                if result.get('notes') and not result.get('recommendation_rank'):text('；'.join(result['notes']),'wealthChatCaption',content)
                 action('查看产品详情 →', 'product', {'code': product['code']}, target=content)
                 target=alternatives_box if group=='其他备选' else excluded_box if group in {'不匹配','暂不匹配'} else body
                 target.addWidget(card)
