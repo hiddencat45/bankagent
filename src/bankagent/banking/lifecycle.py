@@ -97,7 +97,7 @@ class LifecycleMixin:
         with self._transaction():
             if operation not in OPERATIONS:
                 return result(operation, error='OPERATION_NOT_ALLOWED')
-            if not self._owned(context):
+            if not self._owned(context) and not (operation == 'OPEN_ACCOUNT' and self._unopened_customer(context)):
                 return result(operation, error='ACCOUNT_NOT_ACCESSIBLE')
             if not isinstance(context, WriteContext) or not context.authorization_ref:
                 return result(operation, error='AUTHORIZATION_REQUIRED')

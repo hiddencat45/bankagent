@@ -110,7 +110,7 @@ def test_desktop_entry_reopens_same_ledger(tmp_path, monkeypatch):
     before = original.read_bytes()
     app = QApplication.instance() or QApplication([])
     monkeypatch.setattr(entry, 'desktop_environment', lambda: dict(env))
-    monkeypatch.setattr(entry.sys, 'argv', ['desktop/app.py'])
+    monkeypatch.setattr(entry.sys, 'argv', ['desktop/app.py', '--demo'])
     monkeypatch.setattr('PySide6.QtWidgets.QApplication', lambda *args: app)
     def drive():
         window = next(w for w in app.topLevelWidgets() if isinstance(w, BankWindow) and w.isVisible())

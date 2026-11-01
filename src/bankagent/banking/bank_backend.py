@@ -74,7 +74,7 @@ class BankBackend(LifecycleMixin):
 
     def query_accounts(self, *, context: TrustedContext) -> BackendResult:
         with self._transaction():
-            if not self._owned(context):
+            if not self._owned(context) and not self._unopened_customer(context):
                 return _result('QUERY_ACCOUNTS', error='ACCOUNT_NOT_ACCESSIBLE')
             return _result('QUERY_ACCOUNTS', {'accounts': [
                 {'account_ref': key, 'display_name': row.get('display_name', '默认演示账户'),
@@ -82,6 +82,10 @@ class BankBackend(LifecycleMixin):
                 for key, row in self._data['accounts'].items() if row['user_id'] == context.user_id],
                 'card_account_migration': [dict(row) for row in self._data.get('card_account_migration', [])
                     if self._data['accounts'][row['account_id']]['user_id'] == context.user_id]})
+
+    def _unopened_customer(self, context):
+        return (isinstance(context, TrustedContext) and context.account_id == 'unopened'
+                and self._data.get('customers', {}).get(context.user_id, {}).get('identity_type') == 'LOCAL')
 
     def _now(self):
         value = self._clock()

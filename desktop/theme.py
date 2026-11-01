@@ -40,7 +40,7 @@ QPushButton#navigation {text-align:left;background:transparent;padding:14px 12px
 QPushButton#navigation:checked {background:#d9e8de;color:#174c38;font-weight:600;}
 QPushButton#navigation:hover {background:#e0ebe3;}
 QFrame#assistantSpace {border:1px solid #d7e5d9;border-radius:18px;
- background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #eef5e9,stop:0.55 #f7faf7,stop:1 #e6f1ec);}
+ background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 rgba(238,245,233,235),stop:0.55 rgba(247,250,247,225),stop:1 rgba(230,241,236,240));}
 QFrame#assistantSpace QWidget {background:transparent;}
 QFrame#assistantSpace QLabel#welcomeTitle {font-size:32px;font-weight:600;color:#214f3b;padding:12px;}
 QFrame#composer {background:#ffffff;border:1px solid #dce7de;border-radius:16px;}

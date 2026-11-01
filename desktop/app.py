@@ -145,11 +145,14 @@ def main():
     parser.add_argument('--serve', metavar='READY_FILE')
     parser.add_argument('--preview', action='store_true', help='Compatibility alias for the default native workspace')
     parser.add_argument('--legacy', action='store_true', help='Use the previous native layout')
+    parser.add_argument('--demo', action='store_true', help='Explicit developer demo identities; no password login')
     args = parser.parse_args()
     if args.serve:
         serve(args.serve)
         return
-    service = LocalService()
+    env = desktop_environment()
+    env['BANKAGENT_LOCAL_LOGIN'] = '0' if args.demo else '1'
+    service = LocalService(env=env)
     try:
         from PySide6.QtWidgets import QApplication
         sys.path.insert(0, str(ROOT))
@@ -162,13 +165,17 @@ def main():
         from PySide6.QtGui import QIcon
         app.setWindowIcon(QIcon(str(ROOT / 'desktop' / 'assets' / 'youdu-app.ico')))
         url = service.start()
-        if not args.legacy:
+        if not args.demo:
+            from desktop.login import LoginWindow
+            window = LoginWindow(url, str(service.database_path))
+        elif not args.legacy:
             from desktop.preview import PreviewWindow
             window = PreviewWindow(url, startup_customer='zhang-wei')
         else:
             window = BankWindow(url, startup_customer='zhang-wei')
-        window.statusBar().showMessage('当前账本：' + str(service.database_path))
-        window.statusBar().setToolTip('当前账本：' + str(service.database_path))
+        if args.demo:
+            window.statusBar().showMessage('当前账本：' + str(service.database_path))
+            window.statusBar().setToolTip('当前账本：' + str(service.database_path))
         window.show()
         app.exec()
     except Exception as exc:

@@ -12,9 +12,9 @@ class Delivery(QObject):
 
 
 class BankWindow(QMainWindow):
-    def __init__(self, url, startup_customer=None):
+    def __init__(self, url, startup_customer=None, client=None):
         super().__init__()
-        self.client = QueryClient(url)
+        self.client = client or QueryClient(url)
         self.client.startup_customer = startup_customer
         self.thread = None
         self.busy = False
