@@ -4,7 +4,7 @@ from decimal import Decimal
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox, QStackedWidget, QScrollArea, QLineEdit, QComboBox, QListWidget,
-    QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QMenu, QGridLayout, QApplication)
+    QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy, QMenu, QGridLayout, QApplication, QInputDialog)
 from desktop.window import BankWindow
 from desktop.client import money, LedgerUnavailable
 from desktop.bills import BillsPage
@@ -415,6 +415,11 @@ class PreviewWindow(BankWindow):
         self.transfer_form = form
         self.payer = text('付款账户正在读取…')
         fields.addWidget(self.payer)
+        self.payer_card_picker = QComboBox()
+        self.payer_card_picker.setPlaceholderText('请先办卡并激活，或选择本人其他付款卡')
+        self.payer_card_picker.setAccessibleName('付款卡')
+        self.payer_card_picker.currentIndexChanged.connect(lambda _: self.choose_context('account', self.payer_card_picker.currentData()) if self.payer_card_picker.currentData() else None)
+        fields.addWidget(self.payer_card_picker)
         fields.addWidget(text('收款卡号 · 仅支持本地模拟卡'))
         self.recipient = QComboBox()
         self.recipient.setEditable(True)
@@ -494,6 +499,7 @@ class PreviewWindow(BankWindow):
         for widget in (self.recipient, self.amount, self.card_list, self.go_transfer):
             widget.setEnabled(editable)
         self.prepare_transfer.setEnabled(editable and self.validate_transfer())
+        self.payer_card_picker.setEnabled(editable)
         selected_card = self.card_list.currentRow()
         unique_card = self.snapshot and selected_card >= 0 and sum(r['display_name'] == self.snapshot['objects']['cards'][selected_card]['display_name'] for r in self.snapshot['objects']['cards']) == 1
         self.card_limits.setEnabled(editable and bool(unique_card))
@@ -539,7 +545,9 @@ class PreviewWindow(BankWindow):
         shortcut = self.recipient.currentIndex() >= 0 and self.recipient.currentText() == self.recipient.itemText(self.recipient.currentIndex())
         recipient_valid = shortcut or bool(re.fullmatch(r'[0-9]{16}', selected.replace(' ', '')))
         self.recipient_error.setText('请输入16位本地模拟卡号，可包含空格。' if selected and not recipient_valid else '')
-        ready = bool(valid and not reason and selected and recipient_valid)
+        source = self.snapshot and next((a for a in self.snapshot['accounts'] if a['account_ref'] == self.snapshot['current_account_ref']), {})
+        card_ready = bool(source and source.get('transfer_card') and source['transfer_card']['status'] == 'ACTIVE')
+        ready = bool(valid and not reason and selected and recipient_valid and card_ready)
         self.prepare_transfer.setEnabled(ready and not self.busy and not self.blocked and self.pending is None and not self.uncertain)
         return ready
 
@@ -566,6 +574,24 @@ class PreviewWindow(BankWindow):
         self.run('query', lambda: self.client.form('TRANSFER', fields))
 
     def business_form(self, action, defaults=None, _card_checked=False):
+        if action == '模拟入金':
+            if self.busy or self.pending or self.uncertain or not self.snapshot:
+                return
+            cards = self.snapshot['objects']['cards']
+            if len(cards) != 1 or cards[0]['status'] != 'ACTIVE':
+                self.status.setText('请先办理并激活当前卡；冻结卡不能模拟入金。')
+                return
+            card = cards[0]
+            amount, ok = QInputDialog.getText(self, '模拟入金 · 非真实存款',
+                card['display_name'] + ' · 尾号' + card['card_number'][-4:] + '\n金额（元，最多10000；下一步核对确认）：',
+                text=(defaults or {}).get('amount', ''))
+            if not ok: return
+            if not re.fullmatch(r'[0-9]+(?:\.[0-9]{1,2})?', amount) or not 0 < Decimal(amount) <= 10000:
+                self.status.setText('模拟入金须大于0、最多10000元，保留两位小数。'); return
+            fields = {'card_name': card['display_name'], 'amount': amount}
+            self.form_active = True; self.last_form = (action, fields); self._prepared_from_form = False
+            self.run('query', lambda: self.client.form('SIMULATE_CARD_DEPOSIT', fields))
+            return
         if action != '转账':
             return super().business_form(action, defaults, _card_checked)
         if self.busy or self.pending or self.uncertain:
@@ -683,6 +709,15 @@ class PreviewWindow(BankWindow):
             self.balance_value.setText('¥ ' + money(current['balance_minor']))
             self.balance_note.setText(current['display_name'] + ' · 人民币账户余额')
             self.payer.setText('付款账户：' + current['display_name'] + '\n可用余额：¥ ' + money(current['balance_minor']))
+            self.payer_card_picker.blockSignals(True)
+            self.payer_card_picker.clear()
+            for account in result['accounts']:
+                card = account.get('transfer_card')
+                if card:
+                    self.payer_card_picker.addItem(card['display_name'] + ' · 尾号' + card['last4'] +
+                        (' · 已激活' if card['status'] == 'ACTIVE' else ' · 不可付款'), account['account_ref'])
+            self.payer_card_picker.setCurrentIndex(self.payer_card_picker.findData(current['account_ref']))
+            self.payer_card_picker.blockSignals(False)
             choice = self.recipient_value()
             self.recipient.blockSignals(True)
             self.recipient.clear()
@@ -757,7 +792,8 @@ class PreviewWindow(BankWindow):
                     self.result_box.show()
             if self.pending:
                 if self.decision is None:
-                    self.confirm_text.setText('付款账户：' + self.context_account.text() + '\n' + self.pending['summary'])
+                    label = '付款账户：' if self.pending.get('recipient') or self.pending.get('items') else '办理账户：'
+                    self.confirm_text.setText(label + self.context_account.text() + '\n' + self.pending['summary'])
                 self.status.setText('办理结果待核对 · 请重试原决定，不要另建付款' if self.decision is not None else '等待确认 · 尚未执行付款或业务变更')
                 if self.decision is None:
                     self.result_box.hide()
@@ -784,6 +820,8 @@ class PreviewWindow(BankWindow):
             return '操作未完成：' + {'INSUFFICIENT_BALANCE': '余额不足，未扣款。', 'USER_CANCELLED': '已取消，未执行。'}.get(receipt.get('error_code'), '请核对提示后处理；结果不确定时重试原决定。')
         if operation == 'TRANSFER':
             return f"转账成功 · {data['recipient']} ¥ {money(data['amount_minor'])}\n账户余额：¥ {money(data['remaining_balance_minor'])}"
+        if operation == 'SIMULATE_CARD_DEPOSIT':
+            return f"模拟入金成功 · {data['display_name']} ¥ {money(data['amount_minor'])}\n余额：¥ {money(data['remaining_balance_minor'])}（非真实存款）"
         if operation == 'GET_BALANCE':
             return '账户余额：¥ ' + money(data['balance_minor'])
         if operation == 'QUERY_BILLS':

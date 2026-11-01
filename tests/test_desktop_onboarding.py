@@ -42,20 +42,21 @@ def test_native_create_switch_issue_activate_reopen(tmp_path, monkeypatch):
             wait(ready)
             if first:
                 summary = write(window.create_customer, ['小林', '日常首账户'])
-                assert '小林' in summary and '日常首账户' in summary and '1,000.00' in summary
+                assert '小林' in summary and '日常首账户' in summary and '0.00' in summary
             wait(lambda: ready() and window.customers.count() == 3)
             index = next(i for i in range(window.customers.count()) if '小林' in window.customers.itemText(i))
             window.customers.setCurrentIndex(index)
             window.switch_customer.click()
             wait(lambda: ready() and '小林' in window.current_customer.text())
-            assert '1,000.00' in window.current_account.text()
+            assert ('0.00' if first else '1,000.00') in window.current_account.text()
             if first:
                 for label, value in [('办理借记卡', '首卡'), ('激活', '首卡')]:
                     write(next(b for b in window.business_buttons if b.text() == label), [value])
+                write(next(b for b in window.business_buttons if b.text() == '模拟入金'), ['首卡', '1000'])
             cards = receipt(window.client.query('我的卡片'))['data']['cards']
             assert len(cards) == 1 and cards[0]['display_name'] == '首卡' and cards[0]['status'] == 'ACTIVE'
             window.bills.click()
-            wait(lambda: ready() and '模拟银行演示资金' in window.history.toPlainText())
+            wait(lambda: ready() and '本机测试资金' in window.history.toPlainText())
         finally:
             if window:
                 window.close()

@@ -38,8 +38,17 @@ def test_registered_card_transfer_window(tmp_path, monkeypatch):
     try:
         url = service.start()
         with httpx.Client(base_url=url, timeout=30) as c:
-            a, password, own = customer(c, 'sender')
-            b, _, number = customer(c, 'receiver')
+            a, password, own = customer(c, 'sender', funding=None)
+            b, _, number = customer(c, 'receiver', funding=None)
+            from test_bank_forms import form, confirm
+            from test_api_http import result
+            from test_funds_chain import select
+            source=c.get('/bank/accounts',headers=a).json()['current_account_ref']
+            second=result(confirm(c,a,form(c,a,'OPEN_ACCOUNT',display_name='第二卡账户')))['data']['account_id']
+            a=select(c,a,second)
+            confirm(c,a,form(c,a,'ISSUE_DEBIT_CARD',display_name='第二卡'))
+            confirm(c,a,form(c,a,'ACTIVATE_DEBIT_CARD',card_name='第二卡'))
+            a=select(c,a,source)
             pin = f'{secrets.randbelow(1000000):06d}'
             c.post('/auth/payment-password', headers=a, json={
                 'login_password':password, 'payment_password':pin}).raise_for_status()
@@ -47,6 +56,23 @@ def test_registered_card_transfer_window(tmp_path, monkeypatch):
             window = AuthenticatedWindow(SimpleNamespace(client=client))
             window.resize(1200,800); window.show()
             wait(lambda:not window.busy and window.snapshot is not None)
+            assert window.balance_value.text()=='¥ 0.00'
+            shot('card-zero-balance')
+            from desktop.preview import QInputDialog
+            monkeypatch.setattr(QInputDialog,'getText',lambda *args,**kwargs:('1000',True))
+            window.business_form('模拟入金')
+            wait(lambda:not window.busy and window.pending is not None)
+            assert '非真实存款' in window.confirm_text.text() and '1,000.00' in window.confirm_text.text()
+            shot('card-deposit-confirm')
+            window.approve.click()
+            wait(lambda:not window.busy and window.pending is None and window.balance_value.text()=='¥ 1,000.00')
+            assert window.payer_card_picker.currentData()==window.snapshot['current_account_ref']
+            assert window.payer_card_picker.count()==2
+            window.payer_card_picker.setCurrentIndex(window.payer_card_picker.findData(second))
+            wait(lambda:not window.busy and window.snapshot and window.snapshot['current_account_ref']==second)
+            assert window.balance_value.text()=='¥ 0.00'
+            window.payer_card_picker.setCurrentIndex(window.payer_card_picker.findData(source))
+            wait(lambda:not window.busy and window.snapshot and window.snapshot['current_account_ref']==source)
             assert window.balance_value.text()=='¥ 1,000.00'
             window.card_list.setCurrentRow(0)
             assert own[-4:] in window.card_note.text() and own not in window.card_note.text()
@@ -70,7 +96,7 @@ def test_registered_card_transfer_window(tmp_path, monkeypatch):
             QTimer.singleShot(100,fill_pin); window.approve.click()
             wait(lambda:not window.busy and window.pending is None and window.balance_value.text()=='¥ 970.00')
             shot('card-transfer-result')
-            assert c.get('/bank/accounts',headers=b).json()['accounts'][0]['balance_minor']==103000
+            assert c.get('/bank/accounts',headers=b).json()['accounts'][0]['balance_minor']==3000
             # AI card-number confirmation also retains the original candidate when editing.
             window.send(f'给{number}转20元')
             wait(lambda:not window.busy and window.pending is not None)
