@@ -39,18 +39,19 @@ def test_wealth_controls_purchase_redeem_and_restart_view(tmp_path,monkeypatch):
         assert w.main_scroll.horizontalScrollBar().maximum()==0
         assert w.pages.currentWidget()==page
         assert page.products.rowCount()==3
-        page.tabs.setCurrentIndex(1)
+        wait(lambda:page.questionnaire.isVisible())
         for key,value in FIELDS.items():
             field=page.fields[key]
             if isinstance(field,QLineEdit):field.setText(value)
             else:field.setCurrentIndex(field.findData(value))
+        page.questionnaire.next.click();assert page.save.isVisible()
         page.save.click();settle('仅模拟需求筛选')
         wait(lambda:page.data['profile_valid'])
         page.tabs.setCurrentIndex(0);page.products.selectRow(0);page.buy_amount.setText('100')
         page.buy.click();settle('申购金额：100.00元')
         wait(lambda:page.orders.rowCount()==1)
         assert page.data['available_minor']==490000 and page.data['frozen_minor']==10000
-        page.tabs.setCurrentIndex(3)
+        page.tabs.setCurrentIndex(3);page.demo_toggle.setChecked(True)
         for _ in range(2):page.step.click();settle('下一步')
         wait(lambda:page.data['holdings_minor']==10000)
         page.tabs.setCurrentIndex(2);page.lots.selectRow(0);page.sell_units.setText('40')

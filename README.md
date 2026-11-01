@@ -4,13 +4,15 @@ PySide6 本地银行模拟应用。模型理解请求并提出工具调用；服
 
 ## 当前版本与入口（2026-11-01）
 
-当前交付分支为 `contract/wealth-simulation`，承接 #76–#91 的未合并功能；**main 不包含这些最新能力**。此前 #56、#61–#74 于10月28日合并，仅代表当时版本。本轮不合并 PR、不推 main。
+当前交付分支为 `feat/wealth-onboarding-design`，承接 #76–#92 的未合并功能；**main 不包含这些最新能力**。此前 #56、#61–#74 于10月28日合并，仅代表当时版本。本轮不合并 PR、不推 main。
 
 本机继续双击项目根目录 **Youdu.exe**。关闭旧窗口再打开即可加载新界面；原账号、密码和账本绑定不变，不需要重新注册或更换测试入口。
 
 Youdu.exe 是内嵌机器人图标的启动器，调用项目 `.venv`，不是独立安装包。私有 `Youdu.ledger-path` 指定原账本绝对路径；路径无效时拒绝启动，不自动换库。此文件、数据库、凭据不得提交 Git。新安装没有此文件时按正常默认路径创建本地账本。
 
 品牌与页头更新：绿色交织标志、精简侧栏底部、右上头像菜单和固定账单卡片选择已接入现有数据；完整账本路径见头像菜单“诊断信息”。实际窗口见[桌面应用](docs/桌面应用.md#品牌与固定页头修正2026-11-01待审)。
+
+理财页面已改为资产概览与产品卡片。首次进入且没有有效问卷时自动弹出两步引导，可稍后填写；浏览无需填问卷，比较与申购要求有效问卷。有效答案自动复用，详情与修改入口常驻。见[界面与首次引导](docs/理财界面与首次引导.md)。
 
 ## 当前能力
 
@@ -31,7 +33,7 @@ Youdu.exe 是内嵌机器人图标的启动器，调用项目 `.venv`，不是�
 Windows、Python 3.10、Git；开发门禁另需 Node。PowerShell 在目标目录运行：
 
 ```powershell
-git clone --branch contract/wealth-simulation https://github.com/hiddencat45/bankagent.git
+git clone --branch feat/wealth-onboarding-design https://github.com/hiddencat45/bankagent.git
 cd bankagent
 .\scripts\setup-desktop.ps1
 .\Youdu.exe

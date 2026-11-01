@@ -84,14 +84,17 @@ def run(output,visible=False,live_model=False):
             client.request('/auth/mfa/confirm',dict(enrollment_id=enrollment['enrollment_id'],code=authenticator.now()))
             shell.show_bank();w=shell.bank;w.resize(1440,900)
             wait(lambda:not w.busy and w.snapshot is not None and w.wealth_page.data is not None);idle()
-            w.wealth_nav.click();page=w.wealth_page;page.tabs.setCurrentIndex(1)
+            w.wealth_nav.click();page=w.wealth_page;wait(lambda:page.questionnaire.isVisible())
             fields=dict(budget='2000',free_cash='6000',horizon_days='90',purpose='闲置资金',liquidity='可等待',loss='接受波动',
                 income='稳定',debt='无压力',experience='有经验',priority='综合比较')
             for key,value in fields.items():
                 f=page.fields[key]
                 if isinstance(f,QLineEdit):f.setText(value)
                 else:f.setCurrentIndex(f.findData(value))
-            capture('questionnaire');page.save.click();approve()
+            assert page.questionnaire.grab().save(str(output/'questionnaire-funds.png'))
+            page.questionnaire.next.click();assert page.save.isVisible()
+            assert page.questionnaire.grab().save(str(output/'questionnaire.png'))
+            page.save.click();approve()
             page.tabs.setCurrentIndex(0);capture('products')
             if live_model:
                 w.toggle_assistant(True)
@@ -107,7 +110,7 @@ def run(output,visible=False,live_model=False):
                 wait(lambda:not w.busy and w.pending is not None);capture('buy-confirm');approve()
             q=client.wealth();assert q['frozen_minor']==100000 and q['available_minor']==900000
             assert q['orders'][0]['product_code']=='YJ01251202A'
-            page.tabs.setCurrentIndex(3);page.orders.selectRow(0);capture('submitted')
+            page.tabs.setCurrentIndex(3);page.orders.selectRow(0);page.demo_toggle.setChecked(True);capture('submitted')
             for _ in range(2):page.step.click();approve()
             q=client.wealth();assert q['holdings_minor']==100000 and q['lots'][0]['redeemable_minor']==0
             page.tabs.setCurrentIndex(2);capture('locked-holding')
