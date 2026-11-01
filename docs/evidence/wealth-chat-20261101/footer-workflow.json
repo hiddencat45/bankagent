@@ -1,0 +1,26 @@
+{
+  "platform": "windows",
+  "visible": true,
+  "scale": 1.25,
+  "size": [
+    1280,
+    844
+  ],
+  "model": "offline rules",
+  "service": "real HTTP, isolated SQLite",
+  "startup_customer": "zhang-wei",
+  "transfer_sender": "primary (explicit controlled switch)",
+  "before_minor": 500000,
+  "after_minor": 497000,
+  "steps": [
+    "welcome",
+    "prefill only",
+    "draft retained",
+    "bills query -> exact result view",
+    "40 pending -> close/reopen -> modify invalidates old confirmation",
+    "30 confirmed -> selected transaction",
+    "20 cancelled, no debit",
+    "long text and historical scroll preserved",
+    "new conversation clears draft/history"
+  ]
+}

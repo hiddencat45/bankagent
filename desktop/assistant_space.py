@@ -69,17 +69,16 @@ class AssistantSpace(QFrame):
         shortcuts.addStretch(); self.column.addWidget(self.shortcuts)
         composer = QFrame(); composer.setObjectName('composer'); compose = QVBoxLayout(composer)
         compose.addWidget(owner.input)
+        self.diagnostics = QPushButton('操作详情'); self.diagnostics.setObjectName('quietAction'); self.diagnostics.setCheckable(True)
+        self.diagnostics.toggled.connect(owner.history.setVisible)
         footer = QHBoxLayout(); hint = QLabel('Enter 换行 · Ctrl+Enter 发送'); hint.setObjectName('muted')
-        footer.addWidget(hint); footer.addStretch(); footer.addWidget(owner.submit); compose.addLayout(footer)
+        footer.addWidget(hint); footer.addStretch(); footer.addWidget(self.diagnostics); footer.addWidget(owner.submit); compose.addLayout(footer)
         self.column.addWidget(composer)
         self.feedback = QLabel(); self.feedback.setObjectName('muted'); self.feedback.setWordWrap(True)
         self.column.addWidget(self.feedback)
         self.bottom_space = QWidget(); self.column.addWidget(self.bottom_space, 1)
-        self.diagnostics = QPushButton('操作详情'); self.diagnostics.setObjectName('quietAction'); self.diagnostics.setCheckable(True)
-        self.diagnostics.toggled.connect(owner.history.setVisible)
         self.column.addWidget(owner.history); owner.history.setMaximumHeight(100); owner.history.hide()
         center_row.addWidget(self.center, 1); center_row.addStretch(); outer.addLayout(center_row, 1)
-        bottom = QHBoxLayout(); bottom.addStretch(); bottom.addWidget(self.diagnostics); outer.addLayout(bottom)
         self.hide()
 
     def prefill(self, value):
@@ -103,5 +102,6 @@ class AssistantSpace(QFrame):
                               '结果待核对，请使用原操作的核对按钮。' if owner.uncertain else
                               '请核对下方操作；批准前不会执行。' if owner.pending else
                               '请求未完成，请查看提示或重新连接。' if owner.blocked else '')
+        self.feedback.setVisible(bool(self.feedback.text()))
         for button in self.shortcut_buttons:
             button.setEnabled(owner.input.isEnabled())
