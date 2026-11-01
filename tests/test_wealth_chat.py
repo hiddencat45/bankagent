@@ -1,4 +1,4 @@
-"""Wealth cards preserve receipt facts and navigate without authorizing business."""
+"""Wealth cards preserve receipt facts without authorizing transactions."""
 from copy import deepcopy
 import pytest
 from bankagent.banking.wealth import PRODUCTS
@@ -90,3 +90,15 @@ def test_clarification_and_failure_are_never_removed(chat):
     assert '请问这笔钱多久不用？' in shown(view) and '查询失败，请重试' in shown(view)
     view.clear(); view.add_turn([('message', {'text':NOTICE})], PreviewWindow.summarize)
     app.processEvents(); assert NOTICE in shown(view)
+
+
+def test_saved_profile_button_requests_fresh_recommendation(chat):
+    from desktop.preview import PreviewWindow
+    from PySide6.QtWidgets import QPushButton
+    view,app=chat;actions=[]
+    view.wealth_opened.connect(lambda *args:actions.append(args))
+    receipt=dict(operation='SAVE_WEALTH_PROFILE',status='COMPLETED',
+        data=dict(profile=dict(expires_on='2027-11-01')))
+    view.add_receipt(receipt,PreviewWindow.summarize(receipt));app.processEvents()
+    view.findChild(QPushButton,'wealthChatPrimary').click()
+    assert actions==[('recommend',{})]
