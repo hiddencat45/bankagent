@@ -134,6 +134,7 @@ class PreviewWindow(BankWindow):
         self.pages.addWidget(self.build_transfer())
         self.bills_page = BillsPage()
         self.bills_page.requested.connect(self.load_ledger)
+        self.bills_page.geometry_changed.connect(lambda:QTimer.singleShot(0,self.fit_page))
         self.bills_page.account_button.clicked.connect(lambda:self.show_context_menu('account',self.bills_page.account_button))
         self.pages.addWidget(self.bills_page)
         main_layout.addWidget(self.pages)

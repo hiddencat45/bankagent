@@ -44,6 +44,11 @@ def test_ledger_filters_orb_transfer_refresh_identity_and_failure(tmp_path,monke
         assert '默认演示账户' in window.ai_context.text()
         window.ai_close.click(); assert not window.assistant_box.isVisible()
         original=list(bills.rows)
+        window.resize(1040,720)
+        for _ in range(5):qt.processEvents()
+        from PySide6.QtCore import QPoint
+        bounds=bills.table.rect().translated(bills.table.mapTo(bills.list_card,QPoint(0,0)))
+        assert bills.list_card.rect().contains(bounds), 'Compact list clips its transaction table'
         bills.details(0)
         assert bills.rows[0]['transaction_id'] in bills.refs.toPlainText()
         bills.refs_toggle.click(); assert bills.refs.isVisible()

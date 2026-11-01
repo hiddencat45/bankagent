@@ -12,6 +12,7 @@ KINDS = {'INCOME':'入账', 'TRANSFER_IN':'转入', 'EXPENSE':'消费', 'TRANSFE
 
 class BillsPage(QWidget):
     requested = Signal()
+    geometry_changed = Signal()
 
     def __init__(self):
         super().__init__()
@@ -120,6 +121,7 @@ class BillsPage(QWidget):
         detail_layout.addLayout(fields); detail_layout.addStretch()
         self.refs=QPlainTextEdit(); self.refs.setReadOnly(True); self.refs.setMaximumHeight(120); self.refs.hide()
         self.refs_toggle=QPushButton('展开流水编号'); self.refs_toggle.setCheckable(True); self.refs_toggle.toggled.connect(self.refs.setVisible)
+        self.refs_toggle.toggled.connect(self.geometry_changed.emit)
         detail_layout.addWidget(self.refs_toggle); detail_layout.addWidget(self.refs)
         self.body.addWidget(self.inspector,3); layout.addLayout(self.body)
         footer=QHBoxLayout(); self.note=QLabel('正在读取账本…'); self.note.setWordWrap(True); footer.addWidget(self.note,1)
@@ -270,5 +272,10 @@ class BillsPage(QWidget):
     def resizeEvent(self,event):
         super().resizeEvent(event)
         wide=self.width() >= 900
-        self.body.setDirection(QBoxLayout.Direction.LeftToRight if wide else QBoxLayout.Direction.TopToBottom)
+        direction=QBoxLayout.Direction.LeftToRight if wide else QBoxLayout.Direction.TopToBottom
+        changed=self.body.direction()!=direction
+        self.body.setDirection(direction)
         self.inspector.setMaximumWidth(355 if wide else 16777215)
+        if changed:
+            self.layout().invalidate()
+            self.geometry_changed.emit()

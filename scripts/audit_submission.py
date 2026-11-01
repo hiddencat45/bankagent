@@ -87,6 +87,8 @@ def run(output, visible=False, live_model=False):
             bills.reset.click(); settle(); assert len(bills.rows)==3
             report['cases'].append({'name':'ledger filters / month / reset / details','status':'COMPLETED'})
             bank.resize(1040,720); bills.details(0); capture('ledger-compact')
+            bank.main_scroll.ensureWidgetVisible(bills.inspector); capture('ledger-compact-detail')
+            bank.main_scroll.verticalScrollBar().setValue(0)
             bank.resize(1440,860)
             if live_model:
                 bank.toggle_assistant(True)
