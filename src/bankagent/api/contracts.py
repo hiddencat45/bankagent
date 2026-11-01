@@ -35,7 +35,7 @@ UNTRUSTED_RESUME_FIELDS: frozenset[str] = (
 
 # 顶层允许的键，其余一律视为客户端 bug。
 _ALLOWED_REQUEST_KEYS: frozenset[str] = frozenset({"thread_id", "message", "resume"})
-_ALLOWED_RESUME_KEYS: frozenset[str] = frozenset({"challenge_id", "decision", "otp"})
+_ALLOWED_RESUME_KEYS: frozenset[str] = frozenset({"challenge_id", "decision", "otp", "totp"})
 
 _DECISIONS = frozenset({"approve", "reject"})
 
@@ -79,6 +79,7 @@ class ResumePayload:
     challenge_id: str
     decision: Literal["approve", "reject"]
     otp: str | None
+    totp: str | None = None
 
 
 def _require_object(payload: Any, *, what: str) -> dict[str, Any]:
@@ -184,9 +185,13 @@ def _parse_resume(raw: dict[str, Any]) -> ResumePayload:
     otp = raw.get("otp")
     if otp is not None and not isinstance(otp, str):
         raise ApiError("INVALID_REQUEST", "resume.otp 必须是字符串或 null。", 400)
+    totp = raw.get('totp')
+    if totp is not None and (not isinstance(totp, str) or len(totp) > 6):
+        raise ApiError('INVALID_REQUEST', '动态码须为不超过6位的字符串。', 400)
 
     return ResumePayload(
         challenge_id=challenge_id.strip(),
         decision=decision,
         otp=otp or None,
+        totp=totp or None,
     )

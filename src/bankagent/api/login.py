@@ -2,6 +2,7 @@
 from fastapi import Request
 from bankagent.api.contracts import ApiError
 from bankagent.api.credentials import CredentialStore
+from bankagent.api.mfa import MfaStore
 from bankagent.banking.bank_types import TrustedContext
 from bankagent.banking.bank_backend import query_accounts
 
@@ -9,6 +10,7 @@ from bankagent.banking.bank_backend import query_accounts
 def install_login(app, service, database_path):
     store = CredentialStore(database_path)
     service.credentials = store
+    service.mfa = MfaStore(store)
 
     @app.get('/auth/me')
     def me(request: Request):
@@ -18,6 +20,7 @@ def install_login(app, service, database_path):
         if row is None:
             raise ApiError('UNAUTHENTICATED', '请重新登录。', 401)
         return {'display_name': row['display_name'], 'payment_configured': row['payment_hash'] is not None,
+                'mfa_configured': service.mfa.configured(current.user_id),
                 'mode': service.runtime.mode}
 
     async def body(request, fields):
@@ -36,6 +39,29 @@ def install_login(app, service, database_path):
         try:
             store.register(**data)
             return {'status': 'REGISTERED'}
+        finally:
+            service.running.release()
+
+    @app.post('/auth/mfa/enroll')
+    async def enroll(request: Request):
+        data = await body(request, ['login_password'])
+        service.reserve()
+        try:
+            current = service.sessions.resolve(request.headers.get('authorization'))
+            response = service.mfa.begin(current.user_id, data['login_password'])
+            from fastapi.responses import JSONResponse
+            return JSONResponse(response, headers={'Cache-Control': 'no-store'})
+        finally:
+            service.running.release()
+
+    @app.post('/auth/mfa/confirm')
+    async def confirm_mfa(request: Request):
+        data = await body(request, ['enrollment_id', 'code'])
+        service.reserve()
+        try:
+            current = service.sessions.resolve(request.headers.get('authorization'))
+            service.mfa.finish(current.user_id, data['enrollment_id'], data['code'])
+            return {'status': 'CONFIGURED'}
         finally:
             service.running.release()
 

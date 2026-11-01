@@ -156,18 +156,20 @@ class QueryClient:
                 raise VerificationRejected(json.load(exc).get('message', '认证不可用，请取消本次操作。')) from None
             raise
 
-    def resume(self, pending, decision, otp=None):
+    def resume(self, pending, decision, otp=None, totp=None):
         if decision not in {'approve', 'reject'}:
             raise ValueError('invalid decision')
         payload = {'challenge_id': pending['challenge_id'], 'decision': decision}
         if otp is not None:
             payload['otp'] = otp
+        if totp is not None:
+            payload['totp'] = totp
         try:
             frames = self._chat({'thread_id': pending['thread_id'], 'resume': payload}, pending['thread_id'])
         except HTTPError as exc:
             if exc.code in {401, 409}:
                 problem = json.load(exc)
-                if problem.get('code', '').startswith('DEMO_AUTH_') or problem.get('code') in {'INVALID_CREDENTIALS','CREDENTIALS_LOCKED','PAYMENT_PASSWORD_REQUIRED'}:
+                if problem.get('code', '').startswith(('DEMO_AUTH_', 'MFA_')) or problem.get('code') in {'INVALID_CREDENTIALS','CREDENTIALS_LOCKED','PAYMENT_PASSWORD_REQUIRED'}:
                     raise VerificationRejected(problem['message']) from None
             raise
         if frames[0][1]['request_id'] != pending['request_id']:

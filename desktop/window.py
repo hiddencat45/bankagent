@@ -312,7 +312,7 @@ class BankWindow(QMainWindow):
         thread = self.thread
         self.run('query', lambda: self.client.query(text, thread))
 
-    def decide(self, decision, otp=None):
+    def decide(self, decision, otp=None, totp=None):
         if self.busy or self.pending is None or decision not in {'approve', 'reject'}:
             return
         if self.decision is not None and decision != self.decision:
@@ -322,7 +322,8 @@ class BankWindow(QMainWindow):
         self.decision = decision
         self.status.setText('正在提交原确认操作，请稍候…')
         pending = dict(self.pending)
-        self.run('decision', lambda: self.client.resume(pending, decision, otp) if otp is not None else self.client.resume(pending, decision))
+        self.run('decision', lambda: self.client.resume(pending, decision, otp, totp=totp) if totp is not None
+                 else self.client.resume(pending, decision, otp) if otp is not None else self.client.resume(pending, decision))
 
     def show_verification(self, info):
         dialog = QDialog(self)

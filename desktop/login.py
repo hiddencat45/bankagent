@@ -30,7 +30,7 @@ class LoginClient(QueryClient):
             with self.post(path, payload) as response:
                 return json.load(response)
         except HTTPError as exc:
-            if path == '/auth/payment-password' and exc.code in {400,401,409}:
+            if (path == '/auth/payment-password' or path.startswith('/auth/mfa/')) and exc.code in {400,401,409}:
                 raise VerificationRejected(json.load(exc).get('message', '交易密码设置失败。')) from None
             raise
 
@@ -267,11 +267,19 @@ class AuthenticatedWindow(PreviewWindow):
 
     def show_connection_menu(self):
         menu = QMenu(self)
+        security = menu.addAction('绑定手机验证器')
+        security.setEnabled(not self.busy and not self.uncertain)
+        security.triggered.connect(self.bind_authenticator)
         action = menu.addAction('退出登录')
         action.setEnabled(not self.busy and not self.pending and not self.uncertain)
         action.triggered.connect(lambda: self.shell.work(lambda: self.client.request('/auth/logout', {}),
                                                         lambda _: self.shell.logged_out()))
         menu.exec(self.more_actions.mapToGlobal(self.more_actions.rect().bottomLeft()))
+
+    def bind_authenticator(self):
+        from desktop.security import EnrollmentDialog
+        if EnrollmentDialog(self.client, self).exec() == QDialog.DialogCode.Accepted:
+            self.status.setText('手机验证器已绑定。等待下一组动态码，再重新核对原转账；尚未扣款。')
 
     def decide(self, decision, otp=None):
         if decision != 'approve' or self.decision is not None or not self.pending or not ('recipient' in self.pending or 'items' in self.pending):
@@ -280,7 +288,12 @@ class AuthenticatedWindow(PreviewWindow):
 
     def receive(self, kind, result):
         if kind == 'payment_profile':
-            self.busy = False; self.controls(); self.payment_dialog(result['payment_configured']); return
+            self.busy = False; self.controls()
+            if result['payment_configured'] and self.pending['risk_level'] == 'RED' and not result['mfa_configured']:
+                self.bind_authenticator()
+            else:
+                self.payment_dialog(result['payment_configured'])
+            return
         if kind == 'payment_setup':
             self.busy = False; self.controls(); self.status.setText('交易密码已设置，请再次确认原转账。'); return
         super().receive(kind, result)
@@ -294,7 +307,12 @@ class AuthenticatedWindow(PreviewWindow):
         summary.setObjectName('dialogSummary')
         layout.addWidget(summary)
         entries = []
-        for name in (['交易密码'] if configured else ['登录密码','6位数字交易密码','再次输入交易密码']):
+        high_risk = configured and self.pending['risk_level'] == 'RED'
+        if high_risk:
+            note = QLabel('本次计入后，客户名下所有卡当日累计转出超过1,000元。\n请输入交易密码和手机验证器动态码。')
+            note.setWordWrap(True); layout.addWidget(note)
+        names = (['交易密码', '手机验证器6位动态码'] if high_risk else ['交易密码']) if configured else ['登录密码','6位数字交易密码','再次输入交易密码']
+        for name in names:
             entry=QLineEdit(); entry.setPlaceholderText(name); entry.setAccessibleName(name)
             entry.setEchoMode(QLineEdit.EchoMode.Password); entry.setMaxLength(128 if name=='登录密码' else 6)
             layout.addWidget(entry); entries.append(entry)
@@ -308,7 +326,7 @@ class AuthenticatedWindow(PreviewWindow):
         for entry in entries: entry.clear()
         dialog.deleteLater()
         if not accepted: return
-        if configured: super().decide('approve', values[0])
+        if configured: super().decide('approve', values[0], totp=values[1] if high_risk else None)
         elif values[1]!=values[2]: self.status.setText('两次交易密码不一致，尚未执行。')
         else:
             self.run('payment_setup', lambda: self.client.request('/auth/payment-password',

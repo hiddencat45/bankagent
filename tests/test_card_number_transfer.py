@@ -4,6 +4,7 @@ from bankagent.api.server import create_app
 from desktop.client import parse_stream
 from test_bank_forms import form, confirm
 from test_api_http import result, chat
+from mfa_support import bind, authorize
 
 
 def customer(c, username, funding='1000'):
@@ -104,8 +105,9 @@ def test_card_transfer_cancel_change_frozen_insufficient_and_cross_user(tmp_path
         blocked=form(c,a,'TRANSFER',recipient_name=number,amount='40')
         assert result(blocked)['error_code']=='SOURCE_CARD_FROZEN'
         confirm(c,a,form(c,a,'UNFREEZE_CARD',card_name='日常卡'))
+        _,_,code=bind(c,a,password)
         insufficient=form(c,a,'TRANSFER',recipient_name=number,amount='1001')
-        assert result(parse_stream(pay(c,a,insufficient,pin).content))['error_code']=='INSUFFICIENT_BALANCE'
+        assert result(parse_stream(authorize(c,a,insufficient,pin,code()).content))['error_code']=='INSUFFICIENT_BALANCE'
         pending=form(c,a,'TRANSFER',recipient_name=number,amount='40')
         # Simulate a destination binding change after confirmation in this isolated store.
         import json
@@ -130,11 +132,12 @@ def test_card_batch_reuses_atomic_backend(tmp_path):
         # Two items may pay the same concrete card; both still commit as one batch.
         pin=f'{secrets.randbelow(1000000):06d}'
         c.post('/auth/payment-password',headers=a,json={'login_password':password,'payment_password':pin}).raise_for_status()
+        _,_,code=bind(c,a,password)
         for amounts,success,expected in [(('40','25'),True,93500),(('900','50'),False,93500)]:
             model.answers.extend([call('prepare_batch_transfer',{'items':[
                 {'recipient_name':number,'amount':amount} for amount in amounts]}),answer('请核对实际回执。')])
             pending=chat(c,a,message='按提供的卡号分两笔转出')
-            response=pay(c,a,pending,pin)
+            response=authorize(c,a,pending,pin,code())
             actual=batch_result(parse_stream(response.content))
             assert actual['data']['committed'] is success
             assert parse_stream(pay(c,a,pending,pin).content)==parse_stream(response.content)

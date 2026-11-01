@@ -23,6 +23,7 @@ langchain-core==1.6.12
 pytest==9.1.1
 fastapi==0.150.0
 uvicorn==0.54.0
+pyotp==2.9.0
 
 # ---- 以下为传递依赖，由 pip freeze 导出，用于锁定完全一致的运行环境 ----
 # 不要手工改。要升级就直接改上面的直接依赖，再用 pip freeze 重新生成这一整段。
